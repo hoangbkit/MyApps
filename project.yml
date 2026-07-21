@@ -1,0 +1,57 @@
+name: MyApps
+options:
+  minimumXcodeGenVersion: 2.45.0
+  createIntermediateGroups: true
+  groupSortPosition: top
+  deploymentTarget:
+    iOS: "26.0"
+settings:
+  base:
+    DEVELOPMENT_TEAM: J458WW3452
+    SWIFT_VERSION: 6.0
+    CURRENT_PROJECT_VERSION: 11
+    MARKETING_VERSION: 1.0
+    CODE_SIGN_STYLE: Automatic
+    ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    CLANG_ENABLE_MODULES: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+
+packages:
+  Runestone:
+    url: https://github.com/simonbs/Runestone.git
+    from: 0.5.2
+  MarkdownView:
+    url: https://github.com/LiYanan2004/MarkdownView.git
+    from: 3.0.0
+
+targets:
+  MyApps:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    dependencies:
+      - package: Runestone
+      - package: MarkdownView
+    sources:
+      - path: MyApps
+        excludes:
+          - Resources/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hoangbkit.myapps
+        PRODUCT_NAME: MyApps
+        PRODUCT_MODULE_NAME: MyApps
+        INFOPLIST_FILE: MyApps/Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+        IPHONEOS_DEPLOYMENT_TARGET: 26.0
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/Frameworks"
