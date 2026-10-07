@@ -3,6 +3,7 @@ import SwiftUI
 struct BranchesView: View {
     let repository: GitHubRepository
     let branches: [GitHubBranch]
+    let tags: [GitHubTag]
     let client: GitHubAPIClient?
     let isLoading: Bool
     let onMerged: () -> Void
@@ -34,6 +35,7 @@ struct BranchesView: View {
                             repository: repository,
                             branch: branch,
                             branches: branches,
+                            existingTags: tags,
                             client: client,
                             onMerged: onMerged
                         )
