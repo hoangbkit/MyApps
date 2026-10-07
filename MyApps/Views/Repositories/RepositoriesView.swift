@@ -88,7 +88,7 @@ struct RepositoriesView: View {
                             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
                         )
 
-                    Text("The token is validated with GitHub and stored only in this device's Keychain.")
+                    Text("The token is validated with GitHub and stored only in this device's Keychain. Use repository Contents read/write permission for private repos and Git write operations.")
                         .font(.system(size: 13, weight: .regular, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
