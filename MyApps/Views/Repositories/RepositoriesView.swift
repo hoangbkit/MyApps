@@ -167,7 +167,10 @@ struct RepositoriesView: View {
                     Section {
                         ForEach(filteredRepositories) { repository in
                             NavigationLink {
-                                RepositoryWorkspaceView(repository: repository)
+                                RepositoryWorkspaceView(
+                                    repository: repository,
+                                    client: session.client()
+                                )
                             } label: {
                                 repositoryRow(repository)
                             }
