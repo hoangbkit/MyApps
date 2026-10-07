@@ -20,6 +20,26 @@ struct GitHubAPIClient: Sendable {
         let head: String
     }
 
+    private struct CreateTagObjectBody: Encodable {
+        let tag: String
+        let message: String
+        let object: String
+        let type: String
+    }
+
+    private struct CreateTagObjectResponse: Decodable {
+        let sha: String
+    }
+
+    private struct CreateRefBody: Encodable {
+        let ref: String
+        let sha: String
+    }
+
+    private struct CreateRefResponse: Decodable {
+        let ref: String
+    }
+
     private struct CreateTreeBody: Encodable {
         let baseTree: String
         let tree: [GitHubTreeMutationEntry]
@@ -80,6 +100,51 @@ struct GitHubAPIClient: Sendable {
     func tags(repository: GitHubRepository) async throws -> [GitHubTag] {
         try await paginated(
             path: "/repos/\(repository.owner.login)/\(repository.name)/tags"
+        )
+    }
+
+    func createLightweightTag(
+        repository: GitHubRepository,
+        name: String,
+        targetSHA: String
+    ) async throws {
+        try await createTagRef(
+            repository: repository,
+            name: name,
+            objectSHA: targetSHA
+        )
+    }
+
+    func createAnnotatedTag(
+        repository: GitHubRepository,
+        name: String,
+        message: String,
+        targetSHA: String
+    ) async throws {
+        let body = try jsonEncoder().encode(
+            CreateTagObjectBody(
+                tag: name,
+                message: message,
+                object: targetSHA,
+                type: "commit"
+            )
+        )
+
+        let (data, response) = try await perform(
+            method: "POST",
+            path: "/repos/\(repository.owner.login)/\(repository.name)/git/tags",
+            body: body
+        )
+
+        guard (200..<300).contains(response.statusCode) else {
+            throw GitHubAPIError.httpStatus(response.statusCode)
+        }
+
+        let tagObject = try decode(CreateTagObjectResponse.self, from: data)
+        try await createTagRef(
+            repository: repository,
+            name: name,
+            objectSHA: tagObject.sha
         )
     }
 
@@ -342,6 +407,31 @@ struct GitHubAPIClient: Sendable {
         }
     }
 
+    private func createTagRef(
+        repository: GitHubRepository,
+        name: String,
+        objectSHA: String
+    ) async throws {
+        let body = try jsonEncoder().encode(
+            CreateRefBody(
+                ref: "refs/tags/\(name)",
+                sha: objectSHA
+            )
+        )
+
+        let (data, response) = try await perform(
+            method: "POST",
+            path: "/repos/\(repository.owner.login)/\(repository.name)/git/refs",
+            body: body
+        )
+
+        guard (200..<300).contains(response.statusCode) else {
+            throw GitHubAPIError.httpStatus(response.statusCode)
+        }
+
+        _ = try decode(CreateRefResponse.self, from: data)
+    }
+
     private func paginated<Response: Decodable & Sendable>(
         path: String
     ) async throws -> [Response] {
@@ -464,7 +554,7 @@ enum GitHubAPIError: LocalizedError {
         case .httpStatus(404):
             return "The requested GitHub resource was not found."
         case .httpStatus(422):
-            return "GitHub rejected the branch operation as invalid."
+            return "GitHub rejected this operation as invalid or the ref already exists."
         case let .httpStatus(status):
             return "GitHub returned HTTP \(status)."
         case .mergeConflict:
