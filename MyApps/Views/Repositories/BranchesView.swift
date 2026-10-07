@@ -6,7 +6,7 @@ struct BranchesView: View {
     let tags: [GitHubTag]
     let client: GitHubAPIClient?
     let isLoading: Bool
-    let onMerged: () -> Void
+    let onRepositoryChanged: () -> Void
 
     private var sortedBranches: [GitHubBranch] {
         branches.sorted { lhs, rhs in
@@ -37,7 +37,7 @@ struct BranchesView: View {
                             branches: branches,
                             existingTags: tags,
                             client: client,
-                            onMerged: onMerged
+                            onRepositoryChanged: onRepositoryChanged
                         )
                     } label: {
                         VStack(alignment: .leading, spacing: 5) {
