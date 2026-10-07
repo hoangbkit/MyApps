@@ -68,6 +68,25 @@ struct BranchDetailView: View {
                         Label("Merge into…", systemImage: "arrow.triangle.merge")
                     }
                     .disabled(!repository.canAttemptWrite)
+
+                    if branch.name != repository.defaultBranch {
+                        NavigationLink {
+                            BranchRebaseView(
+                                repository: repository,
+                                sourceBranch: branch,
+                                branches: branches,
+                                defaultDestination: repository.defaultBranch,
+                                client: client,
+                                onRebased: onMerged
+                            )
+                        } label: {
+                            Label("Rebase onto…", systemImage: "arrow.triangle.branch")
+                        }
+                        .disabled(
+                            !repository.canAttemptWrite ||
+                            branch.isProtected
+                        )
+                    }
                 }
 
                 if !repository.canAttemptWrite {
