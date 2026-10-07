@@ -24,25 +24,41 @@ Do not set up or trigger CI for this integration unless explicitly requested.
 
 MyApps becomes a top-level tab app.
 
-The existing app-management experience is the first tab and must be left alone. The second tab lists GitHub repositories. Tapping a repository opens Git operations.
+The app has a five-tab product structure:
+
+1. **Apps** — the existing custom app list and app details.
+2. **Repos** — GitHub repositories and Git operations.
+3. **App Store** — reserved for App Store Connect apps; implementation is deferred to later work.
+4. **Notes** — the existing global Notes inbox.
+5. **Settings** — the existing Settings screen.
 
 There is **no link between `ManagedApp` and GitHub repositories**.
 
 ```text
 MyApps
 │
-├── Apps tab
-│   └── existing ProjectsView / AppDetailView / Notes
-│       └── leave behavior and design unchanged
+├── 1. Apps
+│   └── existing ProjectsView
+│       └── existing AppDetailView
+│           └── leave app list/details behavior and design unchanged
 │
-└── Repos tab
-    ├── all accessible GitHub repositories
-    └── tap repository
-        └── Git workspace
-            ├── Log
-            ├── Branches
-            ├── Tags
-            └── Releases
+├── 2. Repos
+│   ├── all accessible GitHub repositories
+│   └── tap repository
+│       └── Git workspace
+│           ├── Log
+│           ├── Branches
+│           ├── Tags
+│           └── Releases
+│
+├── 3. App Store
+│   └── reserved for future App Store Connect apps work
+│
+├── 4. Notes
+│   └── existing global NotesInboxView
+│
+└── 5. Settings
+    └── existing SettingsView
 ```
 
 ## Core capabilities
@@ -55,8 +71,9 @@ MyApps
 
 ## Explicitly out of scope
 
-- changing the existing app list UI
+- redesigning the existing app list UI
 - changing `AppDetailView`
+- implementing App Store Connect integration in this PR
 - linking a `ManagedApp` to a repository
 - file/repository tree browsing
 - source-code viewing/editing
@@ -71,20 +88,16 @@ MyApps
 # Top-level design
 
 ```text
-┌────────────────────────────────────┐
-│                                    │
-│        Current Apps UI             │
-│                                    │
-│  Spokio                            │
-│  BYOKchat                          │
-│  ReadAloud                         │
-│  ...                               │
-│                                    │
-├────────────────────────────────────┤
-│                                    │
-│      [ Apps ]        [ Repos ]     │
-│        ▔▔▔                         │
-└────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│                                         │
+│            Selected tab content         │
+│                                         │
+│                                         │
+│                                         │
+├─────────────────────────────────────────┤
+│ Apps   Repos   App Store   Notes   ⚙︎  │
+│  ▔▔▔                                    │
+└─────────────────────────────────────────┘
 ```
 
 Conceptually:
@@ -98,12 +111,27 @@ TabView
 │           └── AppDetailView
 │               └── existing behavior unchanged
 │
-└── Repos
+├── Repos
+│   └── NavigationStack
+│       └── RepositoriesView
+│
+├── App Store
+│   └── reserved for future App Store Connect implementation
+│
+├── Notes
+│   └── NavigationStack
+│       └── existing NotesInboxView
+│
+└── Settings
     └── NavigationStack
-        └── RepositoriesView
+        └── existing SettingsView
 ```
 
-Do not redesign ProjectsView, AppDetailView, app editing, notes, backup, or current local data flows merely to support the new tab structure.
+The Apps tab remains the existing custom app-management product. Do not redesign its rows, filtering, editing, app details, or per-app notes.
+
+The current top-level entry points for global Notes and Settings should move to their dedicated tabs when the tab shell is implemented; their underlying screens and behavior should otherwise remain unchanged.
+
+The App Store tab is a reserved product slot only in this PR. App Store Connect integration is explicitly deferred.
 
 ---
 
@@ -484,13 +512,22 @@ TabView
    |                 +-- AppDetailView
    |
    +-- Repos tab
-         +-- NavigationStack
-               +-- RepositoriesView
-                     +-- RepositoryWorkspaceView
-                           +-- GitLogView
-                           +-- BranchesView
-                           +-- TagsView
-                           +-- ReleasesView
+   |     +-- NavigationStack
+   |           +-- RepositoriesView
+   |                 +-- RepositoryWorkspaceView
+   |                       +-- GitLogView
+   |                       +-- BranchesView
+   |                       +-- TagsView
+   |                       +-- ReleasesView
+   |
+   +-- App Store tab
+   |     +-- reserved / future App Store Connect work
+   |
+   +-- Notes tab
+   |     +-- existing NotesInboxView
+   |
+   +-- Settings tab
+         +-- existing SettingsView
 
 GitHubService
    +-- Authentication
@@ -513,6 +550,8 @@ Phase 0 should settle:
 
 - authentication method
 - one account vs account switching
+- exact label/icon for the future App Store tab
+- whether the deferred App Store tab is visible as a placeholder now or only introduced when implemented
 - repository ordering
 - whether forks/archived repos appear by default
 - search behavior
@@ -543,14 +582,18 @@ Deliverable: update this document only. No production implementation.
 
 ## Phase 1 — Root tabs + GitHub foundation
 
-- wrap the existing root navigation in a two-tab `TabView`
-- first tab hosts the existing Apps navigation unchanged
-- second tab hosts Repos
+- introduce the five-tab root architecture: Apps, Repos, App Store, Notes, Settings
+- Apps hosts the existing app navigation without redesigning the app list/details
+- Repos hosts the new GitHub feature area
+- App Store is reserved for future App Store Connect work; no App Store Connect implementation in this PR
+- Notes hosts the existing global `NotesInboxView`
+- Settings hosts the existing `SettingsView`
+- relocate the existing top-level Notes/Settings entry points into their dedicated tabs without redesigning those screens
 - add GitHub client/auth abstraction
 - store credentials in Keychain
 - add connection/error/loading state
 
-Acceptance: Apps behaves unchanged and GitHub failures cannot break it.
+Acceptance: Apps, global Notes, and Settings retain their existing behavior; the future App Store slot is isolated; GitHub failures cannot break non-Git tabs.
 
 **STOP. Wait for explicit approval.**
 
@@ -677,6 +720,9 @@ Phase 8   Polish
 Product boundary:
 
 ```text
-Apps tab  = existing MyApps product, unchanged
-Repos tab = Git history + real repository operations
+Tab 1 · Apps      = existing custom app list/details
+Tab 2 · Repos     = Git history + real repository operations
+Tab 3 · App Store = reserved for future App Store Connect apps
+Tab 4 · Notes     = existing global notes inbox
+Tab 5 · Settings  = existing settings
 ```
