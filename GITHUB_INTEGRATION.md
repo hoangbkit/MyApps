@@ -548,7 +548,7 @@ Keychain
 
 Phase 0 should settle:
 
-- authentication method
+- whether OAuth/device-flow should later replace or supplement the Phase 1 personal-access-token connection
 - one account vs account switching
 - exact label/icon for the future App Store tab
 - whether the deferred App Store tab is visible as a placeholder now or only introduced when implemented
@@ -581,6 +581,10 @@ Deliverable: update this document only. No production implementation.
 **STOP. Wait for explicit approval.**
 
 ## Phase 1 — Root tabs + GitHub foundation
+
+**Status: implemented on PR #2.**
+
+Phase 1 uses a GitHub personal access token (fine-grained or classic) as the initial connection mechanism. The token is validated against the authenticated-user endpoint and stored only in Keychain. Repository loading remains Phase 2.
 
 - introduce the five-tab root architecture: Apps, Repos, App Store, Notes, Settings
 - Apps hosts the existing app navigation without redesigning the app list/details
