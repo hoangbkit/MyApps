@@ -2,8 +2,12 @@ import SwiftUI
 import UIKit
 
 struct GitCommitDetailView: View {
+    let repository: GitHubRepository
     let commit: GitHubCommit
     let references: GitHubCommitReferences
+    let existingTags: [GitHubTag]
+    let client: GitHubAPIClient?
+    let onTagCreated: () -> Void
 
     @State private var didCopySHA = false
 
@@ -64,7 +68,21 @@ struct GitCommitDetailView: View {
                 }
             }
 
-            Section {
+            Section("Actions") {
+                NavigationLink {
+                    CreateTagView(
+                        repository: repository,
+                        targetSHA: commit.sha,
+                        targetDescription: commit.subject,
+                        existingTags: existingTags,
+                        client: client,
+                        onCreated: onTagCreated
+                    )
+                } label: {
+                    Label("Create Tag Here", systemImage: "tag")
+                }
+                .disabled(!repository.canAttemptWrite)
+
                 Button {
                     UIPasteboard.general.string = commit.sha
                     didCopySHA = true
