@@ -172,19 +172,6 @@ struct RepositoryWorkspaceView: View {
         }
     }
 
-    private func phasePlaceholder(
-        title: String,
-        symbol: String,
-        message: String
-    ) -> some View {
-        ContentUnavailableView(
-            title,
-            systemImage: symbol,
-            description: Text(message)
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
     @ToolbarContentBuilder
     private var branchToolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
