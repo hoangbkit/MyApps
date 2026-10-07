@@ -52,7 +52,15 @@ struct CreateTagView: View {
             }
 
             Section("Target") {
-                LabeledContent("Commit", value: targetSHA)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Commit")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text(targetSHA)
+                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .textSelection(.enabled)
+                }
 
                 if let targetDescription {
                     Text(targetDescription)
