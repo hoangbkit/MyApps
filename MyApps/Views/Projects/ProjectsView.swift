@@ -81,15 +81,6 @@ struct ProjectsView: View {
         .navigationTitle("MyApps")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                NavigationLink {
-                    SettingsView()
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .accessibilityLabel("Settings")
-            }
-
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Menu {
                     Picker("Sort Apps", selection: $appSortRawValue) {
@@ -102,13 +93,6 @@ struct ProjectsView: View {
                     Image(systemName: "arrow.up.arrow.down")
                 }
                 .accessibilityLabel("Sort Apps by \(appSortOption.title)")
-
-                NavigationLink {
-                    NotesInboxView()
-                } label: {
-                    Image(systemName: "note.text")
-                }
-                .accessibilityLabel("Notes")
 
                 Button {
                     isPresentingNewApp = true

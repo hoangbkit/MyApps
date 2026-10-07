@@ -10,8 +10,41 @@ struct RootView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ProjectsView()
+        TabView {
+            NavigationStack {
+                ProjectsView()
+            }
+            .tabItem {
+                Label("Apps", systemImage: "square.grid.2x2")
+            }
+
+            NavigationStack {
+                RepositoriesView()
+            }
+            .tabItem {
+                Label("Repos", systemImage: "shippingbox")
+            }
+
+            NavigationStack {
+                AppStorePlaceholderView()
+            }
+            .tabItem {
+                Label("App Store", systemImage: "storefront")
+            }
+
+            NavigationStack {
+                NotesInboxView()
+            }
+            .tabItem {
+                Label("Notes", systemImage: "note.text")
+            }
+
+            NavigationStack {
+                SettingsView()
+            }
+            .tabItem {
+                Label("Settings", systemImage: "gearshape")
+            }
         }
         .preferredColorScheme(appearance.colorScheme)
         .fontDesign(.rounded)
