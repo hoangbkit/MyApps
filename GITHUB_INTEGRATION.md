@@ -1,293 +1,787 @@
 # GitHub Integration
 
-This branch extends the iOS-only MyApps app from the latest `master` with focused GitHub repository tooling.
+This branch extends the iOS-only MyApps app from the latest `master` with a focused Git operations companion for iPhone.
 
 ## Execution rule
 
 This PR is **planning-only until explicitly approved**.
 
-Do not start implementation merely because a phase is documented here. Before every phase:
+Before every implementation phase:
 
-1. Discuss any remaining product/UX/API requirements with the user.
-2. Wait for an explicit go-ahead for that phase.
-3. Implement only the approved phase.
-4. Stop again after that phase is complete and report what changed.
+1. Discuss remaining requirements and UX choices with the user.
+2. Wait for an explicit go-ahead.
+3. Implement only that approved phase.
+4. Stop after the phase and report what changed.
 5. Do not continue to the next phase without another explicit go-ahead.
 
-If a requirement is ambiguous or a choice could materially change the product, stop and ask before implementing it.
+If a requirement is ambiguous or could materially change behavior, stop and ask before implementing it.
 
-Do not set up or trigger CI as part of this GitHub-integration work unless explicitly requested.
+Do not set up or trigger CI for this integration unless explicitly requested.
 
-## Product direction
+---
 
-MyApps should remain the personal dashboard for apps the user builds. GitHub functionality belongs to each `ManagedApp`; this should not become a generic replacement for GitHub Mobile.
+# Product scope
 
-The primary motivation is to make important repository-management workflows usable from iPhone where GitHub Mobile is currently weak, especially:
+MyApps should not duplicate GitHub Mobile.
 
-- browsing the actual repository tree
-- changing branch/tag context while browsing
-- viewing source/text files
-- inspecting branches and tags
-- creating tags without needing a desktop terminal
+GitHub Mobile is already good enough for:
 
-Later phases may extend this into releases and GitHub Actions if those workflows prove useful inside MyApps.
+- browsing files
+- pull requests
+- issues
+- reviews
+- notifications
 
-## Constraints
+MyApps should instead provide the Git operations that are awkward or missing on iPhone:
 
-- Base all work on the latest `master`.
-- Do not merge in the experimental macOS/iCloud work from `develop`.
-- iOS only.
-- Preserve the current MyApps navigation and SwiftData architecture unless a narrowly scoped change is required.
-- Existing MyApps data remains local-first and usable without GitHub.
-- GitHub credentials must never be stored in SwiftData, UserDefaults, backups, logs, or source control.
-- GitHub repository contents remain remote/on-demand; do not mirror repositories into SwiftData.
-- Prefer native SwiftUI and Foundation APIs.
-- Avoid duplicating GitHub Mobile functionality unless it directly helps the intended developer workflow.
-- Destructive or repository-writing actions need clear confirmation and error presentation.
+1. **Beautified Git log / commit graph**
+2. **Branch merge**
+3. **True branch rebase**
+4. **Create Git tag**
+5. **Create GitHub release**
 
-## Requirements to settle before implementation
+This is a Git history + repository-operations layer attached to each `ManagedApp`.
 
-These are intentionally unresolved until discussed:
+## Explicitly out of scope
+
+- file/repository tree browser
+- source-code viewer
+- editing files
+- issue management
+- PR review
+- PR merge
+- notifications
+- discussions
+- general GitHub replacement
+- macOS target
+- iCloud work from `develop`
+
+---
+
+# Product structure
+
+```text
+MyApps
+  |
+  +-- Spokio
+  |    |
+  |    +-- Notes
+  |    |
+  |    +-- Git
+  |         |
+  |         +-- Log
+  |         +-- Branches
+  |         +-- Tags
+  |         +-- Releases
+  |
+  +-- BYOKchat
+  |    +-- ...
+  |
+  +-- ReadAloud
+       +-- ...
+```
+
+Git operations remain optional. An app without a linked repository continues behaving exactly as it does today.
+
+---
+
+# Core UX design
+
+## App detail
+
+```text
+SPOKIO
+────────────────────────────────────
+‹ MyApps          [icon] Spokio    •••
+
+Building · iOS/macOS
+Live 1.12 · Dev 1.13
+
+[ Notes ]                       [ Git ]
+```
+
+Git should feel like a capability of the app being managed, not a new global GitHub client.
+
+---
+
+# Git home / visual log
+
+The visual Git log is the primary screen.
+
+```text
+SPOKIO · GIT
+────────────────────────────────────
+‹ Spokio                    develop ▾
+
+[ Log ]   [ Branches ]   [ Tags ]   [ Releases ]
+ ─────
+
+●  e94fa51                         develop
+│  Fix model lifecycle
+│  Hoang · 18m
+│
+●  8136db2
+│  Queue job-details polish
+│  Hoang · 1h
+│
+├─● 72ad510                  ios-polish
+│ │ Paragraph sheet polish
+│ │ Hoang · 2h
+│ │
+│ ● a8ff112
+│ │ Voice gender labels
+│ │
+●─┘ 71ac03f
+│  Merge branch ios-polish
+│
+●  30bd728                         master
+│  Release 1.12                    [1.12]
+│  Sep 29
+│
+●  b8af203
+│  Update AppFoundation
+│
+⋮
+```
+
+## Log requirements
+
+The graph should make these immediately visible:
+
+- parent/child topology
+- branch divergence
+- merges
+- current selected branch
+- branch-head labels
+- tag labels
+- short SHA
+- commit subject
+- author
+- relative/absolute time as appropriate
+
+It should not try to become a desktop Git GUI.
+
+The graph must prioritize readability on an iPhone-sized display.
+
+---
+
+# Commit details
+
+Tap a commit:
+
+```text
+COMMIT
+────────────────────────────────────
+‹ Log
+
+e94fa51
+
+Fix model lifecycle
+
+Hoang Nguyen
+Today · 22:01
+
+Refs
+develop
+
+────────────────────────────────────
+
+Parents
+8136db2
+
+Commit
+e94fa51
+
+────────────────────────────────────
+
+[ Create Tag Here ]
+
+Copy SHA
+Open on GitHub
+```
+
+Commit details are intentionally lightweight.
+
+No file diff viewer is required for v1 because GitHub Mobile/web can handle that.
+
+---
+
+# Branches
+
+```text
+BRANCHES
+────────────────────────────────────
+‹ Git
+
+✓ develop
+  e94fa51
+  Fix model lifecycle
+
+  ios-polish
+  72ad510
+  Paragraph sheet polish
+  2 commits ahead · 1 behind
+
+  master
+  30bd728
+  Release 1.12
+```
+
+Tap a branch:
+
+```text
+IOS-POLISH
+────────────────────────────────────
+
+Head
+72ad510
+
+Relative to develop
+2 ahead · 1 behind
+
+Actions
+
+[ View Log ]
+
+[ Merge into… ]
+
+[ Rebase onto… ]
+
+[ Create Tag at HEAD ]
+```
+
+---
+
+# Merge flow
+
+This means normal Git branch merge, not PR merge.
+
+```text
+MERGE
+────────────────────────────────────
+Cancel
+
+Source
+ios-polish
+
+        ↓
+
+Destination
+develop
+
+2 commits ahead
+1 commit behind
+
+Commits introduced
+
+● 72ad510  Paragraph sheet polish
+● a8ff112  Voice gender labels
+
+────────────────────────────────────
+
+[ Merge ios-polish into develop ]
+```
+
+Confirmation:
+
+```text
+MERGE BRANCHES?
+────────────────────────────────────
+
+ios-polish
+    ↓
+develop
+
+This updates develop.
+
+[ Cancel ]                 [ Merge ]
+```
+
+## Merge behavior
+
+Use GitHub's normal branch merge capability when possible.
+
+The UI must show:
+
+- source branch
+- destination branch
+- ahead/behind relationship
+- expected resulting operation
+- merge conflicts/errors clearly
+
+Never silently reverse source and destination.
+
+---
+
+# Rebase flow
+
+This means **true branch rebase**, equivalent in intent to:
+
+```text
+git checkout ios-polish
+git rebase develop
+git push --force-with-lease
+```
+
+It is not GitHub's PR "Rebase and merge" feature.
+
+```text
+REBASE
+────────────────────────────────────
+Cancel
+
+Branch
+ios-polish
+
+        ↓ rebase onto
+
+develop
+
+Commits to replay
+
+● 72ad510  Paragraph sheet polish
+● a8ff112  Voice gender labels
+
+────────────────────────────────────
+
+⚠ History of ios-polish will change.
+
+[ Rebase ios-polish onto develop ]
+```
+
+Confirmation:
+
+```text
+REWRITE BRANCH HISTORY?
+────────────────────────────────────
+
+ios-polish will be rebased onto develop.
+
+Old head
+72ad510
+
+Base
+e94fa51
+
+The branch ref will move if the
+rebase succeeds.
+
+[ Cancel ]                [ Rebase ]
+```
+
+## Rebase safety requirements
+
+True rebase is the highest-risk feature in this scope.
+
+GitHub does not provide the same simple high-level REST endpoint for arbitrary branch rebase that it provides for normal branch merge.
+
+Implementation must therefore be designed carefully around Git commit/tree/ref operations, or another explicitly approved strategy.
+
+Required safety properties:
+
+- calculate the exact commit range to replay before writing
+- refuse ambiguous or unsupported histories
+- detect conflicts before moving the branch ref
+- never partially move the branch on failed rebase
+- use compare-and-swap / force-with-lease-style protection when updating the branch ref
+- refuse the write if the remote branch moved since the operation was prepared
+- show the old and proposed new head before confirmation
+- do not offer rebase on protected/default branches unless explicitly allowed by the agreed requirements
+
+Do not implement a fake rebase.
+
+---
+
+# Tags
+
+```text
+TAGS
+────────────────────────────────────
+‹ Git                            ＋
+
+1.12
+30bd728
+Sep 29
+
+1.11
+19aa821
+Sep 14
+
+1.10
+1f683cd
+Sep 7
+```
+
+Create from a selected commit:
+
+```text
+CREATE TAG
+────────────────────────────────────
+Cancel                        Create
+
+Tag
+┌──────────────────────────────────┐
+│ 1.13                             │
+└──────────────────────────────────┘
+
+Commit
+e94fa51
+Fix model lifecycle
+
+Tag type
+Lightweight / Annotated
+(to be decided in Phase 0)
+
+[ Create Tag ]
+```
+
+The app must resolve and show the exact target SHA before creation.
+
+---
+
+# Releases
+
+```text
+RELEASES
+────────────────────────────────────
+‹ Git                            ＋
+
+1.12                         Latest
+Sep 29
+
+1.11
+Sep 14
+
+1.10
+Sep 7
+
+────────────────────────────────────
+
+Build prereleases
+
+mycli-build-37609478530-1
+Today
+```
+
+Create release:
+
+```text
+CREATE RELEASE
+────────────────────────────────────
+Cancel                        Create
+
+Tag
+1.13                           ›
+
+Title
+Spokio 1.13
+
+Release notes
+┌──────────────────────────────────┐
+│                                  │
+│                                  │
+└──────────────────────────────────┘
+
+[ ] Prerelease
+[ ] Draft
+
+[ Create Release ]
+```
+
+Product releases and disposable `mycli-build-*` prereleases should be visually distinguishable.
+
+Do not upload release assets in the initial implementation unless explicitly requested.
+
+---
+
+# Authentication and data rules
+
+- GitHub credentials must live in Keychain only.
+- Never put credentials in SwiftData, UserDefaults, backups, logs, analytics, or source control.
+- Repository identity may be stored on `ManagedApp` once its exact representation is agreed.
+- Git history is remote data and should be fetched on demand with only lightweight caching if needed.
+- GitHub failure must never make local MyApps notes/business data unusable.
+- All repository-writing operations need explicit confirmation and local error ownership.
+
+---
+
+# Requirements still to settle
+
+Phase 0 must resolve these before implementation:
 
 - authentication method for this personal app
-- whether repository linking stores `owner/name`, repository ID, URL, or a combination
-- how repositories are selected/linked to a `ManagedApp`
-- whether one ManagedApp may link to more than one GitHub repository
-- default branch behavior and remembered branch/tag selection
-- tree browsing behavior for large repositories and binary files
-- source viewer feature level
+- whether one GitHub account is enough
+- how a `ManagedApp` links to a repository
+- whether one app can link to more than one repository
+- repository identity storage format
+- where the Notes/Git switch should live in App Detail
+- default selected branch
+- how much Git history to load initially
+- pagination/infinite-scroll behavior
+- graph complexity limits on iPhone
+- whether merge commits are always allowed or fast-forward should be preferred when possible
+- exact merge commit-message behavior
+- exact supported rebase cases
+- protected/default branch restrictions for rebase
 - lightweight vs annotated tag creation
-- exact tag target-selection UX
-- whether tag deletion belongs in the first release
-- whether Releases and Actions belong in the initial product scope
-- how much PR/issue functionality, if any, belongs in MyApps
+- whether deleting tags is needed
+- default release title/notes behavior
+- whether `mycli-build-*` releases should be hidden, collapsed, or shown in a separate section
 
-## Proposed architecture
+---
+
+# Proposed architecture
 
 ```text
 ManagedApp
    |
-   +-- GitHub repository link
+   +-- GitHub repository identity
    |
    v
-GitHubRepositoryView
+GitWorkspaceView
    |
-   +-- Code
-   +-- Branches
+   +-- GitLogView
+   +-- BranchesView
+   +-- TagsView
+   +-- ReleasesView
+   |
+   v
+GitHubService
+   |
+   +-- Authentication
+   +-- Commits / compare
+   +-- Branch refs
+   +-- Merge
+   +-- Git objects / ref updates for rebase
    +-- Tags
-   +-- Releases       later / if approved
-   +-- Actions        later / if approved
+   +-- Releases
    |
    v
-GitHubClient
-   |
-   +-- REST API
-   +-- authentication provider
-   +-- Keychain credential storage
+Keychain
 ```
 
-The GitHub layer should be isolated from the existing notes/business-data features so GitHub integration can fail or be disconnected without affecting the local MyApps library.
+Keep the GitHub layer isolated from the existing MyApps local data layer.
 
 ---
 
 # Multi-phase implementation plan
 
-## Phase 0 — Requirements and UX lock
+## Phase 0 — Requirements + UX lock
 
-**Status:** discussion only.
+**Status: discussion only.**
 
-Goal: settle the product decisions that affect architecture before code is written.
+Finalize:
 
-Discuss and decide:
-
-- authentication approach
-- account/repository access expectations
-- how a ManagedApp links to its repository
-- where GitHub appears in App Detail
-- initial navigation structure for Code / Branches / Tags
-- write-operation confirmation rules
-- exact first-release feature boundary
+- authentication
+- repository linking
+- Log / Branches / Tags / Releases navigation
+- graph presentation
+- merge semantics
+- supported rebase semantics and safety rules
+- tag type
+- release defaults
 
 Deliverable:
 
-- update this document with agreed requirements
+- update this document only
 - no production implementation
 
-**Stop after Phase 0 and wait for explicit approval.**
-
-## Phase 1 — GitHub foundation
-
-Goal: add the smallest reusable GitHub infrastructure without changing the main product flow.
-
-Likely work:
-
-- GitHub API client
-- request/response models required by the approved first-release scope
-- authentication abstraction
-- secure credential storage in Keychain
-- connection/account state
-- consistent loading and error handling
-- no repository UI beyond what is necessary to validate the foundation
-
-Acceptance direction:
-
-- connection can be established and revoked safely
-- credentials never enter SwiftData/backups
-- failed/offline GitHub requests do not affect local MyApps data
-
-**Stop after Phase 1 and wait for explicit approval.**
-
-## Phase 2 — Link ManagedApp to GitHub repository
-
-Goal: make GitHub context app-specific.
-
-Likely work:
-
-- minimally extend `ManagedApp` with the agreed repository identity
-- repository picker/search/manual-link UX as agreed in Phase 0
-- link/unlink/change repository
-- surface repository identity in App Detail
-- preserve backward migration for existing SwiftData records
-- ensure MyApps backup behavior does not accidentally include secrets
-
-Acceptance direction:
-
-- existing ManagedApp records migrate cleanly
-- unlinked apps behave exactly as before
-- linking is optional
-- incorrect/inaccessible repositories have clear recoverable errors
-
-**Stop after Phase 2 and wait for explicit approval.**
-
-## Phase 3 — Repository tree and source viewing
-
-Goal: solve the biggest GitHub Mobile gap first.
-
-Likely work:
-
-- repository root browser
-- directory traversal
-- branch/tag/ref selector
-- file metadata sufficient for navigation
-- text/source-file viewer
-- explicit handling for unsupported/binary/oversized files
-- loading, empty, offline, permission, and not-found states
-
-Avoid turning this into an IDE. Editing repository files is out of scope unless explicitly added later.
-
-Acceptance direction:
-
-- user can open an app, enter GitHub, navigate the real repository tree, switch refs, and inspect source/text files comfortably on iPhone
-
-**Stop after Phase 3 and wait for explicit approval.**
-
-## Phase 4 — Branches and tags
-
-Goal: make refs genuinely useful from iPhone.
-
-Likely work:
-
-- branch list
-- tag list
-- ref details needed to understand targets
-- create-tag flow
-- target selection from approved branch/tag/commit sources
-- confirmation before creating the tag
-- success/failure feedback
-- refresh affected views after creation
-
-Tag type and deletion behavior remain dependent on Phase 0 requirements.
-
-Acceptance direction:
-
-- user can reliably create the intended Git tag against the intended commit without using a desktop terminal
-
-**Stop after Phase 4 and wait for explicit approval.**
-
-## Phase 5 — Releases
-
-**Only implement if explicitly approved after the earlier phases.**
-
-Possible scope:
-
-- release list
-- release details
-- distinguish product releases from `mycli-build-*` prereleases where useful
-- create release from an existing tag
-- draft/prerelease controls
-- release notes input
-- optional asset visibility/download metadata
-
-Do not add complex release-asset uploading unless there is a concrete requirement.
-
-**Stop after Phase 5 and wait for explicit approval.**
-
-## Phase 6 — GitHub Actions
-
-**Only implement if explicitly approved.**
-
-Possible scope:
-
-- workflow list
-- recent workflow runs
-- run status/details
-- manual `workflow_dispatch`
-- workflow inputs where supported
-- rerun/cancel only if clearly useful and approved
-
-This should complement the existing manual release workflow rather than introducing new CI architecture.
-
-**Stop after Phase 6 and wait for explicit approval.**
-
-## Phase 7 — Optional PR/issues integration
-
-**Deferred by default.**
-
-Only add features that materially improve the MyApps developer workflow beyond what GitHub Mobile already does well.
-
-Possible candidates:
-
-- compact open-PR status for the linked repository
-- compact open-issue status
-- deep links into GitHub Mobile/web for full review
-
-Full PR review, issue management, discussions, notifications, and social GitHub features are explicitly not goals unless later requested.
-
-**Stop after Phase 7.**
-
-## Phase 8 — Release-readiness polish
-
-Only after the approved functional scope is complete:
-
-- accessibility
-- loading/error/empty-state consistency
-- caching review
-- data-migration review
-- credential/security review
-- backup/restore interaction review
-- documentation update
-- manual end-to-end validation of approved workflows
-
-Do not expand scope during polish.
+**STOP. Wait for explicit approval.**
 
 ---
 
-## Initial priority
+## Phase 1 — GitHub foundation + authentication
 
-Unless requirements discussion changes it, the highest-value path is:
+Goal: establish the safe API/auth layer.
+
+Likely work:
+
+- GitHub client
+- authenticated request layer
+- Keychain credential storage
+- account connection/disconnection
+- repository access validation
+- shared error model
+- request cancellation/loading state
+
+No Git operation UI beyond what is required to validate the foundation.
+
+**STOP. Wait for explicit approval.**
+
+---
+
+## Phase 2 — ManagedApp ↔ repository linking
+
+Goal: associate each MyApps entry with its GitHub repository.
+
+Likely work:
+
+- minimal `ManagedApp` persistence change
+- repository selection/linking
+- unlink/change repository
+- existing SwiftData migration
+- Git entry point in App Detail
+- unlinked empty state
+
+Existing apps without GitHub links must continue working unchanged.
+
+**STOP. Wait for explicit approval.**
+
+---
+
+## Phase 3 — Beautified Git log
+
+Goal: deliver the main read-only value first.
+
+Likely work:
+
+- commit history retrieval
+- branch/ref metadata
+- tag metadata needed by the graph
+- commit-parent topology
+- iPhone-friendly graph layout
+- branch/tag chips on commits
+- branch selector
+- pagination
+- lightweight commit detail screen
+- copy SHA / open on GitHub
+- create-tag entry point may be visible but not active until the tag phase
+
+Acceptance target:
+
+The user can understand repository history and branch topology substantially faster than in GitHub Mobile.
+
+**STOP. Wait for explicit approval.**
+
+---
+
+## Phase 4 — Branch merge
+
+Goal: support normal Git branch merging safely.
+
+Likely work:
+
+- branches list
+- ahead/behind comparison
+- source/destination selector
+- merge preview
+- confirmation
+- merge API operation
+- conflict/error handling
+- log/branch refresh after success
+
+No PR is created or merged.
+
+**STOP. Wait for explicit approval.**
+
+---
+
+## Phase 5 — True branch rebase
+
+Goal: support real branch rebase, not PR "rebase and merge."
+
+This phase must be treated independently because it rewrites history.
+
+Likely work:
+
+- determine merge base
+- determine replay set
+- validate topology
+- construct rebased commits safely
+- detect unsupported/conflicting cases
+- preview old/new branch head
+- guarded ref update with stale-head protection
+- refuse update if remote branch changed
+- clear failure/recovery presentation
+
+This phase must not start until its technical strategy and supported cases are explicitly approved.
+
+**STOP. Wait for explicit approval.**
+
+---
+
+## Phase 6 — Tags
+
+Goal: create Git tags from known commits.
+
+Likely work:
+
+- tag list
+- tag labels in the Git log
+- create tag from commit
+- create tag from branch HEAD
+- exact SHA preview
+- lightweight/annotated behavior as agreed
+- confirmation and error handling
+- refresh log/tag state after success
+
+Tag deletion remains out of scope unless explicitly added.
+
+**STOP. Wait for explicit approval.**
+
+---
+
+## Phase 7 — Releases
+
+Goal: make product release creation practical from iPhone.
+
+Likely work:
+
+- release list
+- visually separate product releases from `mycli-build-*` prereleases
+- create release from existing tag
+- title
+- release notes
+- draft/prerelease options
+- release creation confirmation/error handling
+
+No release-asset upload initially.
+
+**STOP. Wait for explicit approval.**
+
+---
+
+## Phase 8 — Release-readiness polish
+
+After approved functionality is complete:
+
+- accessibility
+- graph rendering/performance
+- pagination/cache review
+- destructive-action consistency
+- credential/security review
+- migration review
+- backup/restore review
+- offline/network-state review
+- documentation
+- end-to-end manual validation
+
+Do not expand product scope during polish.
+
+**STOP.**
+
+---
+
+# Core delivery path
 
 ```text
-Requirements
+Phase 0   Requirements
     ↓
-Secure GitHub connection
+Phase 1   GitHub/Auth foundation
     ↓
-ManagedApp ↔ repository
+Phase 2   App ↔ Repo
     ↓
-Repository tree + source viewer
+Phase 3   Beautiful Git Log
     ↓
-Branches + tags
+Phase 4   Merge
     ↓
-Create tag
+Phase 5   Rebase
+    ↓
+Phase 6   Tags
+    ↓
+Phase 7   Releases
+    ↓
+Phase 8   Polish
 ```
 
-That is the smallest version that directly solves the current iPhone pain point. Releases, Actions, PRs, and issues can remain deferred until the core workflow proves useful.
+The defining features of this integration are the **visual Git log** and the ability to perform **real Git repository operations from iPhone** without duplicating GitHub Mobile.
