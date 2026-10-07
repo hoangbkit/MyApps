@@ -23,7 +23,9 @@ final class CreateReleaseViewModel: ObservableObject {
         self.repositoryName = repositoryName
         self.existingReleases = existingReleases
 
-        let firstTag = tags.first?.name ?? ""
+        let firstTag = tags.first(where: { !$0.name.hasPrefix("mycli-build-") })?.name
+            ?? tags.first?.name
+            ?? ""
         selectedTagName = firstTag
         title = firstTag.isEmpty ? "" : "\(repositoryName) \(firstTag)"
     }
