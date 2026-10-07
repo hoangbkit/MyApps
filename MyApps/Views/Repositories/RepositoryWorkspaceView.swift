@@ -64,10 +64,10 @@ struct RepositoryWorkspaceView: View {
                     }
                 }
             case .releases:
-                phasePlaceholder(
-                    title: "Releases",
-                    symbol: "shippingbox",
-                    message: "Release management arrives in Phase 7."
+                ReleasesView(
+                    repository: repository,
+                    tags: logModel.tags,
+                    client: client
                 )
             }
         }
