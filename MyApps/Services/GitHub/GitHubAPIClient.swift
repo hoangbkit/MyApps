@@ -27,6 +27,34 @@ struct GitHubAPIClient: Sendable {
         try await request(path: "/user")
     }
 
+    func branches(repository: GitHubRepository) async throws -> [GitHubBranch] {
+        try await paginated(
+            path: "/repos/\(repository.owner.login)/\(repository.name)/branches"
+        )
+    }
+
+    func tags(repository: GitHubRepository) async throws -> [GitHubTag] {
+        try await paginated(
+            path: "/repos/\(repository.owner.login)/\(repository.name)/tags"
+        )
+    }
+
+    func commits(
+        repository: GitHubRepository,
+        branch: String,
+        page: Int,
+        perPage: Int
+    ) async throws -> [GitHubCommit] {
+        try await request(
+            path: "/repos/\(repository.owner.login)/\(repository.name)/commits",
+            queryItems: [
+                URLQueryItem(name: "sha", value: branch),
+                URLQueryItem(name: "per_page", value: String(perPage)),
+                URLQueryItem(name: "page", value: String(page))
+            ]
+        )
+    }
+
     func repositories() async throws -> [GitHubRepository] {
         let pageSize = 100
         var page = 1
@@ -51,6 +79,34 @@ struct GitHubAPIClient: Sendable {
 
             guard batch.count == pageSize else {
                 return repositories
+            }
+
+            page += 1
+        }
+    }
+
+    private func paginated<Response: Decodable & Sendable>(
+        path: String
+    ) async throws -> [Response] {
+        let pageSize = 100
+        var page = 1
+        var values: [Response] = []
+
+        while true {
+            try Task.checkCancellation()
+
+            let batch: [Response] = try await request(
+                path: path,
+                queryItems: [
+                    URLQueryItem(name: "per_page", value: String(pageSize)),
+                    URLQueryItem(name: "page", value: String(page))
+                ]
+            )
+
+            values.append(contentsOf: batch)
+
+            guard batch.count == pageSize else {
+                return values
             }
 
             page += 1
