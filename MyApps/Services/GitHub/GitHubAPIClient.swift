@@ -148,6 +148,31 @@ struct GitHubAPIClient: Sendable {
         )
     }
 
+    func releases(repository: GitHubRepository) async throws -> [GitHubRelease] {
+        try await paginated(
+            path: "/repos/\(repository.owner.login)/\(repository.name)/releases"
+        )
+    }
+
+    func createRelease(
+        repository: GitHubRepository,
+        request release: GitHubCreateReleaseRequest
+    ) async throws -> GitHubRelease {
+        let body = try jsonEncoder().encode(release)
+
+        let (data, response) = try await perform(
+            method: "POST",
+            path: "/repos/\(repository.owner.login)/\(repository.name)/releases",
+            body: body
+        )
+
+        guard (200..<300).contains(response.statusCode) else {
+            throw GitHubAPIError.httpStatus(response.statusCode)
+        }
+
+        return try decode(GitHubRelease.self, from: data)
+    }
+
     func commits(
         repository: GitHubRepository,
         branch: String,
