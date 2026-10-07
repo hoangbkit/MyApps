@@ -6,7 +6,7 @@ struct BranchDetailView: View {
     let branches: [GitHubBranch]
     let existingTags: [GitHubTag]
     let client: GitHubAPIClient?
-    let onMerged: () -> Void
+    let onRepositoryChanged: () -> Void
 
     @State private var comparison: GitHubComparison?
     @State private var isLoadingComparison = false
@@ -62,7 +62,7 @@ struct BranchDetailView: View {
                         targetDescription: "HEAD of \(branch.name)",
                         existingTags: existingTags,
                         client: client,
-                        onCreated: onMerged
+                        onCreated: onRepositoryChanged
                     )
                 } label: {
                     Label("Create Tag at HEAD", systemImage: "tag")
@@ -77,7 +77,7 @@ struct BranchDetailView: View {
                             branches: branches,
                             defaultDestination: suggestedDestination,
                             client: client,
-                            onMerged: onMerged
+                            onMerged: onRepositoryChanged
                         )
                     } label: {
                         Label("Merge into…", systemImage: "arrow.triangle.merge")
@@ -92,7 +92,7 @@ struct BranchDetailView: View {
                                 branches: branches,
                                 defaultDestination: repository.defaultBranch,
                                 client: client,
-                                onRebased: onMerged
+                                onRebased: onRepositoryChanged
                             )
                         } label: {
                             Label("Rebase onto…", systemImage: "arrow.triangle.branch")
