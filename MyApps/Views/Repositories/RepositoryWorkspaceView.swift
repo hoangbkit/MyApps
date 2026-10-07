@@ -43,6 +43,7 @@ struct RepositoryWorkspaceView: View {
                 BranchesView(
                     repository: repository,
                     branches: logModel.branches,
+                    tags: logModel.tags,
                     client: client,
                     isLoading: logModel.isLoading
                 ) {
@@ -51,11 +52,17 @@ struct RepositoryWorkspaceView: View {
                     }
                 }
             case .tags:
-                phasePlaceholder(
-                    title: "Tags",
-                    symbol: "tag",
-                    message: "Tag management arrives in Phase 6."
-                )
+                TagsView(
+                    repository: repository,
+                    tags: logModel.tags,
+                    branches: logModel.branches,
+                    selectedBranchName: logModel.selectedBranch,
+                    client: client
+                ) {
+                    Task {
+                        await logModel.loadInitial(repository: repository, client: client)
+                    }
+                }
             case .releases:
                 phasePlaceholder(
                     title: "Releases",
@@ -113,9 +120,16 @@ struct RepositoryWorkspaceView: View {
                     ForEach(Array(logModel.commits.enumerated()), id: \.element.sha) { index, commit in
                         NavigationLink {
                             GitCommitDetailView(
+                                repository: repository,
                                 commit: commit,
-                                references: logModel.references(for: commit)
-                            )
+                                references: logModel.references(for: commit),
+                                existingTags: logModel.tags,
+                                client: client
+                            ) {
+                                Task {
+                                    await logModel.loadInitial(repository: repository, client: client)
+                                }
+                            }
                         } label: {
                             GitCommitRowView(
                                 commit: commit,
