@@ -14,6 +14,7 @@ struct GitHubRepository: Codable, Identifiable, Hashable, Sendable {
     }
 
     let id: Int
+    let nodeID: String
     let name: String
     let fullName: String
     let owner: Owner
@@ -28,6 +29,7 @@ struct GitHubRepository: Codable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case nodeID = "node_id"
         case name
         case fullName = "full_name"
         case owner
