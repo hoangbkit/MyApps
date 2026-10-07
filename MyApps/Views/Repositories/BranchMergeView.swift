@@ -117,7 +117,7 @@ struct BranchMergeView: View {
                     model.isMerging ||
                     model.comparison?.aheadBy == 0 ||
                     model.comparison == nil ||
-                    !repository.hasWriteAccess
+                    !repository.canAttemptWrite
                 )
             } footer: {
                 Text("Before writing, MyApps refreshes both branch heads and recomputes the comparison.")

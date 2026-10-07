@@ -67,11 +67,11 @@ struct BranchDetailView: View {
                     } label: {
                         Label("Merge into…", systemImage: "arrow.triangle.merge")
                     }
-                    .disabled(!repository.hasWriteAccess)
+                    .disabled(!repository.canAttemptWrite)
                 }
 
-                if !repository.hasWriteAccess {
-                    Text("This GitHub connection has read-only access to the repository.")
+                if !repository.canAttemptWrite {
+                    Text(repository.isArchived ? "Archived repositories are read-only." : "This GitHub connection has read-only access to the repository.")
                         .font(.system(size: 13, weight: .regular, design: .rounded))
                         .foregroundStyle(.secondary)
                 }

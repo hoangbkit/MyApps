@@ -42,6 +42,11 @@ struct GitHubRepository: Codable, Identifiable, Hashable, Sendable {
     }
 
     var hasWriteAccess: Bool {
-        permissions?.push == true || permissions?.maintain == true || permissions?.admin == true
+        guard let permissions else { return true }
+        return permissions.push == true || permissions.maintain == true || permissions.admin == true
+    }
+
+    var canAttemptWrite: Bool {
+        !isArchived && hasWriteAccess
     }
 }
