@@ -4,6 +4,7 @@ struct BranchDetailView: View {
     let repository: GitHubRepository
     let branch: GitHubBranch
     let branches: [GitHubBranch]
+    let existingTags: [GitHubTag]
     let client: GitHubAPIClient?
     let onMerged: () -> Void
 
@@ -54,6 +55,20 @@ struct BranchDetailView: View {
             }
 
             Section("Actions") {
+                NavigationLink {
+                    CreateTagView(
+                        repository: repository,
+                        targetSHA: branch.commit.sha,
+                        targetDescription: "HEAD of \(branch.name)",
+                        existingTags: existingTags,
+                        client: client,
+                        onCreated: onMerged
+                    )
+                } label: {
+                    Label("Create Tag at HEAD", systemImage: "tag")
+                }
+                .disabled(!repository.canAttemptWrite)
+
                 if let suggestedDestination {
                     NavigationLink {
                         BranchMergeView(
