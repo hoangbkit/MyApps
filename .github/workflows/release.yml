@@ -1,0 +1,124 @@
+name: Release
+
+# Manual-only by design: this creates disposable mycli build releases,
+# not App Store/product releases.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mycli-release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and release iOS
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v6
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          uname -m
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Set build release tag
+        id: release
+        shell: bash
+        run: |
+          tag="mycli-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Build release: $tag"
+
+      # mycli signs and exports the archive locally using the developer
+      # machine's credentials, so CI intentionally leaves it unsigned.
+      - name: Archive unsigned iOS app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IOS_DERIVED="$RUNNER_TEMP/MyApps-iOS"
+          IOS_ARCHIVE="$RUNNER_TEMP/MyApps.xcarchive"
+          SOURCE_PACKAGES="$RUNNER_TEMP/SourcePackages"
+
+          xcodebuild \
+            -project MyApps.xcodeproj \
+            -scheme MyApps \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$IOS_DERIVED" \
+            -clonedSourcePackagesDirPath "$SOURCE_PACKAGES" \
+            -archivePath "$IOS_ARCHIVE" \
+            -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            archive
+
+          test -d "$IOS_ARCHIVE"
+
+          IOS_APP_COUNT="$(find "$IOS_ARCHIVE/Products/Applications" -maxdepth 1 -type d -name '*.app' -print | wc -l | tr -d ' ')"
+          if [[ "$IOS_APP_COUNT" != "1" ]]; then
+            echo "error: expected exactly one iOS app in archive, found $IOS_APP_COUNT" >&2
+            exit 1
+          fi
+
+          IOS_APP="$(find "$IOS_ARCHIVE/Products/Applications" -maxdepth 1 -type d -name '*.app' -print)"
+          IOS_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$IOS_APP/Info.plist")"
+          echo "iOS bundle id: $IOS_BUNDLE_ID"
+          [[ "$IOS_BUNDLE_ID" == "com.hoangbkit.myapps" ]] || {
+            echo "error: unexpected iOS bundle identifier" >&2
+            exit 1
+          }
+
+          mkdir -p artifacts
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$IOS_ARCHIVE" \
+            "artifacts/MyApps-iOS-unsigned-${{ steps.release.outputs.tag }}.xcarchive.zip"
+
+          rm -rf "$IOS_DERIVED" "$IOS_ARCHIVE"
+
+      - name: Verify release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ARCHIVE="artifacts/MyApps-iOS-unsigned-${{ steps.release.outputs.tag }}.xcarchive.zip"
+          test -f "$ARCHIVE"
+          ls -lh "$ARCHIVE"
+
+          bytes="$(stat -f%z "$ARCHIVE")"
+          if (( bytes >= 2147483648 )); then
+            echo "error: $ARCHIVE is too large for a GitHub Release asset" >&2
+            exit 1
+          fi
+
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_SHA: ${{ steps.release.outputs.release_sha }}
+        shell: bash
+        run: |
+          gh release create "$RELEASE_TAG" artifacts/*.zip \
+            --target "$RELEASE_SHA" \
+            --title "$RELEASE_TAG" \
+            --prerelease \
+            --generate-notes
