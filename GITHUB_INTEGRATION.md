@@ -603,6 +603,10 @@ Acceptance: Apps, global Notes, and Settings retain their existing behavior; the
 
 ## Phase 2 — Repositories tab
 
+**Status: implemented on PR #2.**
+
+The implementation uses GitHub's authenticated-user repository endpoint, requests owned/collaborator/organization-member repositories, paginates at 100 repositories per request until exhausted, and sorts by most recently updated.
+
 - list all accessible repositories
 - private repos
 - search/filter
