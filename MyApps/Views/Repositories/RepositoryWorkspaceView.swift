@@ -191,6 +191,7 @@ struct RepositoryWorkspaceView: View {
                 Label(logModel.selectedBranch, systemImage: "arrow.triangle.branch")
             }
             .accessibilityLabel("Branch \(logModel.selectedBranch)")
+            .disabled(logModel.isLoading || logModel.isLoadingMore)
         }
     }
 }
