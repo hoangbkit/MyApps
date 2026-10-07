@@ -44,14 +44,21 @@ final class CreateTagViewModel: ObservableObject {
         }
 
         if value == "@" ||
-            value.hasPrefix(".") ||
-            value.hasSuffix(".") ||
             value.hasPrefix("/") ||
             value.hasSuffix("/") ||
-            value.hasSuffix(".lock") ||
             value.contains("..") ||
             value.contains("//") ||
             value.contains("@{") {
+            return "Enter a valid Git tag name."
+        }
+
+        let components = value.split(separator: "/", omittingEmptySubsequences: false)
+        if components.contains(where: {
+            $0.isEmpty ||
+            $0.hasPrefix(".") ||
+            $0.hasSuffix(".") ||
+            $0.hasSuffix(".lock")
+        }) {
             return "Enter a valid Git tag name."
         }
 
