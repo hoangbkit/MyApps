@@ -637,6 +637,10 @@ The log uses GitHub's branches, tags, and paged commits endpoints. The selected 
 
 ## Phase 4 — Branch merge
 
+**Status: implemented on PR #2.**
+
+The Branches section now lists repository branches, shows default/protected status, previews ahead/behind state against the default branch, and supports an explicit source → destination merge flow. Before a merge write, MyApps re-fetches both branch heads and recomputes the SHA-based comparison; GitHub's normal branch-merge endpoint performs the actual merge.
+
 - branch list
 - ahead/behind comparison
 - source/destination selection

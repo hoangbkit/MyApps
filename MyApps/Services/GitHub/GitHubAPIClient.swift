@@ -15,6 +15,11 @@ struct GitHubAccount: Codable, Equatable, Sendable {
 }
 
 struct GitHubAPIClient: Sendable {
+    private struct MergeBody: Encodable {
+        let base: String
+        let head: String
+    }
+
     private let token: String
     private let session: URLSession
 
@@ -53,6 +58,43 @@ struct GitHubAPIClient: Sendable {
                 URLQueryItem(name: "page", value: String(page))
             ]
         )
+    }
+
+    func compare(
+        repository: GitHubRepository,
+        baseSHA: String,
+        headSHA: String
+    ) async throws -> GitHubComparison {
+        try await request(
+            path: "/repos/\(repository.owner.login)/\(repository.name)/compare/\(baseSHA)...\(headSHA)"
+        )
+    }
+
+    func merge(
+        repository: GitHubRepository,
+        sourceBranch: String,
+        destinationBranch: String
+    ) async throws -> GitHubMergeResult {
+        let body = try JSONEncoder().encode(
+            MergeBody(base: destinationBranch, head: sourceBranch)
+        )
+
+        let (data, response) = try await perform(
+            method: "POST",
+            path: "/repos/\(repository.owner.login)/\(repository.name)/merges",
+            body: body
+        )
+
+        switch response.statusCode {
+        case 201:
+            return .merged(try decode(GitHubCommit.self, from: data))
+        case 204:
+            return .alreadyUpToDate
+        case 409:
+            throw GitHubAPIError.mergeConflict
+        default:
+            throw GitHubAPIError.httpStatus(response.statusCode)
+        }
     }
 
     func repositories() async throws -> [GitHubRepository] {
@@ -117,6 +159,25 @@ struct GitHubAPIClient: Sendable {
         path: String,
         queryItems: [URLQueryItem] = []
     ) async throws -> Response {
+        let (data, response) = try await perform(
+            method: "GET",
+            path: path,
+            queryItems: queryItems
+        )
+
+        guard (200..<300).contains(response.statusCode) else {
+            throw GitHubAPIError.httpStatus(response.statusCode)
+        }
+
+        return try decode(Response.self, from: data)
+    }
+
+    private func perform(
+        method: String,
+        path: String,
+        queryItems: [URLQueryItem] = [],
+        body: Data? = nil
+    ) async throws -> (Data, HTTPURLResponse) {
         var components = URLComponents()
         components.scheme = "https"
         components.host = "api.github.com"
@@ -128,11 +189,16 @@ struct GitHubAPIClient: Sendable {
         }
 
         var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        request.httpMethod = method
+        request.httpBody = body
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("2026-03-10", forHTTPHeaderField: "X-GitHub-Api-Version")
         request.setValue("MyApps", forHTTPHeaderField: "User-Agent")
+
+        if body != nil {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
 
         let (data, response) = try await session.data(for: request)
 
@@ -140,10 +206,13 @@ struct GitHubAPIClient: Sendable {
             throw GitHubAPIError.invalidResponse
         }
 
-        guard (200..<300).contains(response.statusCode) else {
-            throw GitHubAPIError.httpStatus(response.statusCode)
-        }
+        return (data, response)
+    }
 
+    private func decode<Response: Decodable>(
+        _ type: Response.Type,
+        from data: Data
+    ) throws -> Response {
         do {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
@@ -158,6 +227,7 @@ enum GitHubAPIError: LocalizedError {
     case invalidURL
     case invalidResponse
     case httpStatus(Int)
+    case mergeConflict
     case decoding(Error)
 
     var errorDescription: String? {
@@ -169,11 +239,15 @@ enum GitHubAPIError: LocalizedError {
         case .httpStatus(401):
             return "GitHub rejected the token. Check that it is valid and has not expired."
         case .httpStatus(403):
-            return "GitHub denied this request. Check the token permissions."
+            return "GitHub denied this request. Check repository permissions or branch protection."
         case .httpStatus(404):
             return "The requested GitHub resource was not found."
+        case .httpStatus(422):
+            return "GitHub rejected the branch operation as invalid."
         case let .httpStatus(status):
             return "GitHub returned HTTP \(status)."
+        case .mergeConflict:
+            return "GitHub could not merge these branches automatically because they conflict."
         case let .decoding(error):
             return "Could not read GitHub's response. \(error.localizedDescription)"
         }

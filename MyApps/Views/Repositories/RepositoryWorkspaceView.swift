@@ -40,11 +40,16 @@ struct RepositoryWorkspaceView: View {
             case .log:
                 logView
             case .branches:
-                phasePlaceholder(
-                    title: "Branches",
-                    symbol: "arrow.triangle.branch",
-                    message: "Branch operations arrive in Phase 4."
-                )
+                BranchesView(
+                    repository: repository,
+                    branches: logModel.branches,
+                    client: client,
+                    isLoading: logModel.isLoading
+                ) {
+                    Task {
+                        await logModel.loadInitial(repository: repository, client: client)
+                    }
+                }
             case .tags:
                 phasePlaceholder(
                     title: "Tags",
