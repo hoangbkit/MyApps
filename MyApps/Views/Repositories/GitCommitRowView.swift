@@ -50,7 +50,7 @@ struct GitCommitRowView: View {
                     Text(commit.authorName)
 
                     if let authoredAt = commit.authoredAt {
-                        Text(authoredAt, format: .relative(presentation: .named))
+                        Text(authoredAt, style: .relative)
                     }
                 }
                 .font(.system(size: 12, weight: .regular, design: .rounded))
