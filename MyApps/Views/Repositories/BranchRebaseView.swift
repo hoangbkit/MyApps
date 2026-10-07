@@ -11,6 +11,14 @@ struct BranchRebaseView: View {
     @State private var isConfirmingApply = false
     @Environment(\.dismiss) private var dismiss
 
+    private var rebaseConfirmationMessage: String {
+        let currentHead = String((model.plan?.sourceHeadSHA ?? "").prefix(12))
+        let proposedHead = String((model.proposedHeadSHA ?? "").prefix(12))
+
+        return "\(sourceBranch.name) will move from \(currentHead) to \(proposedHead). " +
+            "GitHub rejects the update if either branch moved since preparation."
+    }
+
     private var destinations: [GitHubBranch] {
         branches
             .filter { $0.name != sourceBranch.name }
@@ -173,12 +181,7 @@ struct BranchRebaseView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(
-                "\(sourceBranch.name) will move from " +
-                "\(String((model.plan?.sourceHeadSHA ?? "").prefix(12))) to " +
-                "\(String((model.proposedHeadSHA ?? "").prefix(12))). " +
-                "GitHub rejects the update if either branch moved since preparation."
-            )
+            Text(rebaseConfirmationMessage)
         }
         .alert(
             "Rebase",
