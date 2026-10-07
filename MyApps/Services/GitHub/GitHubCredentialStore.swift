@@ -89,8 +89,8 @@ enum GitHubCredentialError: LocalizedError {
         case .invalidStoredCredential:
             return "The stored GitHub credential could not be read."
         case let .keychain(status):
-            if let message = SecCopyErrorMessageString(status, nil) as String? {
-                return "Keychain error: \(message)"
+            if let message = SecCopyErrorMessageString(status, nil) {
+                return "Keychain error: \(message as String)"
             }
             return "Keychain error \(status)."
         }
