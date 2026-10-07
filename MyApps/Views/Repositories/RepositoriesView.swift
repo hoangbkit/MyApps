@@ -43,13 +43,18 @@ struct RepositoriesView: View {
         .alert(
             "GitHub",
             isPresented: Binding(
-                get: { session.errorMessage != nil },
-                set: { if !$0 { session.errorMessage = nil } }
+                get: { session.errorMessage != nil || repositoriesModel.errorMessage != nil },
+                set: {
+                    if !$0 {
+                        session.errorMessage = nil
+                        repositoriesModel.errorMessage = nil
+                    }
+                }
             )
         ) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(session.errorMessage ?? "")
+            Text(session.errorMessage ?? repositoriesModel.errorMessage ?? "")
         }
     }
 
@@ -152,8 +157,12 @@ struct RepositoriesView: View {
         } else {
             List {
                 if filteredRepositories.isEmpty {
-                    ContentUnavailableView.search(text: searchText)
-                        .listRowBackground(Color.clear)
+                    ContentUnavailableView(
+                        "No Matching Repositories",
+                        systemImage: "magnifyingglass",
+                        description: Text("No repositories match “\(searchText)”.")
+                    )
+                    .listRowBackground(Color.clear)
                 } else {
                     Section {
                         ForEach(filteredRepositories) { repository in
@@ -226,7 +235,7 @@ struct RepositoriesView: View {
                     Label("Fork", systemImage: "tuningfork")
                 }
 
-                if let permissions = repository.permissions, permissions.push != true {
+                if repository.permissions != nil && !repository.hasWriteAccess {
                     Label("Read Only", systemImage: "lock")
                 }
             }
