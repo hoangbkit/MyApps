@@ -674,6 +674,10 @@ Do not begin until supported cases and technical strategy are explicitly approve
 
 ## Phase 6 — Tags
 
+**Status: implemented on PR #2.**
+
+MyApps now lists repository tags and creates both lightweight and annotated tags from the Tags section, commit details, or branch HEADs. The exact target commit SHA is shown before confirmation, tag names are validated locally, duplicates are re-checked against GitHub immediately before creation, and refs/log labels refresh after success.
+
 - tag list
 - tag labels in Git log
 - create tag from commit
