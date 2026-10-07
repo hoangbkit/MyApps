@@ -1,6 +1,6 @@
-# GitHub Integration
+# Git Operations Companion
 
-This branch extends the iOS-only MyApps app from the latest `master` with a focused Git operations companion for iPhone.
+This branch extends the iOS-only MyApps app from the latest `master` with a separate Git operations area for iPhone.
 
 ## Execution rule
 
@@ -20,98 +20,157 @@ Do not set up or trigger CI for this integration unless explicitly requested.
 
 ---
 
-# Product scope
+# Product boundary
 
-MyApps should not duplicate GitHub Mobile.
+MyApps becomes a top-level tab app.
 
-GitHub Mobile is already good enough for:
+The existing app-management experience is the first tab and must be left alone. The second tab lists GitHub repositories. Tapping a repository opens Git operations.
 
-- browsing files
-- pull requests
-- issues
-- reviews
-- notifications
+There is **no link between `ManagedApp` and GitHub repositories**.
 
-MyApps should instead provide the Git operations that are awkward or missing on iPhone:
+```text
+MyApps
+│
+├── Apps tab
+│   └── existing ProjectsView / AppDetailView / Notes
+│       └── leave behavior and design unchanged
+│
+└── Repos tab
+    ├── all accessible GitHub repositories
+    └── tap repository
+        └── Git workspace
+            ├── Log
+            ├── Branches
+            ├── Tags
+            └── Releases
+```
+
+## Core capabilities
 
 1. **Beautified Git log / commit graph**
-2. **Branch merge**
+2. **Normal branch merge**
 3. **True branch rebase**
 4. **Create Git tag**
 5. **Create GitHub release**
 
-This is a Git history + repository-operations layer attached to each `ManagedApp`.
-
 ## Explicitly out of scope
 
-- file/repository tree browser
-- source-code viewer
-- editing files
+- changing the existing app list UI
+- changing `AppDetailView`
+- linking a `ManagedApp` to a repository
+- file/repository tree browsing
+- source-code viewing/editing
 - issue management
-- PR review
-- PR merge
-- notifications
-- discussions
-- general GitHub replacement
+- PR review or PR merge
+- notifications/discussions
 - macOS target
 - iCloud work from `develop`
 
 ---
 
-# Product structure
+# Top-level design
 
 ```text
-MyApps
-  |
-  +-- Spokio
-  |    |
-  |    +-- Notes
-  |    |
-  |    +-- Git
-  |         |
-  |         +-- Log
-  |         +-- Branches
-  |         +-- Tags
-  |         +-- Releases
-  |
-  +-- BYOKchat
-  |    +-- ...
-  |
-  +-- ReadAloud
-       +-- ...
+┌────────────────────────────────────┐
+│                                    │
+│        Current Apps UI             │
+│                                    │
+│  Spokio                            │
+│  BYOKchat                          │
+│  ReadAloud                         │
+│  ...                               │
+│                                    │
+├────────────────────────────────────┤
+│                                    │
+│      [ Apps ]        [ Repos ]     │
+│        ▔▔▔                         │
+└────────────────────────────────────┘
 ```
 
-Git operations remain optional. An app without a linked repository continues behaving exactly as it does today.
+Conceptually:
+
+```text
+TabView
+│
+├── Apps
+│   └── NavigationStack
+│       └── ProjectsView
+│           └── AppDetailView
+│               └── existing behavior unchanged
+│
+└── Repos
+    └── NavigationStack
+        └── RepositoriesView
+```
+
+Do not redesign ProjectsView, AppDetailView, app editing, notes, backup, or current local data flows merely to support the new tab structure.
 
 ---
 
-# Core UX design
+# Repos tab
 
-## App detail
+```text
+REPOS
+────────────────────────────────────
+Git Repositories                 ↻
+
+Search repositories
+┌──────────────────────────────────┐
+│ 🔍 Search                        │
+└──────────────────────────────────┘
+
+Spokio
+hoangbkit/Spokio
+Private · Swift                       ›
+
+BYOKchat
+hoangbkit/BYOKchat
+Private · Swift                       ›
+
+ReadAloud
+hoangbkit/ReadAloud
+Private · Swift                       ›
+
+analytics-server
+hoangbkit/analytics-server
+Private · TypeScript                  ›
+```
+
+Requirements:
+
+- show all repositories the authenticated account can access
+- support private repositories
+- search/filter
+- refresh
+- lightweight metadata only
+- clear loading/empty/error states
+- no repository file browser
+
+Pinned/recent repositories are optional and require explicit approval.
+
+---
+
+# Repository workspace
 
 ```text
 SPOKIO
 ────────────────────────────────────
-‹ MyApps          [icon] Spokio    •••
+‹ Repos                    develop ▾
 
-Building · iOS/macOS
-Live 1.12 · Dev 1.13
+hoangbkit/Spokio
 
-[ Notes ]                       [ Git ]
+[ Log ]   [ Branches ]   [ Tags ]   [ Releases ]
+ ─────
 ```
-
-Git should feel like a capability of the app being managed, not a new global GitHub client.
 
 ---
 
-# Git home / visual log
-
-The visual Git log is the primary screen.
+# Beautified Git log
 
 ```text
-SPOKIO · GIT
+SPOKIO · LOG
 ────────────────────────────────────
-‹ Spokio                    develop ▾
+‹ Repos                    develop ▾
 
 [ Log ]   [ Branches ]   [ Tags ]   [ Releases ]
  ─────
@@ -144,30 +203,11 @@ SPOKIO · GIT
 ⋮
 ```
 
-## Log requirements
+The graph should clearly show parent topology, divergence, merges, selected branch, branch-head labels, tag labels, SHA, subject, author, and date while remaining readable on iPhone.
 
-The graph should make these immediately visible:
+No file diff viewer is required for v1.
 
-- parent/child topology
-- branch divergence
-- merges
-- current selected branch
-- branch-head labels
-- tag labels
-- short SHA
-- commit subject
-- author
-- relative/absolute time as appropriate
-
-It should not try to become a desktop Git GUI.
-
-The graph must prioritize readability on an iPhone-sized display.
-
----
-
-# Commit details
-
-Tap a commit:
+## Commit detail
 
 ```text
 COMMIT
@@ -189,20 +229,11 @@ develop
 Parents
 8136db2
 
-Commit
-e94fa51
-
-────────────────────────────────────
-
 [ Create Tag Here ]
 
 Copy SHA
 Open on GitHub
 ```
-
-Commit details are intentionally lightweight.
-
-No file diff viewer is required for v1 because GitHub Mobile/web can handle that.
 
 ---
 
@@ -211,7 +242,7 @@ No file diff viewer is required for v1 because GitHub Mobile/web can handle that
 ```text
 BRANCHES
 ────────────────────────────────────
-‹ Git
+‹ Spokio
 
 ✓ develop
   e94fa51
@@ -220,7 +251,7 @@ BRANCHES
   ios-polish
   72ad510
   Paragraph sheet polish
-  2 commits ahead · 1 behind
+  2 ahead · 1 behind vs develop
 
   master
   30bd728
@@ -236,23 +267,20 @@ IOS-POLISH
 Head
 72ad510
 
-Relative to develop
+Compare against
+develop
+
 2 ahead · 1 behind
 
-Actions
-
 [ View Log ]
-
 [ Merge into… ]
-
 [ Rebase onto… ]
-
 [ Create Tag at HEAD ]
 ```
 
 ---
 
-# Merge flow
+# Merge
 
 This means normal Git branch merge, not PR merge.
 
@@ -264,7 +292,7 @@ Cancel
 Source
 ios-polish
 
-        ↓
+        ↓ merge into
 
 Destination
 develop
@@ -276,8 +304,6 @@ Commits introduced
 
 ● 72ad510  Paragraph sheet polish
 ● a8ff112  Voice gender labels
-
-────────────────────────────────────
 
 [ Merge ios-polish into develop ]
 ```
@@ -297,25 +323,13 @@ This updates develop.
 [ Cancel ]                 [ Merge ]
 ```
 
-## Merge behavior
-
-Use GitHub's normal branch merge capability when possible.
-
-The UI must show:
-
-- source branch
-- destination branch
-- ahead/behind relationship
-- expected resulting operation
-- merge conflicts/errors clearly
-
-Never silently reverse source and destination.
+Requirements: source/destination are always explicit, ahead/behind is shown before confirmation, merge direction is never reversed silently, and conflicts/errors are surfaced clearly.
 
 ---
 
-# Rebase flow
+# Rebase
 
-This means **true branch rebase**, equivalent in intent to:
+This means true branch rebase, equivalent in intent to:
 
 ```text
 git checkout ios-polish
@@ -323,7 +337,7 @@ git rebase develop
 git push --force-with-lease
 ```
 
-It is not GitHub's PR "Rebase and merge" feature.
+It is **not** PR "rebase and merge."
 
 ```text
 REBASE
@@ -342,53 +356,23 @@ Commits to replay
 ● 72ad510  Paragraph sheet polish
 ● a8ff112  Voice gender labels
 
-────────────────────────────────────
-
 ⚠ History of ios-polish will change.
 
 [ Rebase ios-polish onto develop ]
 ```
 
-Confirmation:
+Rebase safety requirements:
 
-```text
-REWRITE BRANCH HISTORY?
-────────────────────────────────────
-
-ios-polish will be rebased onto develop.
-
-Old head
-72ad510
-
-Base
-e94fa51
-
-The branch ref will move if the
-rebase succeeds.
-
-[ Cancel ]                [ Rebase ]
-```
-
-## Rebase safety requirements
-
-True rebase is the highest-risk feature in this scope.
-
-GitHub does not provide the same simple high-level REST endpoint for arbitrary branch rebase that it provides for normal branch merge.
-
-Implementation must therefore be designed carefully around Git commit/tree/ref operations, or another explicitly approved strategy.
-
-Required safety properties:
-
-- calculate the exact commit range to replay before writing
-- refuse ambiguous or unsupported histories
+- calculate the exact replay range before writing
+- refuse unsupported or ambiguous histories
 - detect conflicts before moving the branch ref
-- never partially move the branch on failed rebase
-- use compare-and-swap / force-with-lease-style protection when updating the branch ref
-- refuse the write if the remote branch moved since the operation was prepared
-- show the old and proposed new head before confirmation
-- do not offer rebase on protected/default branches unless explicitly allowed by the agreed requirements
+- never partially update the branch on failure
+- use stale-head / force-with-lease-style protection
+- refuse the write if the remote branch moved after preparation
+- show old and proposed new head before confirmation
+- do not fake rebase with PR operations
 
-Do not implement a fake rebase.
+Protected/default-branch rules must be decided in Phase 0.
 
 ---
 
@@ -397,7 +381,7 @@ Do not implement a fake rebase.
 ```text
 TAGS
 ────────────────────────────────────
-‹ Git                            ＋
+‹ Spokio                         ＋
 
 1.12
 30bd728
@@ -406,13 +390,7 @@ Sep 29
 1.11
 19aa821
 Sep 14
-
-1.10
-1f683cd
-Sep 7
 ```
-
-Create from a selected commit:
 
 ```text
 CREATE TAG
@@ -420,22 +398,20 @@ CREATE TAG
 Cancel                        Create
 
 Tag
-┌──────────────────────────────────┐
-│ 1.13                             │
-└──────────────────────────────────┘
+[ 1.13                         ]
 
-Commit
+Target
 e94fa51
 Fix model lifecycle
 
 Tag type
 Lightweight / Annotated
-(to be decided in Phase 0)
+(decide in Phase 0)
 
 [ Create Tag ]
 ```
 
-The app must resolve and show the exact target SHA before creation.
+The exact target SHA must be visible before creation.
 
 ---
 
@@ -444,7 +420,10 @@ The app must resolve and show the exact target SHA before creation.
 ```text
 RELEASES
 ────────────────────────────────────
-‹ Git                            ＋
+‹ Spokio                         ＋
+
+Product Releases
+────────────────────────────────────
 
 1.12                         Latest
 Sep 29
@@ -452,18 +431,12 @@ Sep 29
 1.11
 Sep 14
 
-1.10
-Sep 7
-
+Build Prereleases
 ────────────────────────────────────
-
-Build prereleases
 
 mycli-build-37609478530-1
 Today
 ```
-
-Create release:
 
 ```text
 CREATE RELEASE
@@ -477,10 +450,8 @@ Title
 Spokio 1.13
 
 Release notes
-┌──────────────────────────────────┐
-│                                  │
-│                                  │
-└──────────────────────────────────┘
+[                              ]
+[                              ]
 
 [ ] Prerelease
 [ ] Draft
@@ -488,69 +459,43 @@ Release notes
 [ Create Release ]
 ```
 
-Product releases and disposable `mycli-build-*` prereleases should be visually distinguishable.
-
-Do not upload release assets in the initial implementation unless explicitly requested.
+Product releases and disposable `mycli-build-*` prereleases should be visually distinct. Release asset upload is out of scope initially.
 
 ---
 
-# Authentication and data rules
+# Data and architecture rules
 
-- GitHub credentials must live in Keychain only.
-- Never put credentials in SwiftData, UserDefaults, backups, logs, analytics, or source control.
-- Repository identity may be stored on `ManagedApp` once its exact representation is agreed.
-- Git history is remote data and should be fetched on demand with only lightweight caching if needed.
-- GitHub failure must never make local MyApps notes/business data unusable.
-- All repository-writing operations need explicit confirmation and local error ownership.
-
----
-
-# Requirements still to settle
-
-Phase 0 must resolve these before implementation:
-
-- authentication method for this personal app
-- whether one GitHub account is enough
-- how a `ManagedApp` links to a repository
-- whether one app can link to more than one repository
-- repository identity storage format
-- where the Notes/Git switch should live in App Detail
-- default selected branch
-- how much Git history to load initially
-- pagination/infinite-scroll behavior
-- graph complexity limits on iPhone
-- whether merge commits are always allowed or fast-forward should be preferred when possible
-- exact merge commit-message behavior
-- exact supported rebase cases
-- protected/default branch restrictions for rebase
-- lightweight vs annotated tag creation
-- whether deleting tags is needed
-- default release title/notes behavior
-- whether `mycli-build-*` releases should be hidden, collapsed, or shown in a separate section
-
----
-
-# Proposed architecture
+- GitHub credentials live in Keychain only.
+- Never store credentials in SwiftData, UserDefaults, backups, logs, analytics, or source control.
+- Do not add Git-specific fields to `ManagedApp`.
+- Repositories and Git history are remote data.
+- GitHub failures must not affect the Apps tab or local MyApps data.
+- All Git write operations require explicit confirmation and local error presentation.
 
 ```text
-ManagedApp
-   |
-   +-- GitHub repository identity
+RootView
    |
    v
-GitWorkspaceView
+TabView
    |
-   +-- GitLogView
-   +-- BranchesView
-   +-- TagsView
-   +-- ReleasesView
+   +-- Apps tab
+   |     +-- existing NavigationStack
+   |           +-- ProjectsView
+   |                 +-- AppDetailView
    |
-   v
+   +-- Repos tab
+         +-- NavigationStack
+               +-- RepositoriesView
+                     +-- RepositoryWorkspaceView
+                           +-- GitLogView
+                           +-- BranchesView
+                           +-- TagsView
+                           +-- ReleasesView
+
 GitHubService
-   |
    +-- Authentication
-   +-- Commits / compare
-   +-- Branch refs
+   +-- Repositories
+   +-- Commits / refs / compare
    +-- Merge
    +-- Git objects / ref updates for rebase
    +-- Tags
@@ -560,7 +505,29 @@ GitHubService
 Keychain
 ```
 
-Keep the GitHub layer isolated from the existing MyApps local data layer.
+---
+
+# Requirements still to settle
+
+Phase 0 should settle:
+
+- authentication method
+- one account vs account switching
+- repository ordering
+- whether forks/archived repos appear by default
+- search behavior
+- whether recent/pinned repositories are needed
+- default branch when opening a repo
+- initial Git-history depth
+- pagination/infinite-scroll behavior
+- graph complexity limits
+- merge strategy and commit-message behavior
+- exact supported rebase cases
+- protected/default branch rebase rules
+- lightweight vs annotated tags
+- whether tag deletion is needed
+- release title/notes defaults
+- grouping/filtering of `mycli-build-*` prereleases
 
 ---
 
@@ -568,195 +535,118 @@ Keep the GitHub layer isolated from the existing MyApps local data layer.
 
 ## Phase 0 — Requirements + UX lock
 
-**Status: discussion only.**
+Discussion only. Finalize auth, root tabs, repository list, Git workspace navigation, graph behavior, merge semantics, rebase safety, tag type, and release defaults.
 
-Finalize:
-
-- authentication
-- repository linking
-- Log / Branches / Tags / Releases navigation
-- graph presentation
-- merge semantics
-- supported rebase semantics and safety rules
-- tag type
-- release defaults
-
-Deliverable:
-
-- update this document only
-- no production implementation
+Deliverable: update this document only. No production implementation.
 
 **STOP. Wait for explicit approval.**
 
----
+## Phase 1 — Root tabs + GitHub foundation
 
-## Phase 1 — GitHub foundation + authentication
+- wrap the existing root navigation in a two-tab `TabView`
+- first tab hosts the existing Apps navigation unchanged
+- second tab hosts Repos
+- add GitHub client/auth abstraction
+- store credentials in Keychain
+- add connection/error/loading state
 
-Goal: establish the safe API/auth layer.
-
-Likely work:
-
-- GitHub client
-- authenticated request layer
-- Keychain credential storage
-- account connection/disconnection
-- repository access validation
-- shared error model
-- request cancellation/loading state
-
-No Git operation UI beyond what is required to validate the foundation.
+Acceptance: Apps behaves unchanged and GitHub failures cannot break it.
 
 **STOP. Wait for explicit approval.**
 
----
+## Phase 2 — Repositories tab
 
-## Phase 2 — ManagedApp ↔ repository linking
+- list all accessible repositories
+- private repos
+- search/filter
+- refresh
+- loading/empty/error states
+- navigate into repository workspace shell
 
-Goal: associate each MyApps entry with its GitHub repository.
-
-Likely work:
-
-- minimal `ManagedApp` persistence change
-- repository selection/linking
-- unlink/change repository
-- existing SwiftData migration
-- Git entry point in App Detail
-- unlinked empty state
-
-Existing apps without GitHub links must continue working unchanged.
+No Git operations yet.
 
 **STOP. Wait for explicit approval.**
-
----
 
 ## Phase 3 — Beautified Git log
 
-Goal: deliver the main read-only value first.
-
-Likely work:
-
-- commit history retrieval
-- branch/ref metadata
-- tag metadata needed by the graph
-- commit-parent topology
-- iPhone-friendly graph layout
-- branch/tag chips on commits
-- branch selector
+- commit history
+- parent topology
+- branch/tag metadata
+- selected branch
+- graph rendering
 - pagination
-- lightweight commit detail screen
-- copy SHA / open on GitHub
-- create-tag entry point may be visible but not active until the tag phase
-
-Acceptance target:
-
-The user can understand repository history and branch topology substantially faster than in GitHub Mobile.
+- lightweight commit details
+- Copy SHA / Open on GitHub
 
 **STOP. Wait for explicit approval.**
-
----
 
 ## Phase 4 — Branch merge
 
-Goal: support normal Git branch merging safely.
-
-Likely work:
-
-- branches list
+- branch list
 - ahead/behind comparison
-- source/destination selector
-- merge preview
-- confirmation
-- merge API operation
-- conflict/error handling
-- log/branch refresh after success
+- source/destination selection
+- merge preview + confirmation
+- normal GitHub branch merge
+- conflicts/errors
+- refresh after success
 
-No PR is created or merged.
+No PR operation.
 
 **STOP. Wait for explicit approval.**
-
----
 
 ## Phase 5 — True branch rebase
 
-Goal: support real branch rebase, not PR "rebase and merge."
+- merge-base calculation
+- replay-set determination
+- topology validation
+- safe rebased commit construction
+- conflict/unsupported-case detection
+- old/new-head preview
+- guarded branch-ref update
+- stale-head protection
 
-This phase must be treated independently because it rewrites history.
-
-Likely work:
-
-- determine merge base
-- determine replay set
-- validate topology
-- construct rebased commits safely
-- detect unsupported/conflicting cases
-- preview old/new branch head
-- guarded ref update with stale-head protection
-- refuse update if remote branch changed
-- clear failure/recovery presentation
-
-This phase must not start until its technical strategy and supported cases are explicitly approved.
+Do not begin until supported cases and technical strategy are explicitly approved.
 
 **STOP. Wait for explicit approval.**
-
----
 
 ## Phase 6 — Tags
 
-Goal: create Git tags from known commits.
-
-Likely work:
-
 - tag list
-- tag labels in the Git log
+- tag labels in Git log
 - create tag from commit
-- create tag from branch HEAD
+- create tag at branch HEAD
 - exact SHA preview
 - lightweight/annotated behavior as agreed
-- confirmation and error handling
-- refresh log/tag state after success
-
-Tag deletion remains out of scope unless explicitly added.
+- confirmation/errors/refresh
 
 **STOP. Wait for explicit approval.**
 
----
-
 ## Phase 7 — Releases
 
-Goal: make product release creation practical from iPhone.
-
-Likely work:
-
 - release list
-- visually separate product releases from `mycli-build-*` prereleases
+- product vs `mycli-build-*` grouping
 - create release from existing tag
-- title
-- release notes
+- title + notes
 - draft/prerelease options
-- release creation confirmation/error handling
+- confirmation/errors
 
 No release-asset upload initially.
 
 **STOP. Wait for explicit approval.**
 
----
-
 ## Phase 8 — Release-readiness polish
 
-After approved functionality is complete:
-
 - accessibility
-- graph rendering/performance
+- repository-list performance
+- graph performance/readability
 - pagination/cache review
 - destructive-action consistency
 - credential/security review
-- migration review
-- backup/restore review
-- offline/network-state review
+- network/offline states
 - documentation
-- end-to-end manual validation
+- manual end-to-end validation
 
-Do not expand product scope during polish.
+Do not redesign or expand the Apps tab during polish.
 
 **STOP.**
 
@@ -767,9 +657,9 @@ Do not expand product scope during polish.
 ```text
 Phase 0   Requirements
     ↓
-Phase 1   GitHub/Auth foundation
+Phase 1   Tabs + Auth/Foundation
     ↓
-Phase 2   App ↔ Repo
+Phase 2   Repositories
     ↓
 Phase 3   Beautiful Git Log
     ↓
@@ -784,4 +674,9 @@ Phase 7   Releases
 Phase 8   Polish
 ```
 
-The defining features of this integration are the **visual Git log** and the ability to perform **real Git repository operations from iPhone** without duplicating GitHub Mobile.
+Product boundary:
+
+```text
+Apps tab  = existing MyApps product, unchanged
+Repos tab = Git history + real repository operations
+```
