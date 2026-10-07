@@ -20,6 +20,45 @@ struct GitHubAPIClient: Sendable {
         let head: String
     }
 
+    private struct CreateTreeBody: Encodable {
+        let baseTree: String
+        let tree: [GitHubTreeMutationEntry]
+
+        enum CodingKeys: String, CodingKey {
+            case baseTree = "base_tree"
+            case tree
+        }
+    }
+
+    private struct CreateCommitBody: Encodable {
+        let message: String
+        let tree: String
+        let parents: [String]
+        let author: GitHubCommitAuthorPayload?
+    }
+
+    private struct GraphQLUpdateRefsVariables: Encodable {
+        let repositoryID: String
+        let sourceName: String
+        let sourceBefore: String
+        let sourceAfter: String
+        let destinationName: String
+        let destinationOID: String
+    }
+
+    private struct GraphQLUpdateRefsBody: Encodable {
+        let query: String
+        let variables: GraphQLUpdateRefsVariables
+    }
+
+    private struct GraphQLErrorItem: Decodable {
+        let message: String
+    }
+
+    private struct GraphQLUpdateRefsResponse: Decodable {
+        let errors: [GraphQLErrorItem]?
+    }
+
     private let token: String
     private let session: URLSession
 
@@ -94,6 +133,182 @@ struct GitHubAPIClient: Sendable {
             throw GitHubAPIError.mergeConflict
         default:
             throw GitHubAPIError.httpStatus(response.statusCode)
+        }
+    }
+
+    func gitCommit(
+        repository: GitHubRepository,
+        sha: String
+    ) async throws -> GitHubGitCommitObject {
+        try await request(
+            path: "/repos/\(repository.owner.login)/\(repository.name)/git/commits/\(sha)"
+        )
+    }
+
+    func gitTree(
+        repository: GitHubRepository,
+        sha: String
+    ) async throws -> GitHubGitTree {
+        try await request(
+            path: "/repos/\(repository.owner.login)/\(repository.name)/git/trees/\(sha)",
+            queryItems: [URLQueryItem(name: "recursive", value: "1")]
+        )
+    }
+
+    func commitFiles(
+        repository: GitHubRepository,
+        sha: String
+    ) async throws -> [GitHubComparisonFile] {
+        let pageSize = 100
+        var page = 1
+        var files: [GitHubComparisonFile] = []
+
+        while true {
+            let response: GitHubCommitFilesPage = try await request(
+                path: "/repos/\(repository.owner.login)/\(repository.name)/commits/\(sha)",
+                queryItems: [
+                    URLQueryItem(name: "per_page", value: String(pageSize)),
+                    URLQueryItem(name: "page", value: String(page))
+                ]
+            )
+
+            let batch = response.files ?? []
+            files.append(contentsOf: batch)
+
+            guard batch.count == pageSize else {
+                return files
+            }
+
+            page += 1
+        }
+    }
+
+    func createTree(
+        repository: GitHubRepository,
+        baseTreeSHA: String,
+        entries: [GitHubTreeMutationEntry]
+    ) async throws -> GitHubGitTree {
+        let body = try jsonEncoder().encode(
+            CreateTreeBody(baseTree: baseTreeSHA, tree: entries)
+        )
+
+        let (data, response) = try await perform(
+            method: "POST",
+            path: "/repos/\(repository.owner.login)/\(repository.name)/git/trees",
+            body: body
+        )
+
+        guard (200..<300).contains(response.statusCode) else {
+            throw GitHubAPIError.httpStatus(response.statusCode)
+        }
+
+        return try decode(GitHubGitTree.self, from: data)
+    }
+
+    func createCommit(
+        repository: GitHubRepository,
+        message: String,
+        treeSHA: String,
+        parentSHA: String,
+        author: GitHubCommitAuthorPayload?
+    ) async throws -> GitHubGitCommitObject {
+        let body = try jsonEncoder().encode(
+            CreateCommitBody(
+                message: message,
+                tree: treeSHA,
+                parents: [parentSHA],
+                author: author
+            )
+        )
+
+        let (data, response) = try await perform(
+            method: "POST",
+            path: "/repos/\(repository.owner.login)/\(repository.name)/git/commits",
+            body: body
+        )
+
+        guard (200..<300).contains(response.statusCode) else {
+            throw GitHubAPIError.httpStatus(response.statusCode)
+        }
+
+        return try decode(GitHubGitCommitObject.self, from: data)
+    }
+
+    func updateRebasedBranchWithLease(
+        repository: GitHubRepository,
+        sourceBranch: String,
+        expectedSourceSHA: String,
+        newSourceSHA: String,
+        destinationBranch: String,
+        expectedDestinationSHA: String
+    ) async throws {
+        let query = """
+        mutation UpdateRebasedBranch(
+          $repositoryID: ID!,
+          $sourceName: GitRefname!,
+          $sourceBefore: GitObjectID!,
+          $sourceAfter: GitObjectID!,
+          $destinationName: GitRefname!,
+          $destinationOID: GitObjectID!
+        ) {
+          updateRefs(input: {
+            repositoryId: $repositoryID,
+            refUpdates: [
+              {
+                name: $sourceName,
+                beforeOid: $sourceBefore,
+                afterOid: $sourceAfter,
+                force: true
+              },
+              {
+                name: $destinationName,
+                beforeOid: $destinationOID,
+                afterOid: $destinationOID,
+                force: false
+              }
+            ]
+          }) {
+            clientMutationId
+          }
+        }
+        """
+
+        let payload = GraphQLUpdateRefsBody(
+            query: query,
+            variables: GraphQLUpdateRefsVariables(
+                repositoryID: repository.nodeID,
+                sourceName: "refs/heads/\(sourceBranch)",
+                sourceBefore: expectedSourceSHA,
+                sourceAfter: newSourceSHA,
+                destinationName: "refs/heads/\(destinationBranch)",
+                destinationOID: expectedDestinationSHA
+            )
+        )
+
+        guard let url = URL(string: "https://api.github.com/graphql") else {
+            throw GitHubAPIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = try jsonEncoder().encode(payload)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("MyApps", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await session.data(for: request)
+        guard let response = response as? HTTPURLResponse else {
+            throw GitHubAPIError.invalidResponse
+        }
+        guard (200..<300).contains(response.statusCode) else {
+            throw GitHubAPIError.httpStatus(response.statusCode)
+        }
+
+        let decoded = try JSONDecoder().decode(GraphQLUpdateRefsResponse.self, from: data)
+        if let message = decoded.errors?.first?.message {
+            throw GitHubRebaseError.graphQL(
+                "The branch changed or GitHub rejected the atomic ref update: \(message)"
+            )
         }
     }
 
@@ -220,6 +435,12 @@ struct GitHubAPIClient: Sendable {
         } catch {
             throw GitHubAPIError.decoding(error)
         }
+    }
+
+    private func jsonEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
     }
 }
 
