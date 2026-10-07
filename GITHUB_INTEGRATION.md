@@ -2,21 +2,11 @@
 
 This branch extends the iOS-only MyApps app from the latest `master` with a separate Git operations area for iPhone.
 
-## Execution rule
+## Implementation status
 
-This PR is **planning-only until explicitly approved**.
+The scoped Git operations work is implemented on PR #2.
 
-Before every implementation phase:
-
-1. Discuss remaining requirements and UX choices with the user.
-2. Wait for an explicit go-ahead.
-3. Implement only that approved phase.
-4. Stop after the phase and report what changed.
-5. Do not continue to the next phase without another explicit go-ahead.
-
-If a requirement is ambiguous or could materially change behavior, stop and ask before implementing it.
-
-Do not set up or trigger CI for this integration unless explicitly requested.
+Development followed explicit phase gates: each phase was discussed, approved, implemented on the same PR, and stopped before continuing. CI was not set up or triggered as part of this work.
 
 ---
 
@@ -544,29 +534,27 @@ Keychain
 
 ---
 
-# Requirements still to settle
+# Implemented decisions
 
-Phase 0 should settle:
-
-- whether OAuth/device-flow should later replace or supplement the Phase 1 personal-access-token connection
-- one account vs account switching
-- exact label/icon for the future App Store tab
-- whether the deferred App Store tab is visible as a placeholder now or only introduced when implemented
-- repository ordering
-- whether forks/archived repos appear by default
-- search behavior
-- whether recent/pinned repositories are needed
-- default branch when opening a repo
-- initial Git-history depth
-- pagination/infinite-scroll behavior
-- graph complexity limits
-- merge strategy and commit-message behavior
-- exact supported rebase cases
-- protected/default branch rebase rules
-- lightweight vs annotated tags
-- whether tag deletion is needed
-- release title/notes defaults
-- grouping/filtering of `mycli-build-*` prereleases
+- GitHub authentication: one personal access token connection for now.
+- Credentials: token stored only in Keychain with this-device-only accessibility.
+- Token permissions: repository Contents read/write for private repositories and write operations.
+- App structure: five visible tabs — Apps, Repos, App Store, Notes, Settings.
+- App Store tab: placeholder only; App Store Connect work is deferred.
+- Repository ordering: most recently updated first.
+- Repository scope: owned, collaborator, and organization-member repositories; forks and archived repositories remain visible.
+- Search: repository name, full name, and language.
+- Default branch: repository default branch when opening a repository.
+- Initial Git history: 40 commits.
+- Pagination: explicit Load More.
+- Git graph: compact iPhone-first selected-branch history with ref labels and merge topology indication.
+- Merge: normal GitHub branch merge with explicit source/destination preview and refresh-before-write.
+- Rebase: conservative linear replay only, maximum 100 commits each side; default/protected branches, merge commits, incomplete history, and overlapping changed paths are refused.
+- Tags: both lightweight and annotated tags; no tag deletion.
+- Releases: existing tags only; default title is `<Repository> <tag>`; notes are editable; draft and prerelease are supported.
+- `mycli-build-*` releases: grouped separately as build prereleases.
+- Release assets: not uploaded in this version.
+- No GitHub data is persisted into `ManagedApp`.
 
 ---
 
@@ -690,6 +678,10 @@ MyApps now lists repository tags and creates both lightweight and annotated tags
 
 ## Phase 7 — Releases
 
+**Status: implemented on PR #2.**
+
+The Releases section loads GitHub releases independently from the Git log, separates product releases from `mycli-build-*` build releases, and creates releases only from tags that already exist. Creation supports title, notes, draft, and prerelease settings with duplicate-tag revalidation immediately before the write.
+
 - release list
 - product vs `mycli-build-*` grouping
 - create release from existing tag
@@ -702,6 +694,12 @@ No release-asset upload initially.
 **STOP. Wait for explicit approval.**
 
 ## Phase 8 — Release-readiness polish
+
+**Status: complete on PR #2.**
+
+Final static review covered all changed Swift files and the XcodeGen source configuration. No TODO/FIXME/debug placeholders remain in the GitHub feature area. GitHub code remains isolated from `ManagedApp`; credentials remain Keychain-only; completed phase placeholder code was removed; write callbacks and permission guidance were clarified; product tags are preferred when creating releases.
+
+No CI or tests were triggered during this work, per the project constraint.
 
 - accessibility
 - repository-list performance
