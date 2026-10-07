@@ -27,10 +27,47 @@ struct GitHubAPIClient: Sendable {
         try await request(path: "/user")
     }
 
+    func repositories() async throws -> [GitHubRepository] {
+        let pageSize = 100
+        var page = 1
+        var repositories: [GitHubRepository] = []
+
+        while true {
+            try Task.checkCancellation()
+
+            let batch: [GitHubRepository] = try await request(
+                path: "/user/repos",
+                queryItems: [
+                    URLQueryItem(name: "affiliation", value: "owner,collaborator,organization_member"),
+                    URLQueryItem(name: "visibility", value: "all"),
+                    URLQueryItem(name: "sort", value: "updated"),
+                    URLQueryItem(name: "direction", value: "desc"),
+                    URLQueryItem(name: "per_page", value: String(pageSize)),
+                    URLQueryItem(name: "page", value: String(page))
+                ]
+            )
+
+            repositories.append(contentsOf: batch)
+
+            guard batch.count == pageSize else {
+                return repositories
+            }
+
+            page += 1
+        }
+    }
+
     private func request<Response: Decodable & Sendable>(
-        path: String
+        path: String,
+        queryItems: [URLQueryItem] = []
     ) async throws -> Response {
-        guard let url = URL(string: "https://api.github.com\(path)") else {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "api.github.com"
+        components.path = path
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+
+        guard let url = components.url else {
             throw GitHubAPIError.invalidURL
         }
 
@@ -38,7 +75,7 @@ struct GitHubAPIClient: Sendable {
         request.httpMethod = "GET"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        request.setValue("2026-03-10", forHTTPHeaderField: "X-GitHub-Api-Version")
         request.setValue("MyApps", forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await session.data(for: request)
@@ -52,7 +89,9 @@ struct GitHubAPIClient: Sendable {
         }
 
         do {
-            return try JSONDecoder().decode(Response.self, from: data)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode(Response.self, from: data)
         } catch {
             throw GitHubAPIError.decoding(error)
         }
