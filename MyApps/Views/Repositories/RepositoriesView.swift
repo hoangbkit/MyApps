@@ -2,7 +2,23 @@ import SwiftUI
 
 struct RepositoriesView: View {
     @StateObject private var session = GitHubSession()
+    @StateObject private var repositoriesModel = RepositoriesViewModel()
+
     @State private var token = ""
+    @State private var searchText = ""
+
+    private var filteredRepositories: [GitHubRepository] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            return repositoriesModel.repositories
+        }
+
+        return repositoriesModel.repositories.filter { repository in
+            repository.name.localizedCaseInsensitiveContains(query) ||
+            repository.fullName.localizedCaseInsensitiveContains(query) ||
+            (repository.language?.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
 
     var body: some View {
         Group {
@@ -15,7 +31,7 @@ struct RepositoriesView: View {
                 connectionView
 
             case let .connected(account):
-                connectedView(account)
+                repositoriesView(account)
             }
         }
         .background(Color(uiColor: .systemGroupedBackground))
@@ -48,7 +64,7 @@ struct RepositoriesView: View {
                     Text("Connect GitHub")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
 
-                    Text("Connect your GitHub account to use repository history and Git operations from MyApps.")
+                    Text("Connect your GitHub account to browse repositories and use Git operations from MyApps.")
                         .font(.system(size: 16, weight: .regular, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
@@ -76,6 +92,7 @@ struct RepositoriesView: View {
                     Task {
                         if await session.connect(token: token) {
                             token = ""
+                            await repositoriesModel.load(using: session.client(), force: true)
                         }
                     }
                 } label: {
@@ -103,31 +120,139 @@ struct RepositoriesView: View {
         }
     }
 
-    private func connectedView(_ account: GitHubAccount) -> some View {
-        List {
-            Section("GitHub") {
-                LabeledContent {
-                    Text("@\(account.login)")
-                } label: {
-                    Label("Account", systemImage: "person.crop.circle.badge.checkmark")
+    @ViewBuilder
+    private func repositoriesView(_ account: GitHubAccount) -> some View {
+        if repositoriesModel.isLoading && repositoriesModel.repositories.isEmpty {
+            ProgressView("Loading repositories…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .task(id: account.id) {
+                    await repositoriesModel.load(using: session.client())
+                }
+                .toolbar {
+                    accountToolbar(account)
+                }
+        } else if repositoriesModel.repositories.isEmpty {
+            ContentUnavailableView {
+                Label("No Repositories", systemImage: "shippingbox")
+            } description: {
+                Text("No repositories are available to this GitHub connection.")
+            } actions: {
+                Button("Try Again") {
+                    Task {
+                        await repositoriesModel.load(using: session.client(), force: true)
+                    }
+                }
+            }
+            .task(id: account.id) {
+                await repositoriesModel.load(using: session.client())
+            }
+            .toolbar {
+                accountToolbar(account)
+            }
+        } else {
+            List {
+                if filteredRepositories.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
+                        .listRowBackground(Color.clear)
+                } else {
+                    Section {
+                        ForEach(filteredRepositories) { repository in
+                            NavigationLink {
+                                RepositoryWorkspaceView(repository: repository)
+                            } label: {
+                                repositoryRow(repository)
+                            }
+                        }
+                    } header: {
+                        Text("\(filteredRepositories.count) Repositories")
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .searchable(
+                text: $searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search repositories"
+            )
+            .refreshable {
+                await repositoriesModel.load(using: session.client(), force: true)
+            }
+            .task(id: account.id) {
+                await repositoriesModel.load(using: session.client())
+            }
+            .toolbar {
+                accountToolbar(account)
+            }
+        }
+    }
+
+    private func repositoryRow(_ repository: GitHubRepository) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(repository.name)
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+
+                if repository.isPrivate {
+                    Text("Private")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.12), in: Capsule())
                 }
 
+                if repository.isArchived {
+                    Text("Archived")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.12), in: Capsule())
+                }
+            }
+
+            Text(repository.fullName)
+                .font(.system(size: 13, weight: .regular, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            HStack(spacing: 8) {
+                if let language = repository.language {
+                    Label(language, systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+
+                if repository.isFork {
+                    Label("Fork", systemImage: "tuningfork")
+                }
+
+                if let permissions = repository.permissions, permissions.push != true {
+                    Label("Read Only", systemImage: "lock")
+                }
+            }
+            .font(.system(size: 12, weight: .regular, design: .rounded))
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 3)
+    }
+
+    @ToolbarContentBuilder
+    private func accountToolbar(_ account: GitHubAccount) -> some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Menu {
+                Label("@\(account.login)", systemImage: "person.crop.circle.badge.checkmark")
+
                 Button(role: .destructive) {
+                    repositoriesModel.reset()
+                    searchText = ""
                     session.disconnect()
                 } label: {
                     Label("Disconnect GitHub", systemImage: "rectangle.portrait.and.arrow.right")
                 }
+            } label: {
+                Image(systemName: "person.crop.circle")
             }
-
-            Section {
-                ContentUnavailableView(
-                    "Repositories Coming Next",
-                    systemImage: "shippingbox",
-                    description: Text("Phase 2 will load and search repositories available to @\(account.login).")
-                )
-                .listRowBackground(Color.clear)
-            }
+            .accessibilityLabel("GitHub Account")
         }
-        .listStyle(.insetGrouped)
     }
 }
