@@ -655,6 +655,10 @@ No PR operation.
 
 ## Phase 5 — True branch rebase
 
+**Status: implemented on PR #2.**
+
+The first version is deliberately conservative: it handles linear replay ranges, declines merge-commit replay, and declines cases where both sides changed the same paths. It prepares replacement Git objects before updating the source branch, and the final ref update is guarded by GitHub GraphQL `beforeOid` checks for both selected branches.
+
 - merge-base calculation
 - replay-set determination
 - topology validation
