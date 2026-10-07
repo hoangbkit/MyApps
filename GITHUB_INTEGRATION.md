@@ -620,6 +620,10 @@ No Git operations yet.
 
 ## Phase 3 — Beautified Git log
 
+**Status: implemented on PR #2.**
+
+The log uses GitHub's branches, tags, and paged commits endpoints. The selected branch is switchable from the repository toolbar; commits load 40 at a time. Branch/tag labels are attached by matching ref target SHAs, and merge commits render with a compact secondary graph lane so parent topology remains readable on iPhone.
+
 - commit history
 - parent topology
 - branch/tag metadata
