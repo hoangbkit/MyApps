@@ -113,9 +113,8 @@ final class CreateReleaseViewModel: ObservableObject {
             successMessage = "Created release \(selectedTagName)."
             errorMessage = nil
             return true
-        } catch is CancellationError {
-            return false
         } catch {
+            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }

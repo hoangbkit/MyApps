@@ -138,6 +138,7 @@ struct BranchDetailView: View {
             )
             comparisonError = nil
         } catch {
+            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
             comparisonError = error.localizedDescription
         }
     }

@@ -28,8 +28,15 @@ final class GitHubSession: ObservableObject {
 
             token = storedToken
             let account = try await GitHubAPIClient(token: storedToken).currentUser()
+            try Task.checkCancellation()
             connectionState = .connected(account)
+            errorMessage = nil
         } catch {
+            if Task.isCancelled || GitHubAPIClient.isCancellation(error) {
+                // A cancelled restoration must be retried on the next activation.
+                hasRestored = false
+                return
+            }
             connectionState = .disconnected
             errorMessage = error.localizedDescription
         }
@@ -54,6 +61,9 @@ final class GitHubSession: ObservableObject {
             errorMessage = nil
             return true
         } catch {
+            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else {
+                return false
+            }
             errorMessage = error.localizedDescription
             return false
         }

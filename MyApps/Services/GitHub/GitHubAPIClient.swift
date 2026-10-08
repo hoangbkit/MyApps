@@ -79,6 +79,13 @@ struct GitHubAPIClient: Sendable {
         let errors: [GraphQLErrorItem]?
     }
 
+    // URLSession cancellation errors (-999) are not always CancellationError.
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
+    }
+
     private let token: String
     private let session: URLSession
 

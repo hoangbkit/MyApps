@@ -28,9 +28,8 @@ final class ReleasesViewModel: ObservableObject {
             releases = try await client.releases(repository: repository)
             hasLoaded = true
             errorMessage = nil
-        } catch is CancellationError {
-            return
         } catch {
+            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
             errorMessage = error.localizedDescription
         }
     }

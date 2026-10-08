@@ -15,6 +15,7 @@ final class GitLogViewModel: ObservableObject {
     private let pageSize = 40
     private var nextPage = 1
     private var loadedBranch: String?
+    private var loadGeneration = 0
 
     init(defaultBranch: String) {
         selectedBranch = defaultBranch
@@ -29,25 +30,36 @@ final class GitLogViewModel: ObservableObject {
             return
         }
 
+        loadGeneration += 1
+        let generation = loadGeneration
         isLoading = true
-        defer { isLoading = false }
+        isLoadingMore = false
+        errorMessage = nil
+        defer {
+            if generation == loadGeneration { isLoading = false }
+        }
 
         do {
             async let branchesRequest = client.branches(repository: repository)
             async let tagsRequest = client.tags(repository: repository)
+            let fetchedBranches = try await branchesRequest
+            let fetchedTags = try await tagsRequest
+            guard generation == loadGeneration, !Task.isCancelled else { return }
 
-            branches = try await branchesRequest
-            tags = try await tagsRequest
-
-            if !branches.contains(where: { $0.name == selectedBranch }) {
-                selectedBranch = repository.defaultBranch
-            }
-
-            try await loadFirstPage(repository: repository, client: client)
-            errorMessage = nil
-        } catch is CancellationError {
-            return
+            let branch = fetchedBranches.contains(where: { $0.name == selectedBranch })
+                ? selectedBranch
+                : repository.defaultBranch
+            let page = try await client.commits(
+                repository: repository, branch: branch, page: 1, perPage: pageSize
+            )
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            branches = fetchedBranches
+            tags = fetchedTags
+            applyFirstPage(page, branch: branch)
         } catch {
+            guard generation == loadGeneration,
+                  !Task.isCancelled,
+                  !GitHubAPIClient.isCancellation(error) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -57,27 +69,41 @@ final class GitLogViewModel: ObservableObject {
         repository: GitHubRepository,
         client: GitHubAPIClient?
     ) async {
-        guard branch != loadedBranch || commits.isEmpty else {
+        // Re-selecting the loaded branch invalidates an older request too.
+        if branch == loadedBranch && !commits.isEmpty {
+            loadGeneration += 1
             selectedBranch = branch
+            isLoading = false
+            isLoadingMore = false
+            errorMessage = nil
             return
         }
-
-        selectedBranch = branch
-
         guard let client else {
             errorMessage = "GitHub is not connected."
             return
         }
 
+        loadGeneration += 1
+        let generation = loadGeneration
+        selectedBranch = branch
         isLoading = true
-        defer { isLoading = false }
+        isLoadingMore = false
+        errorMessage = nil
+        defer {
+            if generation == loadGeneration { isLoading = false }
+        }
 
         do {
-            try await loadFirstPage(repository: repository, client: client)
-            errorMessage = nil
-        } catch is CancellationError {
-            return
+            let page = try await client.commits(
+                repository: repository, branch: branch, page: 1, perPage: pageSize
+            )
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            applyFirstPage(page, branch: branch)
         } catch {
+            guard generation == loadGeneration else { return }
+            // Preserve the old commits and their matching branch label.
+            selectedBranch = loadedBranch ?? repository.defaultBranch
+            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -86,33 +112,30 @@ final class GitLogViewModel: ObservableObject {
         repository: GitHubRepository,
         client: GitHubAPIClient?
     ) async {
-        guard
-            hasMoreCommits,
-            !isLoading,
-            !isLoadingMore,
-            let client
-        else {
-            return
-        }
+        guard hasMoreCommits, !isLoading, !isLoadingMore,
+              let client, let branch = loadedBranch else { return }
 
+        let generation = loadGeneration
+        let pageNumber = nextPage
         isLoadingMore = true
-        defer { isLoadingMore = false }
+        defer {
+            if generation == loadGeneration { isLoadingMore = false }
+        }
 
         do {
             let page = try await client.commits(
-                repository: repository,
-                branch: selectedBranch,
-                page: nextPage,
-                perPage: pageSize
+                repository: repository, branch: branch, page: pageNumber, perPage: pageSize
             )
-
+            guard generation == loadGeneration, loadedBranch == branch,
+                  nextPage == pageNumber, !Task.isCancelled else { return }
             appendUnique(page)
             hasMoreCommits = page.count == pageSize
             nextPage += 1
             errorMessage = nil
-        } catch is CancellationError {
-            return
         } catch {
+            guard generation == loadGeneration,
+                  !Task.isCancelled,
+                  !GitHubAPIClient.isCancellation(error) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -130,25 +153,13 @@ final class GitLogViewModel: ObservableObject {
         )
     }
 
-    private func loadFirstPage(
-        repository: GitHubRepository,
-        client: GitHubAPIClient
-    ) async throws {
-        commits = []
-        nextPage = 1
-        hasMoreCommits = true
-        loadedBranch = selectedBranch
-
-        let page = try await client.commits(
-            repository: repository,
-            branch: selectedBranch,
-            page: nextPage,
-            perPage: pageSize
-        )
-
+    private func applyFirstPage(_ page: [GitHubCommit], branch: String) {
+        selectedBranch = branch
+        loadedBranch = branch
         commits = page
         hasMoreCommits = page.count == pageSize
         nextPage = 2
+        errorMessage = nil
     }
 
     private func appendUnique(_ page: [GitHubCommit]) {

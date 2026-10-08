@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RepositoriesView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var session = GitHubSession()
     @StateObject private var repositoriesModel = RepositoriesViewModel()
 
@@ -37,8 +38,13 @@ struct RepositoriesView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Repos")
         .navigationBarTitleDisplayMode(.large)
-        .task {
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
             await session.restore()
+            guard !Task.isCancelled else { return }
+            if case .connected = session.connectionState {
+                await repositoriesModel.load(using: session.client())
+            }
         }
         .alert(
             "GitHub",
@@ -130,9 +136,6 @@ struct RepositoriesView: View {
         if repositoriesModel.isLoading && repositoriesModel.repositories.isEmpty {
             ProgressView("Loading repositories…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .task(id: account.id) {
-                    await repositoriesModel.load(using: session.client())
-                }
                 .toolbar {
                     accountToolbar(account)
                 }
@@ -147,9 +150,6 @@ struct RepositoriesView: View {
                         await repositoriesModel.load(using: session.client(), force: true)
                     }
                 }
-            }
-            .task(id: account.id) {
-                await repositoriesModel.load(using: session.client())
             }
             .toolbar {
                 accountToolbar(account)
@@ -188,9 +188,6 @@ struct RepositoriesView: View {
             )
             .refreshable {
                 await repositoriesModel.load(using: session.client(), force: true)
-            }
-            .task(id: account.id) {
-                await repositoriesModel.load(using: session.client())
             }
             .toolbar {
                 accountToolbar(account)

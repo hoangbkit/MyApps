@@ -184,9 +184,8 @@ final class BranchRebaseViewModel: ObservableObject {
             } else {
                 errorMessage = nil
             }
-        } catch is CancellationError {
-            return
         } catch {
+            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
             plan = nil
             errorMessage = error.localizedDescription
         }
@@ -305,9 +304,8 @@ final class BranchRebaseViewModel: ObservableObject {
             preparedSourceSHA = plan.sourceHeadSHA
             preparedDestinationSHA = plan.destinationHeadSHA
             errorMessage = nil
-        } catch is CancellationError {
-            return
         } catch {
+            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
             proposedHeadSHA = nil
             preparedSourceSHA = nil
             preparedDestinationSHA = nil
@@ -346,9 +344,8 @@ final class BranchRebaseViewModel: ObservableObject {
             successMessage = "Rebased \(sourceBranch.name) onto \(destinationName)."
             errorMessage = nil
             return true
-        } catch is CancellationError {
-            return false
         } catch {
+            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }

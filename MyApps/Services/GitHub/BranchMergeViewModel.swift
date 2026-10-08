@@ -56,9 +56,8 @@ final class BranchMergeViewModel: ObservableObject {
                 headSHA: source.commit.sha
             )
             errorMessage = nil
-        } catch is CancellationError {
-            return
         } catch {
+            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
             comparison = nil
             errorMessage = error.localizedDescription
         }
@@ -117,9 +116,8 @@ final class BranchMergeViewModel: ObservableObject {
 
             errorMessage = nil
             return true
-        } catch is CancellationError {
-            return false
         } catch {
+            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }

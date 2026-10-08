@@ -8,31 +8,38 @@ final class RepositoriesViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private var hasLoaded = false
+    private var loadGeneration = 0
 
     func load(using client: GitHubAPIClient?, force: Bool = false) async {
         guard let client else {
-            repositories = []
-            hasLoaded = false
+            reset()
             return
         }
-
         guard force || !hasLoaded else { return }
 
+        loadGeneration += 1
+        let generation = loadGeneration
         isLoading = true
-        defer { isLoading = false }
+        errorMessage = nil
+        defer {
+            if generation == loadGeneration { isLoading = false }
+        }
 
         do {
-            repositories = try await client.repositories()
+            let fetched = try await client.repositories()
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            repositories = fetched
             hasLoaded = true
-            errorMessage = nil
-        } catch is CancellationError {
-            return
         } catch {
+            guard generation == loadGeneration,
+                  !Task.isCancelled,
+                  !GitHubAPIClient.isCancellation(error) else { return }
             errorMessage = error.localizedDescription
         }
     }
 
     func reset() {
+        loadGeneration += 1
         repositories = []
         isLoading = false
         errorMessage = nil

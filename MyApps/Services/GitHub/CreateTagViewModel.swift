@@ -120,9 +120,8 @@ final class CreateTagViewModel: ObservableObject {
             successMessage = "Created tag \(normalizedName)."
             errorMessage = nil
             return true
-        } catch is CancellationError {
-            return false
         } catch {
+            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }
