@@ -7,6 +7,7 @@ struct TagsView: View {
     let selectedBranchName: String
     let client: GitHubAPIClient?
     let onCreated: () -> Void
+    let onRefresh: () async -> Void
 
     private var selectedBranch: GitHubBranch? {
         branches.first { $0.name == selectedBranchName } ??
@@ -56,5 +57,8 @@ struct TagsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .refreshable {
+            await onRefresh()
+        }
     }
 }

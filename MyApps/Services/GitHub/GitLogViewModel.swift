@@ -21,6 +21,7 @@ final class GitLogViewModel: ObservableObject {
     private var nextPage = 1
     private var loadedBranch: String?
     private var loadGeneration = 0
+    private var tagsGeneration = 0
 
     // The next page to request for every branch that has more history.
     // All Branches does not use a single pagination cursor.
@@ -47,6 +48,9 @@ final class GitLogViewModel: ObservableObject {
 
         loadGeneration += 1
         let generation = loadGeneration
+        // A lightweight tags-only refresh must not be overwritten by an
+        // earlier, slower all-branches history request.
+        let initialTagsGeneration = tagsGeneration
         isLoading = true
         isLoadingMore = false
         errorMessage = nil
@@ -75,10 +79,39 @@ final class GitLogViewModel: ObservableObject {
             guard generation == loadGeneration, !Task.isCancelled else { return }
 
             branches = freshBranches
-            tags = freshTags
+            if tagsGeneration == initialTagsGeneration {
+                tags = freshTags
+            }
             applyFirstPage(firstPage, scope: scope)
         } catch {
             guard generation == loadGeneration,
+                  !Task.isCancelled,
+                  !GitHubAPIClient.isCancellation(error) else { return }
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Refresh only the tag refs. Tag creation and pull-to-refresh must not
+    /// wait for every branch history page or discard the currently shown log.
+    func refreshTags(
+        repository: GitHubRepository,
+        client: GitHubAPIClient?
+    ) async {
+        guard let client else {
+            errorMessage = "GitHub is not connected."
+            return
+        }
+
+        tagsGeneration += 1
+        let generation = tagsGeneration
+
+        do {
+            let latestTags = try await client.tags(repository: repository)
+            guard generation == tagsGeneration, !Task.isCancelled else { return }
+            tags = latestTags
+            errorMessage = nil
+        } catch {
+            guard generation == tagsGeneration,
                   !Task.isCancelled,
                   !GitHubAPIClient.isCancellation(error) else { return }
             errorMessage = error.localizedDescription

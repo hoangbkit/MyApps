@@ -45,7 +45,12 @@ struct RepositoryWorkspaceView: View {
                     branches: logModel.branches,
                     tags: logModel.tags,
                     client: client,
-                    isLoading: logModel.isLoading
+                    isLoading: logModel.isLoading,
+                    onTagCreated: {
+                        Task {
+                            await logModel.refreshTags(repository: repository, client: client)
+                        }
+                    }
                 ) {
                     Task {
                         await logModel.loadInitial(repository: repository, client: client)
@@ -57,12 +62,16 @@ struct RepositoryWorkspaceView: View {
                     tags: logModel.tags,
                     branches: logModel.branches,
                     selectedBranchName: logModel.selectedBranch,
-                    client: client
-                ) {
-                    Task {
-                        await logModel.loadInitial(repository: repository, client: client)
+                    client: client,
+                    onCreated: {
+                        Task {
+                            await logModel.refreshTags(repository: repository, client: client)
+                        }
+                    },
+                    onRefresh: {
+                        await logModel.refreshTags(repository: repository, client: client)
                     }
-                }
+                )
             case .releases:
                 ReleasesView(
                     repository: repository,
@@ -128,7 +137,7 @@ struct RepositoryWorkspaceView: View {
                                 client: client
                             ) {
                                 Task {
-                                    await logModel.loadInitial(repository: repository, client: client)
+                                    await logModel.refreshTags(repository: repository, client: client)
                                 }
                             }
                         } label: {

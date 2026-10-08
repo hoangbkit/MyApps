@@ -6,6 +6,7 @@ struct BranchesView: View {
     let tags: [GitHubTag]
     let client: GitHubAPIClient?
     let isLoading: Bool
+    let onTagCreated: () -> Void
     let onRepositoryChanged: () -> Void
 
     private var sortedBranches: [GitHubBranch] {
@@ -37,6 +38,7 @@ struct BranchesView: View {
                             branches: branches,
                             existingTags: tags,
                             client: client,
+                            onTagCreated: onTagCreated,
                             onRepositoryChanged: onRepositoryChanged
                         )
                     } label: {

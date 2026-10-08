@@ -6,6 +6,7 @@ struct BranchDetailView: View {
     let branches: [GitHubBranch]
     let existingTags: [GitHubTag]
     let client: GitHubAPIClient?
+    let onTagCreated: () -> Void
     let onRepositoryChanged: () -> Void
 
     @State private var comparison: GitHubComparison?
@@ -62,7 +63,7 @@ struct BranchDetailView: View {
                         targetDescription: "HEAD of \(branch.name)",
                         existingTags: existingTags,
                         client: client,
-                        onCreated: onRepositoryChanged
+                        onCreated: onTagCreated
                     )
                 } label: {
                     Label("Create Tag at HEAD", systemImage: "tag")

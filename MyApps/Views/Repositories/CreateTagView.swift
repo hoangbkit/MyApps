@@ -117,7 +117,8 @@ struct CreateTagView: View {
                         targetSHA: targetSHA,
                         client: client
                     ) {
-                        onCreated()
+                        // Wait for explicit dismissal before refreshing the
+                        // parent view, so success/error alerts cannot compete.
                     }
                 }
             }
@@ -148,6 +149,7 @@ struct CreateTagView: View {
             )
         ) {
             Button("Done") {
+                onCreated()
                 dismiss()
             }
         } message: {
