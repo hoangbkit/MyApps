@@ -65,7 +65,11 @@ struct GitCommitRowView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: 80, alignment: .topLeading)
         .overlay(alignment: .leading) {
-            GitGraphMarkerView(layout: graph, laneSpacing: laneSpacing)
+            GitGraphMarkerView(
+                layout: graph,
+                laneSpacing: laneSpacing,
+                nodeY: references.isEmpty ? 22 : 50
+            )
                 .frame(width: graphWidth)
                 .allowsHitTesting(false)
         }

@@ -5,6 +5,7 @@ import SwiftUI
 struct GitGraphMarkerView: View {
     let layout: GitGraphRowLayout
     let laneSpacing: CGFloat
+    let nodeY: CGFloat
 
     private static let laneColors: [Color] = [
         Color(red: 0.13, green: 0.55, blue: 0.95),
@@ -17,7 +18,6 @@ struct GitGraphMarkerView: View {
 
     var body: some View {
         Canvas { context, size in
-            let nodeY: CGFloat = 22
             let nodeX = x(for: layout.nodeLane)
             let bottomY = size.height
 

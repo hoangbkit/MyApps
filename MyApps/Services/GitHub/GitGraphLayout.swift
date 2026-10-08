@@ -82,7 +82,7 @@ enum GitGraphLayout {
                 outgoing.append(lane)
             }
 
-            maxLanes = max(maxLanes, nodeLane + 1, next.count)
+            maxLanes = max(max(maxLanes, nodeLane + 1), next.count)
             rows.append(
                 GitGraphRowLayout(
                     nodeLane: nodeLane,
