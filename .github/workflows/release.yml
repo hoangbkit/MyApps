@@ -19,11 +19,20 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: Checkout master
+      - name: Checkout selected ref
         uses: actions/checkout@v6
         with:
-          ref: master
           fetch-depth: 0
+
+      - name: Verify selected commit
+        shell: bash
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::Checked out $actual_sha, expected $GITHUB_SHA" >&2
+            exit 1
+          fi
+          echo "Building ref $GITHUB_REF at $actual_sha"
 
       - name: Show toolchain
         run: |
