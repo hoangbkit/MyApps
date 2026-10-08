@@ -14,6 +14,18 @@ struct GitHubAccount: Codable, Equatable, Sendable {
     }
 }
 
+/// A per-branch pagination request for an All Branches log.
+struct GitHubBranchHistoryCursor: Sendable {
+    let branch: String
+    let page: Int
+}
+
+struct GitHubBranchHistoryPage: Sendable {
+    let branch: String
+    let page: Int
+    let commits: [GitHubCommit]
+}
+
 struct GitHubAPIClient: Sendable {
     private struct MergeBody: Encodable {
         let base: String
@@ -194,6 +206,56 @@ struct GitHubAPIClient: Sendable {
                 URLQueryItem(name: "page", value: String(page))
             ]
         )
+    }
+
+    /// Fetch a page for every requested branch, bounded to four concurrent
+    /// GitHub calls. A failure aborts the batch: callers never present a
+    /// partially loaded All Branches history as though it were complete.
+    func commitPages(
+        repository: GitHubRepository,
+        cursors: [GitHubBranchHistoryCursor],
+        perPage: Int
+    ) async throws -> [GitHubBranchHistoryPage] {
+        let batchSize = 4
+        var allPages: [GitHubBranchHistoryPage] = []
+        allPages.reserveCapacity(cursors.count)
+
+        for start in stride(from: 0, to: cursors.count, by: batchSize) {
+            try Task.checkCancellation()
+            let end = min(start + batchSize, cursors.count)
+            let batch = Array(cursors[start..<end])
+
+            let pages = try await withThrowingTaskGroup(
+                of: GitHubBranchHistoryPage.self,
+                returning: [GitHubBranchHistoryPage].self
+            ) { group in
+                for cursor in batch {
+                    group.addTask {
+                        let commits = try await self.commits(
+                            repository: repository,
+                            branch: cursor.branch,
+                            page: cursor.page,
+                            perPage: perPage
+                        )
+                        return GitHubBranchHistoryPage(
+                            branch: cursor.branch,
+                            page: cursor.page,
+                            commits: commits
+                        )
+                    }
+                }
+
+                var received: [GitHubBranchHistoryPage] = []
+                for try await page in group {
+                    received.append(page)
+                }
+                return received
+            }
+
+            allPages.append(contentsOf: pages)
+        }
+
+        return allPages
     }
 
     func compare(
