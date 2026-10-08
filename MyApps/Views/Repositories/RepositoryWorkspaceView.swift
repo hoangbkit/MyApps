@@ -115,7 +115,7 @@ struct RepositoryWorkspaceView: View {
                 }
             }
         } else {
-            let graph = GitGraphLayout.make(logModel.commits)
+            let graph = logModel.graph
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(graph.commits.enumerated()), id: \.element.sha) { index, commit in

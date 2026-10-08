@@ -8,6 +8,7 @@ final class GitLogViewModel: ObservableObject {
     @Published private(set) var branches: [GitHubBranch] = []
     @Published private(set) var tags: [GitHubTag] = []
     @Published private(set) var commits: [GitHubCommit] = []
+    @Published private(set) var graph = GitGraphLayout.make([])
     @Published private(set) var isLoading = false
     @Published private(set) var isLoadingMore = false
     @Published private(set) var hasMoreCommits = true
@@ -160,9 +161,9 @@ final class GitLogViewModel: ObservableObject {
 
                 // Combine all fetched pages before touching visible state.
                 // A duplicate shared ancestor must appear only once.
-                commits = Self.uniqueRecentCommits(
+                setCommits(Self.uniqueRecentCommits(
                     commits + pages.flatMap(\.commits)
-                )
+                ))
                 pendingBranchPages = nextBranchPages(
                     from: pages,
                     pageSize: allBranchesPageSize
@@ -269,7 +270,7 @@ final class GitLogViewModel: ObservableObject {
     private func applyFirstPage(_ page: FirstPage, scope: String) {
         selectedBranch = scope
         loadedBranch = scope
-        commits = page.commits
+        setCommits(page.commits)
         pendingBranchPages = page.nextBranchPages
         hasMoreCommits = page.hasMore
         nextPage = 2
@@ -278,7 +279,14 @@ final class GitLogViewModel: ObservableObject {
 
     private func appendUnique(_ page: [GitHubCommit]) {
         let existing = Set(commits.map(\.sha))
-        commits.append(contentsOf: page.filter { !existing.contains($0.sha) })
+        setCommits(commits + page.filter { !existing.contains($0.sha) })
+    }
+
+    private func setCommits(_ updated: [GitHubCommit]) {
+        // Recalculate topology only when history changes, not on every
+        // SwiftUI redraw or relative-time text update.
+        graph = GitGraphLayout.make(updated)
+        commits = updated
     }
 
     private static func uniqueRecentCommits(_ items: [GitHubCommit]) -> [GitHubCommit] {

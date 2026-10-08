@@ -103,49 +103,88 @@ enum GitGraphLayout {
         )
     }
 
+    // Topological sort with an index min-heap: O((commits + parents) log commits).
+    // Prefer the original API position whenever multiple commits are ready.
     private static func topologicalOrder(_ commits: [GitHubCommit]) -> [GitHubCommit] {
         let positions = Dictionary(
             uniqueKeysWithValues: commits.enumerated().map { ($0.element.sha, $0.offset) }
         )
-        var pendingChildren = [Int](repeating: 0, count: commits.count)
+        var remainingChildren = [Int](repeating: 0, count: commits.count)
 
         for commit in commits {
             for parent in commit.parents {
                 if let parentIndex = positions[parent.sha] {
-                    pendingChildren[parentIndex] += 1
+                    remainingChildren[parentIndex] += 1
                 }
             }
         }
 
-        var emitted = Set<Int>()
+        var ready = IndexMinHeap()
+        for index in commits.indices where remainingChildren[index] == 0 {
+            ready.insert(index)
+        }
+
+        var emitted = [Bool](repeating: false, count: commits.count)
         var result: [GitHubCommit] = []
         result.reserveCapacity(commits.count)
 
-        while result.count < commits.count {
-            // Prefer the original API order among ready commits so unrelated
-            // history does not jump around unnecessarily.
-            guard let index = commits.indices.first(where: {
-                !emitted.contains($0) && pendingChildren[$0] == 0
-            }) else {
-                // Git histories are acyclic; keep data visible if the remote
-                // response is unexpectedly inconsistent.
-                for index in commits.indices where !emitted.contains(index) {
-                    result.append(commits[index])
-                }
-                break
-            }
-
-            emitted.insert(index)
+        while let index = ready.popMin() {
+            emitted[index] = true
             let commit = commits[index]
             result.append(commit)
-
             for parent in commit.parents {
                 if let parentIndex = positions[parent.sha] {
-                    pendingChildren[parentIndex] -= 1
+                    remainingChildren[parentIndex] -= 1
+                    if remainingChildren[parentIndex] == 0 {
+                        ready.insert(parentIndex)
+                    }
                 }
             }
         }
 
+        // Git commits cannot have a cycle, but retain everything if an
+        // unexpectedly inconsistent API response prevents complete sorting.
+        if result.count < commits.count {
+            for index in commits.indices where !emitted[index] {
+                result.append(commits[index])
+            }
+        }
         return result
     }
+
+    private struct IndexMinHeap {
+        private var values: [Int] = []
+
+        mutating func insert(_ element: Int) {
+            values.append(element)
+            var index = values.count - 1
+            while index > 0 {
+                let parent = (index - 1) / 2
+                if values[parent] <= values[index] { break }
+                values.swapAt(parent, index)
+                index = parent
+            }
+        }
+
+        mutating func popMin() -> Int? {
+            guard !values.isEmpty else { return nil }
+            if values.count == 1 { return values.removeLast() }
+            let minimum = values[0]
+            values[0] = values.removeLast()
+
+            var index = 0
+            while true {
+                let left = index * 2 + 1
+                guard left < values.count else { break }
+                let right = left + 1
+                let child = right < values.count && values[right] < values[left]
+                    ? right : left
+                if values[index] <= values[child] { break }
+                values.swapAt(index, child)
+                index = child
+            }
+            return minimum
+        }
+    }
+
 }
