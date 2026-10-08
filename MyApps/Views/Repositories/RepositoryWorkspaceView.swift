@@ -179,6 +179,24 @@ struct RepositoryWorkspaceView: View {
     private var branchToolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
+                Button {
+                    Task {
+                        await logModel.selectBranch(
+                            GitLogViewModel.allBranches,
+                            repository: repository,
+                            client: client
+                        )
+                    }
+                } label: {
+                    if logModel.selectedBranch == GitLogViewModel.allBranches {
+                        Label("All Branches", systemImage: "checkmark")
+                    } else {
+                        Label("All Branches", systemImage: "point.3.connected.trianglepath.dotted")
+                    }
+                }
+
+                Divider()
+
                 ForEach(logModel.branches) { branch in
                     Button {
                         Task {
@@ -197,7 +215,12 @@ struct RepositoryWorkspaceView: View {
                     }
                 }
             } label: {
-                Label(logModel.selectedBranch, systemImage: "arrow.triangle.branch")
+                Label(
+                    logModel.selectedBranch,
+                    systemImage: logModel.selectedBranch == GitLogViewModel.allBranches
+                        ? "point.3.connected.trianglepath.dotted"
+                        : "arrow.triangle.branch"
+                )
             }
             .accessibilityLabel("Branch \(logModel.selectedBranch)")
             .disabled(logModel.isLoading || logModel.isLoadingMore)
