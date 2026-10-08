@@ -63,11 +63,13 @@ struct CreateReleaseView: View {
                 TextField("Release notes", text: $model.notes, axis: .vertical)
                     .lineLimit(5...12)
             }
+            .disabled(model.isCreating)
 
             Section("Options") {
                 Toggle("Prerelease", isOn: $model.isPrerelease)
                 Toggle("Draft", isOn: $model.isDraft)
             }
+            .disabled(model.isCreating)
 
             if let validationMessage = model.validationMessage {
                 Section {
@@ -113,9 +115,7 @@ struct CreateReleaseView: View {
         ) {
             Button("Create \(model.selectedTagName)") {
                 Task {
-                    if await model.create(repository: repository, client: client) {
-                        onCreated()
-                    }
+                    await model.create(repository: repository, client: client)
                 }
             }
 
@@ -128,28 +128,27 @@ struct CreateReleaseView: View {
             )
         }
         .alert(
-            "Release",
+            model.successMessage == nil ? "Release Failed" : "Release Created",
             isPresented: Binding(
-                get: { model.errorMessage != nil },
-                set: { if !$0 { model.errorMessage = nil } }
+                get: { model.errorMessage != nil || model.successMessage != nil },
+                set: {
+                    if !$0 {
+                        model.errorMessage = nil
+                        model.successMessage = nil
+                    }
+                }
             )
         ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(model.errorMessage ?? "")
-        }
-        .alert(
-            "Release Created",
-            isPresented: Binding(
-                get: { model.successMessage != nil },
-                set: { if !$0 { model.successMessage = nil } }
-            )
-        ) {
-            Button("Done") {
-                dismiss()
+            if model.successMessage != nil {
+                Button("Done") {
+                    onCreated()
+                    dismiss()
+                }
+            } else {
+                Button("OK", role: .cancel) {}
             }
         } message: {
-            Text(model.successMessage ?? "")
+            Text(model.successMessage ?? model.errorMessage ?? "")
         }
     }
 }

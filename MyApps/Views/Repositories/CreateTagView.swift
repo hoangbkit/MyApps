@@ -50,6 +50,7 @@ struct CreateTagView: View {
                         .lineLimit(3...6)
                 }
             }
+            .disabled(model.isCreating)
 
             Section("Target") {
                 VStack(alignment: .leading, spacing: 6) {
@@ -69,10 +70,10 @@ struct CreateTagView: View {
                 }
             }
 
-            if let validationError = model.validationError,
-               !model.normalizedName.isEmpty {
+            if let validationError = model.validationError {
                 Section {
                     Label(validationError, systemImage: "exclamationmark.triangle")
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -112,13 +113,13 @@ struct CreateTagView: View {
         ) {
             Button("Create \(model.normalizedName)") {
                 Task {
-                    if await model.create(
+                    // Tag creation raises its own success alert. Refresh the
+                    // parent only after Done dismisses that alert.
+                    await model.create(
                         repository: repository,
                         targetSHA: targetSHA,
                         client: client
-                    ) {
-                        onCreated()
-                    }
+                    )
                 }
             }
 
@@ -130,28 +131,27 @@ struct CreateTagView: View {
             )
         }
         .alert(
-            "Tag",
+            model.successMessage == nil ? "Tag Creation Failed" : "Tag Created",
             isPresented: Binding(
-                get: { model.errorMessage != nil },
-                set: { if !$0 { model.errorMessage = nil } }
+                get: { model.errorMessage != nil || model.successMessage != nil },
+                set: {
+                    if !$0 {
+                        model.errorMessage = nil
+                        model.successMessage = nil
+                    }
+                }
             )
         ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(model.errorMessage ?? "")
-        }
-        .alert(
-            "Tag Created",
-            isPresented: Binding(
-                get: { model.successMessage != nil },
-                set: { if !$0 { model.successMessage = nil } }
-            )
-        ) {
-            Button("Done") {
-                dismiss()
+            if model.successMessage != nil {
+                Button("Done") {
+                    onCreated()
+                    dismiss()
+                }
+            } else {
+                Button("OK", role: .cancel) {}
             }
         } message: {
-            Text(model.successMessage ?? "")
+            Text(model.successMessage ?? model.errorMessage ?? "")
         }
     }
 }

@@ -61,6 +61,7 @@ struct BranchRebaseView: View {
                 }
             }
         }
+        .disabled(model.isPreparing || model.isApplying)
     }
 
     @ViewBuilder
@@ -88,17 +89,15 @@ struct BranchRebaseView: View {
         }
     }
 
-    private var isShowingError: Binding<Bool> {
+    private var isShowingResult: Binding<Bool> {
         Binding(
-            get: { model.errorMessage != nil },
-            set: { if !$0 { model.errorMessage = nil } }
-        )
-    }
-
-    private var isShowingSuccess: Binding<Bool> {
-        Binding(
-            get: { model.successMessage != nil },
-            set: { if !$0 { model.successMessage = nil } }
+            get: { model.errorMessage != nil || model.successMessage != nil },
+            set: {
+                if !$0 {
+                    model.errorMessage = nil
+                    model.successMessage = nil
+                }
+            }
         )
     }
 
@@ -119,26 +118,24 @@ struct BranchRebaseView: View {
         ) {
             Button("Rebase \(sourceBranch.name) onto \(model.destinationName)") {
                 Task {
-                    if await model.apply(repository: repository, client: client) {
-                        onRebased()
-                    }
+                    await model.apply(repository: repository, client: client)
                 }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(rebaseConfirmationMessage)
         }
-        .alert("Rebase", isPresented: isShowingError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(model.errorMessage ?? "")
-        }
-        .alert("Rebase Complete", isPresented: isShowingSuccess) {
-            Button("Done") {
-                dismiss()
+        .alert(model.successMessage == nil ? "Rebase Failed" : "Rebase Complete", isPresented: isShowingResult) {
+            if model.successMessage != nil {
+                Button("Done") {
+                    onRebased()
+                    dismiss()
+                }
+            } else {
+                Button("OK", role: .cancel) {}
             }
         } message: {
-            Text(model.successMessage ?? "")
+            Text(model.successMessage ?? model.errorMessage ?? "")
         }
     }
 }

@@ -2,15 +2,28 @@ import SwiftUI
 
 struct BranchDetailView: View {
     let repository: GitHubRepository
-    let branch: GitHubBranch
-    let branches: [GitHubBranch]
-    let existingTags: [GitHubTag]
+    let initialBranch: GitHubBranch
+    @ObservedObject var model: GitLogViewModel
     let client: GitHubAPIClient?
+    let onTagCreated: () -> Void
     let onRepositoryChanged: () -> Void
 
     @State private var comparison: GitHubComparison?
     @State private var isLoadingComparison = false
     @State private var comparisonError: String?
+    @State private var comparisonGeneration = 0
+
+    private var branches: [GitHubBranch] { model.branches }
+    private var existingTags: [GitHubTag] { model.tags }
+    private var branch: GitHubBranch {
+        branches.first { $0.name == initialBranch.name } ?? initialBranch
+    }
+    private var branchExists: Bool {
+        branches.contains { $0.name == initialBranch.name }
+    }
+    private var comparisonID: String {
+        "\(branchExists)-\(branch.commit.sha)-\(defaultBranch?.commit.sha ?? "")"
+    }
 
     private var defaultBranch: GitHubBranch? {
         branches.first { $0.name == repository.defaultBranch }
@@ -39,7 +52,14 @@ struct BranchDetailView: View {
                 }
             }
 
-            if branch.name != repository.defaultBranch {
+            if !branchExists {
+                Section {
+                    Text("This branch no longer exists. Pull to refresh or return to Branches.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if branchExists && branch.name != repository.defaultBranch {
                 Section("Relative to \(repository.defaultBranch)") {
                     if isLoadingComparison {
                         ProgressView()
@@ -62,7 +82,7 @@ struct BranchDetailView: View {
                         targetDescription: "HEAD of \(branch.name)",
                         existingTags: existingTags,
                         client: client,
-                        onCreated: onRepositoryChanged
+                        onCreated: onTagCreated
                     )
                 } label: {
                     Label("Create Tag at HEAD", systemImage: "tag")
@@ -110,16 +130,27 @@ struct BranchDetailView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .disabled(!branchExists)
         }
         .navigationTitle(branch.name)
         .navigationBarTitleDisplayMode(.inline)
-        .task {
+        .refreshable {
+            await model.refreshReferences(repository: repository, client: client)
+            await loadDefaultComparison()
+        }
+        .task(id: comparisonID) {
             await loadDefaultComparison()
         }
     }
 
     private func loadDefaultComparison() async {
+        comparisonGeneration += 1
+        let generation = comparisonGeneration
+        comparison = nil
+        comparisonError = nil
+        isLoadingComparison = false
         guard
+            branchExists,
             branch.name != repository.defaultBranch,
             let defaultBranch,
             let client
@@ -128,16 +159,22 @@ struct BranchDetailView: View {
         }
 
         isLoadingComparison = true
-        defer { isLoadingComparison = false }
+        defer {
+            if generation == comparisonGeneration { isLoadingComparison = false }
+        }
 
         do {
-            comparison = try await client.compare(
+            let fetched = try await client.compare(
                 repository: repository,
                 baseSHA: defaultBranch.commit.sha,
                 headSHA: branch.commit.sha
             )
+            guard generation == comparisonGeneration, !Task.isCancelled else { return }
+            comparison = fetched
             comparisonError = nil
         } catch {
+            guard generation == comparisonGeneration,
+                  !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
             comparisonError = error.localizedDescription
         }
     }

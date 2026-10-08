@@ -3,21 +3,41 @@ import Foundation
 
 @MainActor
 final class GitLogViewModel: ObservableObject {
+    static let allBranches = "All Branches"
+
     @Published private(set) var branches: [GitHubBranch] = []
     @Published private(set) var tags: [GitHubTag] = []
     @Published private(set) var commits: [GitHubCommit] = []
+    @Published private(set) var graph = GitGraphLayout.make([])
     @Published private(set) var isLoading = false
     @Published private(set) var isLoadingMore = false
+    @Published private(set) var isLoadingTags = false
+    @Published private(set) var isLoadingBranches = false
     @Published private(set) var hasMoreCommits = true
     @Published var selectedBranch: String
     @Published var errorMessage: String?
 
-    private let pageSize = 40
+    private let singleBranchPageSize = 40
+    private let allBranchesPageSize = 20
+
     private var nextPage = 1
     private var loadedBranch: String?
+    private var loadGeneration = 0
+    private var tagsGeneration = 0
+    private var branchesGeneration = 0
+
+    // The next page to request for every branch that has more history.
+    // All Branches does not use a single pagination cursor.
+    private var pendingBranchPages: [String: GitHubBranchHistoryCursor] = [:]
+
+    var isSwitchingBranch: Bool {
+        isLoading && loadedBranch != nil && loadedBranch != selectedBranch
+    }
 
     init(defaultBranch: String) {
-        selectedBranch = defaultBranch
+        // The selected branch is still available in the menu, but a log graph
+        // is most useful when it includes unmerged feature branch heads.
+        selectedBranch = Self.allBranches
     }
 
     func loadInitial(
@@ -29,25 +49,133 @@ final class GitLogViewModel: ObservableObject {
             return
         }
 
+        loadGeneration += 1
+        let generation = loadGeneration
+        // A lightweight tags-only refresh must not be overwritten by an
+        // earlier, slower all-branches history request.
+        tagsGeneration += 1
+        let initialTagsGeneration = tagsGeneration
+        branchesGeneration += 1
+        let initialBranchesGeneration = branchesGeneration
         isLoading = true
-        defer { isLoading = false }
+        isLoadingBranches = true
+        isLoadingTags = true
+        isLoadingMore = false
+        errorMessage = nil
+        defer {
+            if generation == loadGeneration { isLoading = false }
+            if initialBranchesGeneration == branchesGeneration { isLoadingBranches = false }
+            if initialTagsGeneration == tagsGeneration { isLoadingTags = false }
+        }
 
         do {
             async let branchesRequest = client.branches(repository: repository)
             async let tagsRequest = client.tags(repository: repository)
-
-            branches = try await branchesRequest
-            tags = try await tagsRequest
-
-            if !branches.contains(where: { $0.name == selectedBranch }) {
-                selectedBranch = repository.defaultBranch
+            let freshBranches = try await branchesRequest
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            if branchesGeneration == initialBranchesGeneration {
+                branches = freshBranches
+                isLoadingBranches = false
             }
 
-            try await loadFirstPage(repository: repository, client: client)
-            errorMessage = nil
-        } catch is CancellationError {
-            return
+            // Tags and branches become usable before the potentially slow
+            // combined-history fetch has finished.
+            let freshTags = try await tagsRequest
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            if tagsGeneration == initialTagsGeneration {
+                tags = freshTags
+                isLoadingTags = false
+            }
+
+            let scope = selectedBranch == Self.allBranches ||
+                branches.contains(where: { $0.name == selectedBranch })
+                ? selectedBranch
+                : repository.defaultBranch
+
+            let firstPage = try await fetchFirstPage(
+                scope: scope,
+                branches: branches,
+                repository: repository,
+                client: client
+            )
+            guard generation == loadGeneration,
+                  initialBranchesGeneration == branchesGeneration,
+                  !Task.isCancelled else { return }
+            applyFirstPage(firstPage, scope: scope)
         } catch {
+            guard generation == loadGeneration,
+                  !Task.isCancelled,
+                  !GitHubAPIClient.isCancellation(error) else { return }
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Branches and branch details should not wait for All Branches history.
+    func refreshBranches(
+        repository: GitHubRepository,
+        client: GitHubAPIClient?
+    ) async {
+        guard let client else {
+            errorMessage = "GitHub is not connected."
+            return
+        }
+
+        branchesGeneration += 1
+        let generation = branchesGeneration
+        isLoadingBranches = true
+        defer {
+            if generation == branchesGeneration { isLoadingBranches = false }
+        }
+
+        do {
+            let latestBranches = try await client.branches(repository: repository)
+            guard generation == branchesGeneration, !Task.isCancelled else { return }
+            branches = latestBranches
+        } catch {
+            guard generation == branchesGeneration,
+                  !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func refreshReferences(
+        repository: GitHubRepository,
+        client: GitHubAPIClient?
+    ) async {
+        errorMessage = nil
+        async let branchesRefresh: Void = refreshBranches(repository: repository, client: client)
+        async let tagsRefresh: Void = refreshTags(repository: repository, client: client, clearError: false)
+        _ = await (branchesRefresh, tagsRefresh)
+    }
+
+    /// Refresh only the tag refs. Tag creation and pull-to-refresh must not
+    /// wait for every branch history page or discard the currently shown log.
+    func refreshTags(
+        repository: GitHubRepository,
+        client: GitHubAPIClient?,
+        clearError: Bool = true
+    ) async {
+        guard let client else {
+            errorMessage = "GitHub is not connected."
+            return
+        }
+
+        tagsGeneration += 1
+        let generation = tagsGeneration
+        isLoadingTags = true
+        if clearError { errorMessage = nil }
+        defer {
+            if generation == tagsGeneration { isLoadingTags = false }
+        }
+
+        do {
+            let latestTags = try await client.tags(repository: repository)
+            guard generation == tagsGeneration, !Task.isCancelled else { return }
+            tags = latestTags
+        } catch {
+            guard generation == tagsGeneration,
+                  !Task.isCancelled,
+                  !GitHubAPIClient.isCancellation(error) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -57,27 +185,45 @@ final class GitLogViewModel: ObservableObject {
         repository: GitHubRepository,
         client: GitHubAPIClient?
     ) async {
-        guard branch != loadedBranch || commits.isEmpty else {
+        if branch == loadedBranch && !commits.isEmpty {
+            // A selection can supersede a pending request for another branch.
+            loadGeneration += 1
             selectedBranch = branch
+            isLoading = false
+            isLoadingMore = false
+            errorMessage = nil
             return
         }
-
-        selectedBranch = branch
 
         guard let client else {
             errorMessage = "GitHub is not connected."
             return
         }
 
+        loadGeneration += 1
+        let generation = loadGeneration
+        selectedBranch = branch
         isLoading = true
-        defer { isLoading = false }
+        isLoadingMore = false
+        errorMessage = nil
+        defer {
+            if generation == loadGeneration { isLoading = false }
+        }
 
         do {
-            try await loadFirstPage(repository: repository, client: client)
-            errorMessage = nil
-        } catch is CancellationError {
-            return
+            let firstPage = try await fetchFirstPage(
+                scope: branch,
+                branches: branches,
+                repository: repository,
+                client: client
+            )
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            applyFirstPage(firstPage, scope: branch)
         } catch {
+            guard generation == loadGeneration else { return }
+            selectedBranch = loadedBranch ?? Self.allBranches
+            guard !Task.isCancelled,
+                  !GitHubAPIClient.isCancellation(error) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -86,33 +232,58 @@ final class GitLogViewModel: ObservableObject {
         repository: GitHubRepository,
         client: GitHubAPIClient?
     ) async {
-        guard
-            hasMoreCommits,
-            !isLoading,
-            !isLoadingMore,
-            let client
-        else {
-            return
-        }
+        guard hasMoreCommits, !isLoading, !isLoadingMore,
+              let client, let scope = loadedBranch else { return }
+
+        let generation = loadGeneration
+        let pageNumber = nextPage
+        let cursors = pendingBranchPages.values.sorted { $0.branch < $1.branch }
 
         isLoadingMore = true
-        defer { isLoadingMore = false }
+        errorMessage = nil
+        defer {
+            if generation == loadGeneration { isLoadingMore = false }
+        }
 
         do {
-            let page = try await client.commits(
-                repository: repository,
-                branch: selectedBranch,
-                page: nextPage,
-                perPage: pageSize
-            )
+            if scope == Self.allBranches {
+                let pages = try await client.commitPages(
+                    repository: repository,
+                    cursors: cursors,
+                    perPage: allBranchesPageSize
+                )
+                guard generation == loadGeneration,
+                      loadedBranch == scope, !Task.isCancelled else { return }
 
-            appendUnique(page)
-            hasMoreCommits = page.count == pageSize
-            nextPage += 1
-            errorMessage = nil
-        } catch is CancellationError {
-            return
+                // Combine all fetched pages before touching visible state.
+                // A duplicate shared ancestor must appear only once.
+                setCommits(Self.uniqueRecentCommits(
+                    commits + pages.flatMap(\.commits)
+                ))
+                pendingBranchPages = nextBranchPages(
+                    from: pages,
+                    pageSize: allBranchesPageSize
+                )
+                hasMoreCommits = !pendingBranchPages.isEmpty
+            } else {
+                let page = try await client.commits(
+                    repository: repository,
+                    branch: scope,
+                    page: pageNumber,
+                    perPage: singleBranchPageSize
+                )
+                guard generation == loadGeneration,
+                      loadedBranch == scope,
+                      nextPage == pageNumber,
+                      !Task.isCancelled else { return }
+                appendUnique(page)
+                hasMoreCommits = page.count == singleBranchPageSize
+                nextPage += 1
+            }
         } catch {
+            guard generation == loadGeneration,
+                  !Task.isCancelled,
+                  !GitHubAPIClient.isCancellation(error) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -130,29 +301,97 @@ final class GitLogViewModel: ObservableObject {
         )
     }
 
-    private func loadFirstPage(
+    private struct FirstPage {
+        let commits: [GitHubCommit]
+        let nextBranchPages: [String: GitHubBranchHistoryCursor]
+        let hasMore: Bool
+    }
+
+    private func fetchFirstPage(
+        scope: String,
+        branches availableBranches: [GitHubBranch],
         repository: GitHubRepository,
         client: GitHubAPIClient
-    ) async throws {
-        commits = []
-        nextPage = 1
-        hasMoreCommits = true
-        loadedBranch = selectedBranch
+    ) async throws -> FirstPage {
+        if scope == Self.allBranches {
+            let cursors = availableBranches.map {
+                GitHubBranchHistoryCursor(
+                    branch: $0.name,
+                    headSHA: $0.commit.sha,
+                    page: 1
+                )
+            }
+            let pages = try await client.commitPages(
+                repository: repository,
+                cursors: cursors,
+                perPage: allBranchesPageSize
+            )
+            let pending = nextBranchPages(from: pages, pageSize: allBranchesPageSize)
+            return FirstPage(
+                commits: Self.uniqueRecentCommits(pages.flatMap(\.commits)),
+                nextBranchPages: pending,
+                hasMore: !pending.isEmpty
+            )
+        }
 
         let page = try await client.commits(
             repository: repository,
-            branch: selectedBranch,
-            page: nextPage,
-            perPage: pageSize
+            branch: scope,
+            page: 1,
+            perPage: singleBranchPageSize
         )
+        return FirstPage(
+            commits: page,
+            nextBranchPages: [:],
+            hasMore: page.count == singleBranchPageSize
+        )
+    }
 
-        commits = page
-        hasMoreCommits = page.count == pageSize
+    private func nextBranchPages(
+        from pages: [GitHubBranchHistoryPage],
+        pageSize: Int
+    ) -> [String: GitHubBranchHistoryCursor] {
+        var next: [String: GitHubBranchHistoryCursor] = [:]
+        for page in pages where page.commits.count == pageSize {
+            next[page.branch] = GitHubBranchHistoryCursor(
+                branch: page.branch,
+                headSHA: page.headSHA,
+                page: page.page + 1
+            )
+        }
+        return next
+    }
+
+    private func applyFirstPage(_ page: FirstPage, scope: String) {
+        selectedBranch = scope
+        loadedBranch = scope
+        setCommits(page.commits)
+        pendingBranchPages = page.nextBranchPages
+        hasMoreCommits = page.hasMore
         nextPage = 2
     }
 
     private func appendUnique(_ page: [GitHubCommit]) {
         let existing = Set(commits.map(\.sha))
-        commits.append(contentsOf: page.filter { !existing.contains($0.sha) })
+        setCommits(commits + page.filter { !existing.contains($0.sha) })
+    }
+
+    private func setCommits(_ updated: [GitHubCommit]) {
+        // Recalculate topology only when history changes, not on every
+        // SwiftUI redraw or relative-time text update.
+        graph = GitGraphLayout.make(updated)
+        commits = updated
+    }
+
+    private static func uniqueRecentCommits(_ items: [GitHubCommit]) -> [GitHubCommit] {
+        var visited = Set<String>()
+        return items
+            .filter { visited.insert($0.sha).inserted }
+            .sorted {
+                let firstDate = $0.commit.committer?.date ?? $0.authoredAt ?? .distantPast
+                let secondDate = $1.commit.committer?.date ?? $1.authoredAt ?? .distantPast
+                if firstDate != secondDate { return firstDate > secondDate }
+                return $0.sha < $1.sha
+            }
     }
 }

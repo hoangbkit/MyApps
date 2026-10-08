@@ -1,8 +1,15 @@
 import SwiftData
 import SwiftUI
 
+private enum RootTab: Hashable {
+    case apps, repos, appStore, notes, settings
+}
+
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var gitHubSession = GitHubSession()
+    @State private var selectedTab: RootTab = .apps
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
 
     private var appearance: AppAppearance {
@@ -10,20 +17,25 @@ struct RootView: View {
     }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             NavigationStack {
                 ProjectsView()
             }
             .tabItem {
                 Label("Apps", systemImage: "square.grid.2x2")
             }
+            .tag(RootTab.apps)
 
             NavigationStack {
-                RepositoriesView()
+                RepositoriesView {
+                    selectedTab = .settings
+                }
             }
+            .id(gitHubSession.connectionRevision)
             .tabItem {
                 Label("Repos", systemImage: "shippingbox")
             }
+            .tag(RootTab.repos)
 
             NavigationStack {
                 AppStorePlaceholderView()
@@ -31,6 +43,7 @@ struct RootView: View {
             .tabItem {
                 Label("App Store", systemImage: "storefront")
             }
+            .tag(RootTab.appStore)
 
             NavigationStack {
                 NotesInboxView()
@@ -38,6 +51,7 @@ struct RootView: View {
             .tabItem {
                 Label("Notes", systemImage: "note.text")
             }
+            .tag(RootTab.notes)
 
             NavigationStack {
                 SettingsView()
@@ -45,8 +59,14 @@ struct RootView: View {
             .tabItem {
                 Label("Settings", systemImage: "gearshape")
             }
+            .tag(RootTab.settings)
         }
+        .environmentObject(gitHubSession)
         .preferredColorScheme(appearance.colorScheme)
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await gitHubSession.restore()
+        }
         .fontDesign(.rounded)
         .task { @MainActor in
             P3MigrationService.run(in: modelContext)

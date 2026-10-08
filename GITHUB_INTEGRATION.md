@@ -33,6 +33,7 @@ MyApps
 │           └── leave app list/details behavior and design unchanged
 │
 ├── 2. Repos
+│   ├── connection guidance (PAT managed in Settings)
 │   ├── all accessible GitHub repositories
 │   └── tap repository
 │       └── Git workspace
@@ -48,6 +49,7 @@ MyApps
 │   └── existing global NotesInboxView
 │
 └── 5. Settings
+    ├── GitHub PAT management (connect / replace / disconnect)
     └── existing SettingsView
 ```
 
@@ -484,6 +486,8 @@ Product releases and disposable `mycli-build-*` prereleases should be visually d
 # Data and architecture rules
 
 - GitHub credentials live in Keychain only.
+- GitHub account connection is managed from Settings, not the Repos tab.
+- A single shared GitHubSession supplies both Settings and Repos; replacing or disconnecting resets repository navigation.
 - Never store credentials in SwiftData, UserDefaults, backups, logs, analytics, or source control.
 - Do not add Git-specific fields to `ManagedApp`.
 - Repositories and Git history are remote data.
@@ -606,6 +610,51 @@ No Git operations yet.
 
 **STOP. Wait for explicit approval.**
 
+## Git log graph and presentation refinement (PR #4)
+
+- Compute graph lanes from actual parent SHAs, not a fabricated second line for each merge commit.
+- Parent-child edges continue between rows at stable column positions, with lanes for additional parents and multiple children.
+- Normalize loaded history to child-before-parent (topological) order while retaining the GitHub order when unconstrained.
+- Track all visible lanes and keep unfinished parent edges through pagination; do not claim to show branches outside the loaded commits.
+- Render lines in a row-height-aware SwiftUI Canvas, making multi-line subjects and reference badges safe.
+- Keep history navigation, 40-commit paging, pull-to-refresh, and commit detail/actions unchanged.
+- Improve text hierarchy: branch/tag refs, commit subject, author/date, and subdued monospaced SHA.
+
+---
+
+## All Branches Git Log (PR #4)
+
+The branch picker includes **All Branches** (the default) alongside individual
+branch names. This fixes feature branches being invisible when `master` or
+`develop` was selected.
+
+- Fetch all branch refs, then a first history page from **each branch head**
+  (`sha=<captured head SHA>`). Only commits reachable from listed branches
+  are included; tag-only unreachable commits are not part of All Branches.
+- Every branch has its own cursor, with 20 commits per branch per request
+  (individual-branch mode retains 40 commits per page).
+- Commit SHAs are deduplicated across shared ancestors. Sort recent commits
+  and then topologically order them for the graph (children before parents).
+- **Load More** fetches the next page from every unfinished branch, deduplicates
+  again, and stops only when every branch is exhausted. It can advance with
+  no new unique rows if the pages contain shared ancestors.
+- Four concurrent branch history requests maximum. If any fails, show the
+  error instead of silently displaying an incomplete aggregate.
+- Pin each history cursor to the captured branch head, so force-pushes or
+  incoming commits do not shift pagination mid-session. Pull-to-refresh
+  fetches updated refs and resets the cursors.
+- Graph topology is computed when commits change, rather than on every
+  SwiftUI redraw. Wide graphs compress lanes to preserve commit text space.
+- Branch-head badges and tag badges remain labels on the exact SHA.
+- Users may switch back to an individual branch at any time. Tags actions
+  use the repository default branch when All Branches is selected.
+
+Performance note: All Branches makes one initial commit request per branch.
+Repos with many branches can take longer to load and use more API calls. The
+app does not silently cap the number of included branch heads.
+
+---
+
 ## Phase 3 — Beautified Git log
 
 **Status: implemented on PR #2.**
@@ -659,6 +708,50 @@ The first version is deliberately conservative: it handles linear replay ranges,
 Do not begin until supported cases and technical strategy are explicitly approved.
 
 **STOP. Wait for explicit approval.**
+
+## Repository workspace navigation (PR #4)
+
+The persistent segmented control has been replaced with a native toolbar
+title menu. The navigation title shows the repository name above the active
+screen name and a chevron. Tapping it opens the list of repository sections
+(Log, Branches, Tags, Releases), with a checkmark for the selected screen.
+
+This removes fixed navigation height, leaves more room for the Git graph,
+scales as more screens are added, and retains the Log-only branch filter in
+the trailing toolbar. Existing section state, list refresh, and navigation
+flows remain unchanged.
+
+---
+
+## Tag creation and refresh reliability (PR #4)
+
+- The Tags list supports native pull-to-refresh and fetches current tag refs
+  independently of the potentially expensive All Branches history.
+- Entering Tags performs a fresh refs request. A spinner distinguishes loading
+  from a genuinely empty tag list, and branch refs are published before the
+  combined commit graph finishes.
+- After a successful tag creation, dismiss the success alert and refresh only
+  tags. The same lightweight callback applies when tagging a commit or branch.
+  This avoids racing two different alerts and waiting for graph pagination.
+- The create form explains disabled actions (empty or invalid name; missing
+  annotated-tag message). Tag writes retain the confirmation and show one
+  unambiguous success/error alert.
+- Tag creation uses GitHub's documented Git refs API. Lightweight tags create
+  refs directly; annotated tags create a tag object then a ref. The redundant
+  Git Commit GET preflight was removed.
+- Write failures include GitHub's response message when present, especially
+  PAT Contents: write restrictions, repository rulesets, duplicates and
+  validation errors. No credentials are included in diagnostics.
+- Tag names remain validated against existing tags before the write; GitHub
+  makes the final determination of conflicts and permissions.
+
+Manual checks: create a new lightweight tag on a branch HEAD; verify success
+and the new tag in the list without waiting for All Branches; pull to refresh;
+create an annotated tag; attempt a duplicate; attempt with a read-only token;
+verify cancel/dismiss leaves the list unchanged. Do not create disposable tags
+in a real release repository merely to test.
+
+---
 
 ## Phase 6 — Tags
 
@@ -748,3 +841,25 @@ Tab 3 · App Store = reserved for future App Store Connect apps
 Tab 4 · Notes     = existing global notes inbox
 Tab 5 · Settings  = existing settings
 ```
+
+## Shared refresh correctness
+
+All REST reads use `reloadIgnoringLocalCacheData` and `Cache-Control: no-cache`. This includes repositories, branches, tags, releases, commit pages, and the branch comparisons used to validate merge/rebase operations. Already-loaded view data remains visible while refreshing; HTTP caching cannot substitute old data for an explicit refresh or a pre-write check.
+
+- Repos, Branches, Tags, Releases, Log, and branch/commit details support pull-to-refresh, including empty list/log states.
+- Branches and Tags fetch refs independently of the All Branches history. Entering these sections refreshes branch heads and tag refs; Tags' Create at HEAD action uses refreshed branches.
+- Releases fetches releases and available tags together under one local error owner. Pull-to-refresh updates both the list and Create Release choices, including when there are no releases yet.
+- Branch and tag loads, releases, branch comparisons, merge previews, and rebase analysis reject superseded responses. A successful sibling request does not erase a ref-refresh failure.
+- Branch details observe current shared heads/tags; their comparison reloads when either compared head changes. Commit details observe current ref badges. Missing branches disable their actions. Returning from a commit preserves loaded Log pagination; switching back to Log from another section refreshes history.
+- Tag/release creation and merge/rebase deliver one result alert. Parent refresh runs from Done after success; failed operations do not trigger success refreshes. Submitted release fields and merge/rebase destinations are held stable during writes. Rebase retains the destination used during preparation and the existing ref lease checks.
+
+Manual checks for PR #4:
+
+1. Pull to refresh every list with zero, one, and many rows. Repos search and Log pagination should remain usable.
+2. Create a lightweight and annotated tag, tap Done, and immediately refresh Tags. Reopen the commit details and confirm the new tag badge.
+3. Enter Releases with no releases, refresh, and verify all current tags are offered by Create Release. Create a draft/prerelease, tap Done, and verify the list updates immediately.
+4. Merge/rebase, tap Done, and check the affected branch heads, ahead/behind comparison, and Log after switching back.
+5. Change the merge/rebase destination quickly during analysis; only the latest preview/plan should appear. During a write/preparation, destination editing is disabled.
+6. Refresh while an earlier load is in flight, switch sections/repositories, and background/foreground the app. Old results must not overwrite newer state; expected read cancellation must not show an error alert.
+
+Validation in this environment is source review and `git diff --check`. Xcode/Swift is unavailable here; no build, CI dispatch, or real test write was performed.

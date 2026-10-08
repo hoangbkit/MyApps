@@ -14,6 +14,20 @@ struct GitHubAccount: Codable, Equatable, Sendable {
     }
 }
 
+/// A per-branch pagination request for an All Branches log.
+struct GitHubBranchHistoryCursor: Sendable {
+    let branch: String
+    let headSHA: String
+    let page: Int
+}
+
+struct GitHubBranchHistoryPage: Sendable {
+    let branch: String
+    let headSHA: String
+    let page: Int
+    let commits: [GitHubCommit]
+}
+
 struct GitHubAPIClient: Sendable {
     private struct MergeBody: Encodable {
         let base: String
@@ -36,8 +50,17 @@ struct GitHubAPIClient: Sendable {
         let sha: String
     }
 
-    private struct CreateRefResponse: Decodable {
+    private struct CreateRefResponse: Decodable, Sendable {
+        struct Object: Decodable, Sendable {
+            let sha: String
+        }
+
         let ref: String
+        let object: Object
+    }
+
+    private struct GitHubErrorMessage: Decodable {
+        let message: String?
     }
 
     private struct CreateTreeBody: Encodable {
@@ -77,6 +100,13 @@ struct GitHubAPIClient: Sendable {
 
     private struct GraphQLUpdateRefsResponse: Decodable {
         let errors: [GraphQLErrorItem]?
+    }
+
+    // URLSession cancellation errors (-999) are not always CancellationError.
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
     }
 
     private let token: String
@@ -136,8 +166,8 @@ struct GitHubAPIClient: Sendable {
             body: body
         )
 
-        guard (200..<300).contains(response.statusCode) else {
-            throw GitHubAPIError.httpStatus(response.statusCode)
+        guard response.statusCode == 201 else {
+            throw tagWriteError(status: response.statusCode, data: data)
         }
 
         let tagObject = try decode(CreateTagObjectResponse.self, from: data)
@@ -187,6 +217,57 @@ struct GitHubAPIClient: Sendable {
                 URLQueryItem(name: "page", value: String(page))
             ]
         )
+    }
+
+    /// Fetch a page for every requested branch, bounded to four concurrent
+    /// GitHub calls. A failure aborts the batch: callers never present a
+    /// partially loaded All Branches history as though it were complete.
+    func commitPages(
+        repository: GitHubRepository,
+        cursors: [GitHubBranchHistoryCursor],
+        perPage: Int
+    ) async throws -> [GitHubBranchHistoryPage] {
+        let batchSize = 4
+        var allPages: [GitHubBranchHistoryPage] = []
+        allPages.reserveCapacity(cursors.count)
+
+        for start in stride(from: 0, to: cursors.count, by: batchSize) {
+            try Task.checkCancellation()
+            let end = min(start + batchSize, cursors.count)
+            let batch = Array(cursors[start..<end])
+
+            let pages = try await withThrowingTaskGroup(
+                of: GitHubBranchHistoryPage.self,
+                returning: [GitHubBranchHistoryPage].self
+            ) { group in
+                for cursor in batch {
+                    group.addTask {
+                        let commits = try await self.commits(
+                            repository: repository,
+                            branch: cursor.headSHA,
+                            page: cursor.page,
+                            perPage: perPage
+                        )
+                        return GitHubBranchHistoryPage(
+                            branch: cursor.branch,
+                            headSHA: cursor.headSHA,
+                            page: cursor.page,
+                            commits: commits
+                        )
+                    }
+                }
+
+                var received: [GitHubBranchHistoryPage] = []
+                for try await page in group {
+                    received.append(page)
+                }
+                return received
+            }
+
+            allPages.append(contentsOf: pages)
+        }
+
+        return allPages
     }
 
     func compare(
@@ -450,11 +531,40 @@ struct GitHubAPIClient: Sendable {
             body: body
         )
 
-        guard (200..<300).contains(response.statusCode) else {
-            throw GitHubAPIError.httpStatus(response.statusCode)
+        guard response.statusCode == 201 else {
+            throw tagWriteError(status: response.statusCode, data: data)
         }
 
-        _ = try decode(CreateRefResponse.self, from: data)
+        // A successful write does not invalidate URLSession's cached tags
+        // collection. Verify the exact ref with a fresh read before reporting
+        // success, for both lightweight and annotated tags.
+        do {
+            let created = try decode(CreateRefResponse.self, from: data)
+            let expectedRef = "refs/tags/\(name)"
+            guard created.ref == expectedRef, created.object.sha == objectSHA else {
+                throw GitHubAPIError.invalidResponse
+            }
+
+            let confirmed: CreateRefResponse = try await request(
+                path: "/repos/\(repository.owner.login)/\(repository.name)/git/ref/tags/\(name)"
+            )
+            guard confirmed.ref == expectedRef, confirmed.object.sha == objectSHA else {
+                throw GitHubAPIError.invalidResponse
+            }
+        } catch {
+            throw GitHubAPIError.tagVerificationFailed(name, error.localizedDescription)
+        }
+    }
+
+    private func tagWriteError(status: Int, data: Data) -> GitHubAPIError {
+        // GitHub's error message usually identifies insufficient PAT scopes,
+        // tag protection rulesets, or an existing ref. Preserve that useful
+        // explanation rather than reducing every rejection to HTTP 403/422.
+        let response = try? JSONDecoder().decode(GitHubErrorMessage.self, from: data)
+        let message = response?.message?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return .tagWriteFailed(status, message.flatMap {
+            $0.isEmpty ? nil : String($0.prefix(300))
+        })
     }
 
     private func paginated<Response: Decodable & Sendable>(
@@ -518,13 +628,21 @@ struct GitHubAPIClient: Sendable {
             throw GitHubAPIError.invalidURL
         }
 
-        var request = URLRequest(url: url)
+        // Every REST read participates in refresh or write validation. A
+        // transport cache must never turn those into reads of old refs,
+        // releases, permissions, or branch comparisons. Views retain their
+        // already-loaded data while a fresh network request is in flight.
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
         request.httpMethod = method
         request.httpBody = body
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("2026-03-10", forHTTPHeaderField: "X-GitHub-Api-Version")
         request.setValue("MyApps", forHTTPHeaderField: "User-Agent")
+
+        if method == "GET" {
+            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        }
 
         if body != nil {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -564,6 +682,8 @@ enum GitHubAPIError: LocalizedError {
     case invalidResponse
     case httpStatus(Int)
     case mergeConflict
+    case tagWriteFailed(Int, String?)
+    case tagVerificationFailed(String, String)
     case decoding(Error)
 
     var errorDescription: String? {
@@ -584,6 +704,24 @@ enum GitHubAPIError: LocalizedError {
             return "GitHub returned HTTP \(status)."
         case .mergeConflict:
             return "GitHub could not merge these branches automatically because they conflict."
+        case let .tagWriteFailed(status, detail):
+            let explanation: String
+            switch status {
+            case 401:
+                explanation = "GitHub rejected the token. Check Settings → GitHub."
+            case 403:
+                explanation = "GitHub denied tag creation. The PAT needs Contents: read/write access, and tag rulesets may restrict creation."
+            case 409, 422:
+                explanation = "GitHub rejected the tag. It may already exist or violate a tag naming/protection rule."
+            default:
+                explanation = "GitHub could not create the tag (HTTP \(status))."
+            }
+            if let detail {
+                return "\(explanation) GitHub: \(detail)"
+            }
+            return explanation
+        case let .tagVerificationFailed(name, detail):
+            return "GitHub accepted the creation of tag \(name), but its ref could not be verified. Refresh tags or check the repository on GitHub before retrying. \(detail)"
         case let .decoding(error):
             return "Could not read GitHub's response. \(error.localizedDescription)"
         }

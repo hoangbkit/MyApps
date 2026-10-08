@@ -12,6 +12,7 @@ final class GitHubSession: ObservableObject {
     @Published private(set) var connectionState: ConnectionState = .loading
     @Published private(set) var isWorking = false
     @Published var errorMessage: String?
+    @Published private(set) var connectionRevision = 0
 
     private var token: String?
     private var hasRestored = false
@@ -28,8 +29,16 @@ final class GitHubSession: ObservableObject {
 
             token = storedToken
             let account = try await GitHubAPIClient(token: storedToken).currentUser()
+            try Task.checkCancellation()
             connectionState = .connected(account)
+            connectionRevision += 1
+            errorMessage = nil
         } catch {
+            if Task.isCancelled || GitHubAPIClient.isCancellation(error) {
+                // A cancelled restoration must be retried on the next activation.
+                hasRestored = false
+                return
+            }
             connectionState = .disconnected
             errorMessage = error.localizedDescription
         }
@@ -48,12 +57,18 @@ final class GitHubSession: ObservableObject {
 
         do {
             let account = try await GitHubAPIClient(token: candidate).currentUser()
+            try Task.checkCancellation()
             try GitHubCredentialStore.saveToken(candidate)
             token = candidate
+            hasRestored = true
             connectionState = .connected(account)
+            connectionRevision += 1
             errorMessage = nil
             return true
         } catch {
+            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else {
+                return false
+            }
             errorMessage = error.localizedDescription
             return false
         }
@@ -63,7 +78,9 @@ final class GitHubSession: ObservableObject {
         do {
             try GitHubCredentialStore.deleteToken()
             token = nil
+            hasRestored = true
             connectionState = .disconnected
+            connectionRevision += 1
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

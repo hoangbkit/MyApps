@@ -1,10 +1,12 @@
 import SwiftUI
 
 struct RepositoriesView: View {
-    @StateObject private var session = GitHubSession()
+    @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var session: GitHubSession
     @StateObject private var repositoriesModel = RepositoriesViewModel()
 
-    @State private var token = ""
+    let onOpenSettings: () -> Void
+
     @State private var searchText = ""
 
     private var filteredRepositories: [GitHubRepository] {
@@ -28,134 +30,68 @@ struct RepositoriesView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             case .disconnected:
-                connectionView
+                ContentUnavailableView {
+                    Label("Connect GitHub", systemImage: "point.3.connected.trianglepath.dotted")
+                } description: {
+                    Text("Add your personal access token in Settings → GitHub to browse repositories.")
+                } actions: {
+                    Button("Open Settings", action: onOpenSettings)
+                        .buttonStyle(.borderedProminent)
+                }
 
-            case let .connected(account):
-                repositoriesView(account)
+            case .connected:
+                repositoriesView
             }
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Repos")
         .navigationBarTitleDisplayMode(.large)
-        .task {
-            await session.restore()
+        .task(id: "\(session.connectionRevision)-\(scenePhase)") {
+            guard scenePhase == .active else { return }
+            switch session.connectionState {
+            case .loading:
+                break
+            case .disconnected:
+                repositoriesModel.reset()
+                searchText = ""
+            case .connected:
+                await repositoriesModel.load(using: session.client(), force: true)
+            }
         }
         .alert(
             "GitHub",
             isPresented: Binding(
-                get: { session.errorMessage != nil || repositoriesModel.errorMessage != nil },
+                get: { repositoriesModel.errorMessage != nil },
                 set: {
-                    if !$0 {
-                        session.errorMessage = nil
-                        repositoriesModel.errorMessage = nil
-                    }
+                    if !$0 { repositoriesModel.errorMessage = nil }
                 }
             )
         ) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(session.errorMessage ?? repositoriesModel.errorMessage ?? "")
-        }
-    }
-
-    private var connectionView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Image(systemName: "point.3.connected.trianglepath.dotted")
-                    .font(.system(size: 44, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.tint)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Connect GitHub")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-
-                    Text("Connect your GitHub account to browse repositories and use Git operations from MyApps.")
-                        .font(.system(size: 16, weight: .regular, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Personal access token")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-
-                    SecureField("github_pat_…", text: $token)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .textContentType(.password)
-                        .padding(12)
-                        .background(
-                            Color(uiColor: .secondarySystemGroupedBackground),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        )
-
-                    Text("The token is validated with GitHub and stored only in this device's Keychain. Use repository Contents read/write permission for private repos and Git write operations.")
-                        .font(.system(size: 13, weight: .regular, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-
-                Button {
-                    Task {
-                        if await session.connect(token: token) {
-                            token = ""
-                            await repositoriesModel.load(using: session.client(), force: true)
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        if session.isWorking {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-
-                        Text(session.isWorking ? "Connecting…" : "Connect GitHub")
-                            .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(
-                    session.isWorking ||
-                    token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                )
-            }
-            .padding(.horizontal, AppTheme.pagePadding)
-            .padding(.top, 24)
-            .padding(.bottom, 32)
+            Text(repositoriesModel.errorMessage ?? "")
         }
     }
 
     @ViewBuilder
-    private func repositoriesView(_ account: GitHubAccount) -> some View {
-        if repositoriesModel.isLoading && repositoriesModel.repositories.isEmpty {
-            ProgressView("Loading repositories…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .task(id: account.id) {
-                    await repositoriesModel.load(using: session.client())
-                }
-                .toolbar {
-                    accountToolbar(account)
-                }
-        } else if repositoriesModel.repositories.isEmpty {
-            ContentUnavailableView {
-                Label("No Repositories", systemImage: "shippingbox")
-            } description: {
-                Text("No repositories are available to this GitHub connection.")
-            } actions: {
-                Button("Try Again") {
-                    Task {
-                        await repositoriesModel.load(using: session.client(), force: true)
+    private var repositoriesView: some View {
+        List {
+            if repositoriesModel.isLoading && repositoriesModel.repositories.isEmpty {
+                ProgressView("Loading repositories…")
+            } else if repositoriesModel.repositories.isEmpty {
+                ContentUnavailableView {
+                    Label("No Repositories", systemImage: "shippingbox")
+                } description: {
+                    Text("No repositories are available to this GitHub connection.")
+                } actions: {
+                    Button("Try Again") {
+                        Task {
+                            await repositoriesModel.load(using: session.client(), force: true)
+                        }
                     }
                 }
-            }
-            .task(id: account.id) {
-                await repositoriesModel.load(using: session.client())
-            }
-            .toolbar {
-                accountToolbar(account)
-            }
-        } else {
-            List {
+                .listRowBackground(Color.clear)
+            } else {
                 if filteredRepositories.isEmpty {
                     ContentUnavailableView(
                         "No Matching Repositories",
@@ -180,21 +116,15 @@ struct RepositoriesView: View {
                     }
                 }
             }
-            .listStyle(.insetGrouped)
-            .searchable(
-                text: $searchText,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "Search repositories"
-            )
-            .refreshable {
-                await repositoriesModel.load(using: session.client(), force: true)
-            }
-            .task(id: account.id) {
-                await repositoriesModel.load(using: session.client())
-            }
-            .toolbar {
-                accountToolbar(account)
-            }
+        }
+        .listStyle(.insetGrouped)
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search repositories"
+        )
+        .refreshable {
+            await repositoriesModel.load(using: session.client(), force: true)
         }
     }
 
@@ -248,23 +178,4 @@ struct RepositoriesView: View {
         .padding(.vertical, 3)
     }
 
-    @ToolbarContentBuilder
-    private func accountToolbar(_ account: GitHubAccount) -> some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Menu {
-                Label("@\(account.login)", systemImage: "person.crop.circle.badge.checkmark")
-
-                Button(role: .destructive) {
-                    repositoriesModel.reset()
-                    searchText = ""
-                    session.disconnect()
-                } label: {
-                    Label("Disconnect GitHub", systemImage: "rectangle.portrait.and.arrow.right")
-                }
-            } label: {
-                Image(systemName: "person.crop.circle")
-            }
-            .accessibilityLabel("GitHub Account")
-        }
-    }
 }

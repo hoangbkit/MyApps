@@ -1,49 +1,105 @@
 import SwiftUI
 
+/// A row-height-aware section of the commit DAG.
+/// Adjacent rows share the same lane coordinates, so edges remain connected.
 struct GitGraphMarkerView: View {
-    let commit: GitHubCommit
-    let isLast: Bool
+    let layout: GitGraphRowLayout
+    let laneSpacing: CGFloat
+    let nodeY: CGFloat
+
+    private static let laneColors: [Color] = [
+        Color(red: 0.13, green: 0.55, blue: 0.95),
+        Color(red: 0.92, green: 0.59, blue: 0.20),
+        Color(red: 0.54, green: 0.41, blue: 0.88),
+        Color(red: 0.20, green: 0.70, blue: 0.58),
+        Color(red: 0.89, green: 0.37, blue: 0.53),
+        Color(red: 0.21, green: 0.69, blue: 0.81)
+    ]
 
     var body: some View {
         Canvas { context, size in
-            let mainX: CGFloat = 12
-            let mergeX: CGFloat = 28
-            let nodeY: CGFloat = 18
+            let nodeX = x(for: layout.nodeLane)
+            let bottomY = size.height
 
-            var mainLine = Path()
-            mainLine.move(to: CGPoint(x: mainX, y: 0))
-            mainLine.addLine(to: CGPoint(x: mainX, y: isLast ? nodeY : size.height))
-            context.stroke(
-                mainLine,
-                with: .foreground,
-                style: StrokeStyle(lineWidth: 2, lineCap: .round)
-            )
-
-            if commit.isMerge {
-                var mergeLine = Path()
-                mergeLine.move(to: CGPoint(x: mergeX, y: size.height))
-                mergeLine.addLine(to: CGPoint(x: mergeX, y: nodeY + 6))
-                mergeLine.addQuadCurve(
-                    to: CGPoint(x: mainX, y: nodeY),
-                    control: CGPoint(x: mergeX, y: nodeY)
-                )
-                context.stroke(
-                    mergeLine,
-                    with: .foreground,
-                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-                )
+            for lane in layout.continuingLanes {
+                var line = Path()
+                line.move(to: CGPoint(x: x(for: lane), y: 0))
+                line.addLine(to: CGPoint(x: x(for: lane), y: bottomY))
+                stroke(line, color: color(for: lane), in: context)
             }
 
-            let nodeRect = CGRect(
-                x: mainX - 5,
-                y: nodeY - 5,
-                width: 10,
-                height: 10
+            for lane in layout.incomingLanes {
+                let startX = x(for: lane)
+                var line = Path()
+                line.move(to: CGPoint(x: startX, y: 0))
+                if startX == nodeX {
+                    line.addLine(to: CGPoint(x: nodeX, y: nodeY))
+                } else {
+                    line.addCurve(
+                        to: CGPoint(x: nodeX, y: nodeY),
+                        control1: CGPoint(x: startX, y: nodeY * 0.58),
+                        control2: CGPoint(x: nodeX, y: nodeY * 0.58)
+                    )
+                }
+                stroke(line, color: color(for: lane), in: context)
+            }
+
+            for lane in layout.outgoingLanes {
+                let endX = x(for: lane)
+                var line = Path()
+                line.move(to: CGPoint(x: nodeX, y: nodeY))
+                if endX == nodeX {
+                    line.addLine(to: CGPoint(x: nodeX, y: bottomY))
+                } else {
+                    line.addCurve(
+                        to: CGPoint(x: endX, y: bottomY),
+                        control1: CGPoint(x: nodeX, y: nodeY + 25),
+                        control2: CGPoint(x: endX, y: bottomY - 20)
+                    )
+                }
+                stroke(line, color: color(for: lane), in: context)
+            }
+
+            let nodeRadius: CGFloat = min(
+                layout.isMerge ? 6 : 4.5,
+                max(1.3, laneSpacing * 0.32)
             )
-            context.fill(Path(ellipseIn: nodeRect), with: .foreground)
+            let outer = CGRect(
+                x: nodeX - nodeRadius - 2,
+                y: nodeY - nodeRadius - 2,
+                width: (nodeRadius + 2) * 2,
+                height: (nodeRadius + 2) * 2
+            )
+            context.fill(Path(ellipseIn: outer), with: .color(Color(uiColor: .systemGroupedBackground)))
+
+            let inner = CGRect(
+                x: nodeX - nodeRadius,
+                y: nodeY - nodeRadius,
+                width: nodeRadius * 2,
+                height: nodeRadius * 2
+            )
+            context.fill(Path(ellipseIn: inner), with: .color(color(for: layout.nodeLane)))
         }
-        .foregroundStyle(commit.isMerge ? Color.accentColor : Color.secondary)
-        .frame(width: 38, height: 70)
         .accessibilityHidden(true)
+    }
+
+    private func x(for lane: Int) -> CGFloat {
+        12 + CGFloat(lane) * laneSpacing
+    }
+
+    private func color(for lane: Int) -> Color {
+        Self.laneColors[lane % Self.laneColors.count]
+    }
+
+    private func stroke(_ path: Path, color: Color, in context: GraphicsContext) {
+        context.stroke(
+            path,
+            with: .color(color),
+            style: StrokeStyle(
+                lineWidth: min(1.7, max(0.5, laneSpacing * 0.45)),
+                lineCap: .round,
+                lineJoin: .round
+            )
+        )
     }
 }

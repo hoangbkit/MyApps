@@ -2,11 +2,13 @@ import SwiftUI
 
 struct BranchesView: View {
     let repository: GitHubRepository
-    let branches: [GitHubBranch]
-    let tags: [GitHubTag]
+    @ObservedObject var model: GitLogViewModel
     let client: GitHubAPIClient?
-    let isLoading: Bool
+    let onTagCreated: () -> Void
     let onRepositoryChanged: () -> Void
+    let onRefresh: () async -> Void
+
+    private var branches: [GitHubBranch] { model.branches }
 
     private var sortedBranches: [GitHubBranch] {
         branches.sorted { lhs, rhs in
@@ -17,26 +19,25 @@ struct BranchesView: View {
     }
 
     var body: some View {
-        if isLoading && branches.isEmpty {
-            ProgressView("Loading branches…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if branches.isEmpty {
-            ContentUnavailableView(
-                "No Branches",
-                systemImage: "arrow.triangle.branch",
-                description: Text("GitHub returned no branches for this repository.")
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            List {
+        List {
+            if model.isLoadingBranches && branches.isEmpty {
+                ProgressView("Loading branches…")
+            } else if branches.isEmpty {
+                ContentUnavailableView(
+                    "No Branches",
+                    systemImage: "arrow.triangle.branch",
+                    description: Text("GitHub returned no branches for this repository.")
+                )
+                .listRowBackground(Color.clear)
+            } else {
                 ForEach(sortedBranches) { branch in
                     NavigationLink {
                         BranchDetailView(
                             repository: repository,
-                            branch: branch,
-                            branches: branches,
-                            existingTags: tags,
+                            initialBranch: branch,
+                            model: model,
                             client: client,
+                            onTagCreated: onTagCreated,
                             onRepositoryChanged: onRepositoryChanged
                         )
                     } label: {
@@ -68,7 +69,10 @@ struct BranchesView: View {
                     }
                 }
             }
-            .listStyle(.insetGrouped)
+        }
+        .listStyle(.insetGrouped)
+        .refreshable {
+            await onRefresh()
         }
     }
 }
