@@ -12,6 +12,7 @@ final class GitLogViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var isLoadingMore = false
     @Published private(set) var isLoadingTags = false
+    @Published private(set) var isLoadingBranches = false
     @Published private(set) var hasMoreCommits = true
     @Published var selectedBranch: String
     @Published var errorMessage: String?
@@ -23,6 +24,7 @@ final class GitLogViewModel: ObservableObject {
     private var loadedBranch: String?
     private var loadGeneration = 0
     private var tagsGeneration = 0
+    private var branchesGeneration = 0
 
     // The next page to request for every branch that has more history.
     // All Branches does not use a single pagination cursor.
@@ -51,12 +53,19 @@ final class GitLogViewModel: ObservableObject {
         let generation = loadGeneration
         // A lightweight tags-only refresh must not be overwritten by an
         // earlier, slower all-branches history request.
+        tagsGeneration += 1
         let initialTagsGeneration = tagsGeneration
+        branchesGeneration += 1
+        let initialBranchesGeneration = branchesGeneration
         isLoading = true
+        isLoadingBranches = true
+        isLoadingTags = true
         isLoadingMore = false
         errorMessage = nil
         defer {
             if generation == loadGeneration { isLoading = false }
+            if initialBranchesGeneration == branchesGeneration { isLoadingBranches = false }
+            if initialTagsGeneration == tagsGeneration { isLoadingTags = false }
         }
 
         do {
@@ -64,7 +73,10 @@ final class GitLogViewModel: ObservableObject {
             async let tagsRequest = client.tags(repository: repository)
             let freshBranches = try await branchesRequest
             guard generation == loadGeneration, !Task.isCancelled else { return }
-            branches = freshBranches
+            if branchesGeneration == initialBranchesGeneration {
+                branches = freshBranches
+                isLoadingBranches = false
+            }
 
             // Tags and branches become usable before the potentially slow
             // combined-history fetch has finished.
@@ -72,20 +84,23 @@ final class GitLogViewModel: ObservableObject {
             guard generation == loadGeneration, !Task.isCancelled else { return }
             if tagsGeneration == initialTagsGeneration {
                 tags = freshTags
+                isLoadingTags = false
             }
 
             let scope = selectedBranch == Self.allBranches ||
-                freshBranches.contains(where: { $0.name == selectedBranch })
+                branches.contains(where: { $0.name == selectedBranch })
                 ? selectedBranch
                 : repository.defaultBranch
 
             let firstPage = try await fetchFirstPage(
                 scope: scope,
-                branches: freshBranches,
+                branches: branches,
                 repository: repository,
                 client: client
             )
-            guard generation == loadGeneration, !Task.isCancelled else { return }
+            guard generation == loadGeneration,
+                  initialBranchesGeneration == branchesGeneration,
+                  !Task.isCancelled else { return }
             applyFirstPage(firstPage, scope: scope)
         } catch {
             guard generation == loadGeneration,
@@ -95,11 +110,50 @@ final class GitLogViewModel: ObservableObject {
         }
     }
 
+    /// Branches and branch details should not wait for All Branches history.
+    func refreshBranches(
+        repository: GitHubRepository,
+        client: GitHubAPIClient?
+    ) async {
+        guard let client else {
+            errorMessage = "GitHub is not connected."
+            return
+        }
+
+        branchesGeneration += 1
+        let generation = branchesGeneration
+        isLoadingBranches = true
+        defer {
+            if generation == branchesGeneration { isLoadingBranches = false }
+        }
+
+        do {
+            let latestBranches = try await client.branches(repository: repository)
+            guard generation == branchesGeneration, !Task.isCancelled else { return }
+            branches = latestBranches
+        } catch {
+            guard generation == branchesGeneration,
+                  !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func refreshReferences(
+        repository: GitHubRepository,
+        client: GitHubAPIClient?
+    ) async {
+        errorMessage = nil
+        async let branchesRefresh: Void = refreshBranches(repository: repository, client: client)
+        async let tagsRefresh: Void = refreshTags(repository: repository, client: client, clearError: false)
+        _ = await (branchesRefresh, tagsRefresh)
+    }
+
     /// Refresh only the tag refs. Tag creation and pull-to-refresh must not
     /// wait for every branch history page or discard the currently shown log.
     func refreshTags(
         repository: GitHubRepository,
-        client: GitHubAPIClient?
+        client: GitHubAPIClient?,
+        clearError: Bool = true
     ) async {
         guard let client else {
             errorMessage = "GitHub is not connected."
@@ -109,6 +163,7 @@ final class GitLogViewModel: ObservableObject {
         tagsGeneration += 1
         let generation = tagsGeneration
         isLoadingTags = true
+        if clearError { errorMessage = nil }
         defer {
             if generation == tagsGeneration { isLoadingTags = false }
         }
@@ -117,7 +172,6 @@ final class GitLogViewModel: ObservableObject {
             let latestTags = try await client.tags(repository: repository)
             guard generation == tagsGeneration, !Task.isCancelled else { return }
             tags = latestTags
-            errorMessage = nil
         } catch {
             guard generation == tagsGeneration,
                   !Task.isCancelled,
@@ -186,6 +240,7 @@ final class GitLogViewModel: ObservableObject {
         let cursors = pendingBranchPages.values.sorted { $0.branch < $1.branch }
 
         isLoadingMore = true
+        errorMessage = nil
         defer {
             if generation == loadGeneration { isLoadingMore = false }
         }
@@ -225,7 +280,6 @@ final class GitLogViewModel: ObservableObject {
                 hasMoreCommits = page.count == singleBranchPageSize
                 nextPage += 1
             }
-            errorMessage = nil
         } catch {
             guard generation == loadGeneration,
                   !Task.isCancelled,
@@ -315,7 +369,6 @@ final class GitLogViewModel: ObservableObject {
         pendingBranchPages = page.nextBranchPages
         hasMoreCommits = page.hasMore
         nextPage = 2
-        errorMessage = nil
     }
 
     private func appendUnique(_ page: [GitHubCommit]) {

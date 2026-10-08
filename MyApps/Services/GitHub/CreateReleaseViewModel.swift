@@ -70,6 +70,7 @@ final class CreateReleaseViewModel: ObservableObject {
         repository: GitHubRepository,
         client: GitHubAPIClient?
     ) async -> Bool {
+        guard !isCreating else { return false }
         guard let client else {
             errorMessage = "GitHub is not connected."
             return false
@@ -80,37 +81,38 @@ final class CreateReleaseViewModel: ObservableObject {
             return false
         }
 
+        let request = GitHubCreateReleaseRequest(
+            tagName: selectedTagName,
+            targetCommitish: repository.defaultBranch,
+            name: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            body: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            draft: isDraft,
+            prerelease: isPrerelease
+        )
+        errorMessage = nil
+        successMessage = nil
         isCreating = true
         defer { isCreating = false }
 
         do {
             let latestReleases = try await client.releases(repository: repository)
-            guard !latestReleases.contains(where: { $0.tagName == selectedTagName }) else {
-                errorMessage = "A release already exists for \(selectedTagName)."
+            guard !latestReleases.contains(where: { $0.tagName == request.tagName }) else {
+                errorMessage = "A release already exists for \(request.tagName)."
                 return false
             }
 
             let latestTags = try await client.tags(repository: repository)
-            guard latestTags.contains(where: { $0.name == selectedTagName }) else {
-                errorMessage = "Tag \(selectedTagName) no longer exists."
+            guard latestTags.contains(where: { $0.name == request.tagName }) else {
+                errorMessage = "Tag \(request.tagName) no longer exists."
                 return false
             }
-
-            let request = GitHubCreateReleaseRequest(
-                tagName: selectedTagName,
-                targetCommitish: repository.defaultBranch,
-                name: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                body: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-                draft: isDraft,
-                prerelease: isPrerelease
-            )
 
             _ = try await client.createRelease(
                 repository: repository,
                 request: request
             )
 
-            successMessage = "Created release \(selectedTagName)."
+            successMessage = "Created release \(request.tagName) in \(repository.fullName)."
             errorMessage = nil
             return true
         } catch {

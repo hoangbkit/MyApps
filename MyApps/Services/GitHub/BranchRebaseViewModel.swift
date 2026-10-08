@@ -28,6 +28,8 @@ final class BranchRebaseViewModel: ObservableObject {
     private let maxReplayCommits = 100
     private var preparedSourceSHA: String?
     private var preparedDestinationSHA: String?
+    private var preparedDestinationName: String?
+    private var analysisGeneration = 0
 
     init(sourceBranch: GitHubBranch, defaultDestination: String) {
         self.sourceBranch = sourceBranch
@@ -38,9 +40,17 @@ final class BranchRebaseViewModel: ObservableObject {
         repository: GitHubRepository,
         client: GitHubAPIClient?
     ) async {
+        guard !isPreparing, !isApplying else { return }
+        analysisGeneration += 1
+        let generation = analysisGeneration
+        let destinationName = self.destinationName
+        plan = nil
         proposedHeadSHA = nil
         preparedSourceSHA = nil
         preparedDestinationSHA = nil
+        preparedDestinationName = nil
+        errorMessage = nil
+        isAnalyzing = false
 
         guard sourceBranch.name != repository.defaultBranch else {
             plan = nil
@@ -67,7 +77,9 @@ final class BranchRebaseViewModel: ObservableObject {
         }
 
         isAnalyzing = true
-        defer { isAnalyzing = false }
+        defer {
+            if generation == analysisGeneration { isAnalyzing = false }
+        }
 
         do {
             let branches = try await client.branches(repository: repository)
@@ -78,11 +90,16 @@ final class BranchRebaseViewModel: ObservableObject {
                 throw GitHubRebaseError.branchMoved
             }
 
+            guard !source.isProtected else {
+                throw GitHubRebaseError.protectedBranch
+            }
+
             let sourceComparison = try await client.compare(
                 repository: repository,
                 baseSHA: destination.commit.sha,
                 headSHA: source.commit.sha
             )
+            guard generation == analysisGeneration, !Task.isCancelled else { return }
 
             guard
                 sourceComparison.aheadBy <= maxReplayCommits,
@@ -168,6 +185,7 @@ final class BranchRebaseViewModel: ObservableObject {
                 .intersection(destinationTouched)
                 .sorted()
 
+            guard generation == analysisGeneration, !Task.isCancelled else { return }
             plan = Plan(
                 sourceHeadSHA: source.commit.sha,
                 destinationHeadSHA: destination.commit.sha,
@@ -185,7 +203,8 @@ final class BranchRebaseViewModel: ObservableObject {
                 errorMessage = nil
             }
         } catch {
-            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
+            guard generation == analysisGeneration,
+                  !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
             plan = nil
             errorMessage = error.localizedDescription
         }
@@ -195,6 +214,7 @@ final class BranchRebaseViewModel: ObservableObject {
         repository: GitHubRepository,
         client: GitHubAPIClient?
     ) async {
+        guard !isAnalyzing, !isPreparing, !isApplying else { return }
         guard
             let plan,
             plan.conflictingPaths.isEmpty,
@@ -204,6 +224,7 @@ final class BranchRebaseViewModel: ObservableObject {
             return
         }
 
+        let destinationName = self.destinationName
         isPreparing = true
         defer { isPreparing = false }
 
@@ -222,6 +243,7 @@ final class BranchRebaseViewModel: ObservableObject {
                 proposedHeadSHA = plan.destinationHeadSHA
                 preparedSourceSHA = plan.sourceHeadSHA
                 preparedDestinationSHA = plan.destinationHeadSHA
+                preparedDestinationName = destinationName
                 errorMessage = nil
                 return
             }
@@ -303,12 +325,14 @@ final class BranchRebaseViewModel: ObservableObject {
             proposedHeadSHA = currentParentSHA
             preparedSourceSHA = plan.sourceHeadSHA
             preparedDestinationSHA = plan.destinationHeadSHA
+            preparedDestinationName = destinationName
             errorMessage = nil
         } catch {
             guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
             proposedHeadSHA = nil
             preparedSourceSHA = nil
             preparedDestinationSHA = nil
+            preparedDestinationName = nil
             errorMessage = error.localizedDescription
         }
     }
@@ -318,16 +342,21 @@ final class BranchRebaseViewModel: ObservableObject {
         repository: GitHubRepository,
         client: GitHubAPIClient?
     ) async -> Bool {
+        guard !isApplying else { return false }
         guard
             let client,
             let proposedHeadSHA,
             let preparedSourceSHA,
-            let preparedDestinationSHA
+            let preparedDestinationSHA,
+            let preparedDestinationName,
+            preparedDestinationName == destinationName
         else {
             errorMessage = "Prepare the rebase before applying it."
             return false
         }
 
+        errorMessage = nil
+        successMessage = nil
         isApplying = true
         defer { isApplying = false }
 
@@ -337,11 +366,11 @@ final class BranchRebaseViewModel: ObservableObject {
                 sourceBranch: sourceBranch.name,
                 expectedSourceSHA: preparedSourceSHA,
                 newSourceSHA: proposedHeadSHA,
-                destinationBranch: destinationName,
+                destinationBranch: preparedDestinationName,
                 expectedDestinationSHA: preparedDestinationSHA
             )
 
-            successMessage = "Rebased \(sourceBranch.name) onto \(destinationName)."
+            successMessage = "Rebased \(sourceBranch.name) onto \(preparedDestinationName)."
             errorMessage = nil
             return true
         } catch {

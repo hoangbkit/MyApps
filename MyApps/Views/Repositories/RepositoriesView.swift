@@ -55,7 +55,7 @@ struct RepositoriesView: View {
                 repositoriesModel.reset()
                 searchText = ""
             case .connected:
-                await repositoriesModel.load(using: session.client())
+                await repositoriesModel.load(using: session.client(), force: true)
             }
         }
         .alert(
@@ -75,25 +75,23 @@ struct RepositoriesView: View {
 
     @ViewBuilder
     private var repositoriesView: some View {
-        if repositoriesModel.isLoading && repositoriesModel.repositories.isEmpty {
-            ProgressView("Loading repositories…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-        } else if repositoriesModel.repositories.isEmpty {
-            ContentUnavailableView {
-                Label("No Repositories", systemImage: "shippingbox")
-            } description: {
-                Text("No repositories are available to this GitHub connection.")
-            } actions: {
-                Button("Try Again") {
-                    Task {
-                        await repositoriesModel.load(using: session.client(), force: true)
+        List {
+            if repositoriesModel.isLoading && repositoriesModel.repositories.isEmpty {
+                ProgressView("Loading repositories…")
+            } else if repositoriesModel.repositories.isEmpty {
+                ContentUnavailableView {
+                    Label("No Repositories", systemImage: "shippingbox")
+                } description: {
+                    Text("No repositories are available to this GitHub connection.")
+                } actions: {
+                    Button("Try Again") {
+                        Task {
+                            await repositoriesModel.load(using: session.client(), force: true)
+                        }
                     }
                 }
-            }
-
-        } else {
-            List {
+                .listRowBackground(Color.clear)
+            } else {
                 if filteredRepositories.isEmpty {
                     ContentUnavailableView(
                         "No Matching Repositories",
@@ -118,16 +116,15 @@ struct RepositoriesView: View {
                     }
                 }
             }
-            .listStyle(.insetGrouped)
-            .searchable(
-                text: $searchText,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "Search repositories"
-            )
-            .refreshable {
-                await repositoriesModel.load(using: session.client(), force: true)
-            }
-
+        }
+        .listStyle(.insetGrouped)
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search repositories"
+        )
+        .refreshable {
+            await repositoriesModel.load(using: session.client(), force: true)
         }
     }
 

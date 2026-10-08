@@ -841,3 +841,25 @@ Tab 3 · App Store = reserved for future App Store Connect apps
 Tab 4 · Notes     = existing global notes inbox
 Tab 5 · Settings  = existing settings
 ```
+
+## Shared refresh correctness
+
+All REST reads use `reloadIgnoringLocalCacheData` and `Cache-Control: no-cache`. This includes repositories, branches, tags, releases, commit pages, and the branch comparisons used to validate merge/rebase operations. Already-loaded view data remains visible while refreshing; HTTP caching cannot substitute old data for an explicit refresh or a pre-write check.
+
+- Repos, Branches, Tags, Releases, Log, and branch/commit details support pull-to-refresh, including empty list/log states.
+- Branches and Tags fetch refs independently of the All Branches history. Entering these sections refreshes branch heads and tag refs; Tags' Create at HEAD action uses refreshed branches.
+- Releases fetches releases and available tags together under one local error owner. Pull-to-refresh updates both the list and Create Release choices, including when there are no releases yet.
+- Branch and tag loads, releases, branch comparisons, merge previews, and rebase analysis reject superseded responses. A successful sibling request does not erase a ref-refresh failure.
+- Branch details observe current shared heads/tags; their comparison reloads when either compared head changes. Commit details observe current ref badges. Missing branches disable their actions. Returning from a commit preserves loaded Log pagination; switching back to Log from another section refreshes history.
+- Tag/release creation and merge/rebase deliver one result alert. Parent refresh runs from Done after success; failed operations do not trigger success refreshes. Submitted release fields and merge/rebase destinations are held stable during writes. Rebase retains the destination used during preparation and the existing ref lease checks.
+
+Manual checks for PR #4:
+
+1. Pull to refresh every list with zero, one, and many rows. Repos search and Log pagination should remain usable.
+2. Create a lightweight and annotated tag, tap Done, and immediately refresh Tags. Reopen the commit details and confirm the new tag badge.
+3. Enter Releases with no releases, refresh, and verify all current tags are offered by Create Release. Create a draft/prerelease, tap Done, and verify the list updates immediately.
+4. Merge/rebase, tap Done, and check the affected branch heads, ahead/behind comparison, and Log after switching back.
+5. Change the merge/rebase destination quickly during analysis; only the latest preview/plan should appear. During a write/preparation, destination editing is disabled.
+6. Refresh while an earlier load is in flight, switch sections/repositories, and background/foreground the app. Old results must not overwrite newer state; expected read cancellation must not show an error alert.
+
+Validation in this environment is source review and `git diff --check`. Xcode/Swift is unavailable here; no build, CI dispatch, or real test write was performed.

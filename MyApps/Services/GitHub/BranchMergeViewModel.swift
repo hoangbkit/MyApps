@@ -13,6 +13,7 @@ final class BranchMergeViewModel: ObservableObject {
     @Published var successMessage: String?
 
     let sourceBranch: GitHubBranch
+    private var prepareGeneration = 0
 
     init(sourceBranch: GitHubBranch, defaultDestination: String) {
         self.sourceBranch = sourceBranch
@@ -24,6 +25,14 @@ final class BranchMergeViewModel: ObservableObject {
         repository: GitHubRepository,
         client: GitHubAPIClient?
     ) async {
+        guard !isMerging else { return }
+        prepareGeneration += 1
+        let generation = prepareGeneration
+        let destinationName = self.destinationName
+        comparison = nil
+        destinationHeadSHA = nil
+        isLoading = false
+        errorMessage = nil
         guard sourceBranch.name != destinationName else {
             comparison = nil
             destinationHeadSHA = nil
@@ -37,7 +46,9 @@ final class BranchMergeViewModel: ObservableObject {
         }
 
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if generation == prepareGeneration { isLoading = false }
+        }
 
         do {
             let branches = try await client.branches(repository: repository)
@@ -48,16 +59,19 @@ final class BranchMergeViewModel: ObservableObject {
                 throw BranchOperationError.branchMovedOrMissing
             }
 
-            sourceHeadSHA = source.commit.sha
-            destinationHeadSHA = destination.commit.sha
-            comparison = try await client.compare(
+            let fetched = try await client.compare(
                 repository: repository,
                 baseSHA: destination.commit.sha,
                 headSHA: source.commit.sha
             )
+            guard generation == prepareGeneration, !Task.isCancelled else { return }
+            sourceHeadSHA = source.commit.sha
+            destinationHeadSHA = destination.commit.sha
+            comparison = fetched
             errorMessage = nil
         } catch {
-            guard !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
+            guard generation == prepareGeneration,
+                  !Task.isCancelled, !GitHubAPIClient.isCancellation(error) else { return }
             comparison = nil
             errorMessage = error.localizedDescription
         }
@@ -68,11 +82,17 @@ final class BranchMergeViewModel: ObservableObject {
         repository: GitHubRepository,
         client: GitHubAPIClient?
     ) async -> Bool {
+        guard !isMerging else { return false }
         guard let client else {
             errorMessage = "GitHub is not connected."
             return false
         }
 
+        let destinationName = self.destinationName
+        prepareGeneration += 1
+        isLoading = false
+        errorMessage = nil
+        successMessage = nil
         isMerging = true
         defer { isMerging = false }
 

@@ -4,12 +4,14 @@ import UIKit
 struct GitCommitDetailView: View {
     let repository: GitHubRepository
     let commit: GitHubCommit
-    let references: GitHubCommitReferences
-    let existingTags: [GitHubTag]
+    @ObservedObject var model: GitLogViewModel
     let client: GitHubAPIClient?
     let onTagCreated: () -> Void
 
     @State private var didCopySHA = false
+
+    private var references: GitHubCommitReferences { model.references(for: commit) }
+    private var existingTags: [GitHubTag] { model.tags }
 
     var body: some View {
         List {
@@ -97,5 +99,8 @@ struct GitCommitDetailView: View {
         }
         .navigationTitle(commit.shortSHA)
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await model.refreshReferences(repository: repository, client: client)
+        }
     }
 }

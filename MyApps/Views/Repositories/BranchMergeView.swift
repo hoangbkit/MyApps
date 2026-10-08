@@ -123,6 +123,7 @@ struct BranchMergeView: View {
                 Text("Before writing, MyApps refreshes both branch heads and recomputes the comparison.")
             }
         }
+        .disabled(model.isMerging)
         .navigationTitle("Merge")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: model.destinationName) {
@@ -135,9 +136,7 @@ struct BranchMergeView: View {
         ) {
             Button("Merge \(sourceBranch.name) into \(model.destinationName)") {
                 Task {
-                    if await model.merge(repository: repository, client: client) {
-                        onMerged()
-                    }
+                    await model.merge(repository: repository, client: client)
                 }
             }
 
@@ -149,28 +148,27 @@ struct BranchMergeView: View {
             )
         }
         .alert(
-            "Merge Failed",
+            model.successMessage == nil ? "Merge Failed" : "Merge Complete",
             isPresented: Binding(
-                get: { model.errorMessage != nil },
-                set: { if !$0 { model.errorMessage = nil } }
+                get: { model.errorMessage != nil || model.successMessage != nil },
+                set: {
+                    if !$0 {
+                        model.errorMessage = nil
+                        model.successMessage = nil
+                    }
+                }
             )
         ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(model.errorMessage ?? "")
-        }
-        .alert(
-            "Merge Complete",
-            isPresented: Binding(
-                get: { model.successMessage != nil },
-                set: { if !$0 { model.successMessage = nil } }
-            )
-        ) {
-            Button("Done") {
-                dismiss()
+            if model.successMessage != nil {
+                Button("Done") {
+                    onMerged()
+                    dismiss()
+                }
+            } else {
+                Button("OK", role: .cancel) {}
             }
         } message: {
-            Text(model.successMessage ?? "")
+            Text(model.successMessage ?? model.errorMessage ?? "")
         }
     }
 }

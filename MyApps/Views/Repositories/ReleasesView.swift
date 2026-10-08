@@ -2,10 +2,11 @@ import SwiftUI
 
 struct ReleasesView: View {
     let repository: GitHubRepository
-    let tags: [GitHubTag]
     let client: GitHubAPIClient?
 
     @StateObject private var model = ReleasesViewModel()
+
+    private var tags: [GitHubTag] { model.tags }
 
     private var productReleases: [GitHubRelease] {
         model.releases.filter { !$0.isMyCLIBuild }
@@ -16,61 +17,54 @@ struct ReleasesView: View {
     }
 
     var body: some View {
-        Group {
+        List {
             if model.isLoading && model.releases.isEmpty {
                 ProgressView("Loading releases…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List {
-                    Section {
-                        NavigationLink {
-                            CreateReleaseView(
-                                repository: repository,
-                                tags: tags,
-                                existingReleases: model.releases,
-                                client: client
-                            ) {
-                                Task {
-                                    await model.load(
-                                        repository: repository,
-                                        client: client,
-                                        force: true
-                                    )
-                                }
+                Section {
+                    NavigationLink {
+                        CreateReleaseView(
+                            repository: repository,
+                            tags: tags,
+                            existingReleases: model.releases,
+                            client: client
+                        ) {
+                            Task {
+                                await model.load(
+                                    repository: repository,
+                                    client: client,
+                                    force: true
+                                )
                             }
-                        } label: {
-                            Label("Create Release", systemImage: "plus.circle")
                         }
-                        .disabled(
-                            tags.isEmpty ||
-                            !repository.canAttemptWrite
-                        )
+                    } label: {
+                        Label("Create Release", systemImage: "plus.circle")
                     }
-
-                    releaseSection(
-                        title: "Product Releases",
-                        releases: productReleases
+                    .disabled(
+                        tags.isEmpty ||
+                        !repository.canAttemptWrite
                     )
-
-                    if !buildReleases.isEmpty {
-                        releaseSection(
-                            title: "Build Prereleases",
-                            releases: buildReleases
-                        )
-                    }
                 }
-                .listStyle(.insetGrouped)
-                .refreshable {
-                    await model.load(
-                        repository: repository,
-                        client: client,
-                        force: true
+
+                releaseSection(
+                    title: "Product Releases",
+                    releases: productReleases
+                )
+
+                if !buildReleases.isEmpty {
+                    releaseSection(
+                        title: "Build Prereleases",
+                        releases: buildReleases
                     )
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .refreshable {
+            await refresh()
+        }
         .task {
-            await model.load(repository: repository, client: client)
+            await refresh()
         }
         .alert(
             "GitHub",
@@ -83,6 +77,12 @@ struct ReleasesView: View {
         } message: {
             Text(model.errorMessage ?? "")
         }
+    }
+
+    private func refresh() async {
+        await model.load(
+            repository: repository, client: client, force: true
+        )
     }
 
     @ViewBuilder
