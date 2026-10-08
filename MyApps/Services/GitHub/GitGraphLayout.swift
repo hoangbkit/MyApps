@@ -15,9 +15,10 @@ struct GitGraphSnapshot {
     let rows: [GitGraphRowLayout]
     let laneCount: Int
 
-    // Make room for all tracks while keeping the graph reasonably compact on iPhone.
+    // Large repositories can have many branch heads. Never let a very
+    // wide graph eat the title column on a narrow iPhone.
     var laneSpacing: CGFloat {
-        max(8, min(21, 140 / CGFloat(max(1, laneCount))))
+        min(20, 104 / CGFloat(max(1, laneCount - 1)))
     }
 
     var width: CGFloat {

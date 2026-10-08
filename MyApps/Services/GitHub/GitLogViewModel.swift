@@ -23,7 +23,7 @@ final class GitLogViewModel: ObservableObject {
 
     // The next page to request for every branch that has more history.
     // All Branches does not use a single pagination cursor.
-    private var pendingBranchPages: [String: Int] = [:]
+    private var pendingBranchPages: [String: GitHubBranchHistoryCursor] = [:]
 
     var isSwitchingBranch: Bool {
         isLoading && loadedBranch != nil && loadedBranch != selectedBranch
@@ -141,9 +141,7 @@ final class GitLogViewModel: ObservableObject {
 
         let generation = loadGeneration
         let pageNumber = nextPage
-        let cursors = pendingBranchPages
-            .map { GitHubBranchHistoryCursor(branch: $0.key, page: $0.value) }
-            .sorted { $0.branch < $1.branch }
+        let cursors = pendingBranchPages.values.sorted { $0.branch < $1.branch }
 
         isLoadingMore = true
         defer {
@@ -209,7 +207,7 @@ final class GitLogViewModel: ObservableObject {
 
     private struct FirstPage {
         let commits: [GitHubCommit]
-        let nextBranchPages: [String: Int]
+        let nextBranchPages: [String: GitHubBranchHistoryCursor]
         let hasMore: Bool
     }
 
@@ -221,7 +219,11 @@ final class GitLogViewModel: ObservableObject {
     ) async throws -> FirstPage {
         if scope == Self.allBranches {
             let cursors = availableBranches.map {
-                GitHubBranchHistoryCursor(branch: $0.name, page: 1)
+                GitHubBranchHistoryCursor(
+                    branch: $0.name,
+                    headSHA: $0.commit.sha,
+                    page: 1
+                )
             }
             let pages = try await client.commitPages(
                 repository: repository,
@@ -252,10 +254,14 @@ final class GitLogViewModel: ObservableObject {
     private func nextBranchPages(
         from pages: [GitHubBranchHistoryPage],
         pageSize: Int
-    ) -> [String: Int] {
-        var next: [String: Int] = [:]
+    ) -> [String: GitHubBranchHistoryCursor] {
+        var next: [String: GitHubBranchHistoryCursor] = [:]
         for page in pages where page.commits.count == pageSize {
-            next[page.branch] = page.page + 1
+            next[page.branch] = GitHubBranchHistoryCursor(
+                branch: page.branch,
+                headSHA: page.headSHA,
+                page: page.page + 1
+            )
         }
         return next
     }

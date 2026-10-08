@@ -60,7 +60,10 @@ struct GitGraphMarkerView: View {
                 stroke(line, color: color(for: lane), in: context)
             }
 
-            let nodeRadius: CGFloat = layout.isMerge ? 6 : 4.5
+            let nodeRadius: CGFloat = min(
+                layout.isMerge ? 6 : 4.5,
+                max(1.3, laneSpacing * 0.32)
+            )
             let outer = CGRect(
                 x: nodeX - nodeRadius - 2,
                 y: nodeY - nodeRadius - 2,
@@ -92,7 +95,11 @@ struct GitGraphMarkerView: View {
         context.stroke(
             path,
             with: .color(color),
-            style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round)
+            style: StrokeStyle(
+                lineWidth: min(1.7, max(0.5, laneSpacing * 0.45)),
+                lineCap: .round,
+                lineJoin: .round
+            )
         )
     }
 }

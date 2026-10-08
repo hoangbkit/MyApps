@@ -17,11 +17,13 @@ struct GitHubAccount: Codable, Equatable, Sendable {
 /// A per-branch pagination request for an All Branches log.
 struct GitHubBranchHistoryCursor: Sendable {
     let branch: String
+    let headSHA: String
     let page: Int
 }
 
 struct GitHubBranchHistoryPage: Sendable {
     let branch: String
+    let headSHA: String
     let page: Int
     let commits: [GitHubCommit]
 }
@@ -233,12 +235,13 @@ struct GitHubAPIClient: Sendable {
                     group.addTask {
                         let commits = try await self.commits(
                             repository: repository,
-                            branch: cursor.branch,
+                            branch: cursor.headSHA,
                             page: cursor.page,
                             perPage: perPage
                         )
                         return GitHubBranchHistoryPage(
                             branch: cursor.branch,
+                            headSHA: cursor.headSHA,
                             page: cursor.page,
                             commits: commits
                         )
