@@ -4,6 +4,15 @@ name: Release
 # not App Store/product releases.
 on:
   workflow_dispatch:
+    inputs:
+      configuration:
+        description: "Xcode build configuration"
+        type: choice
+        required: true
+        default: Debug
+        options:
+          - Debug
+          - Release
 
 permissions:
   contents: write
@@ -14,16 +23,27 @@ concurrency:
 
 jobs:
   release:
-    name: Build and release iOS
+    name: Build and release iOS (${{ inputs.configuration || 'Debug' }})
     runs-on: macos-26
     timeout-minutes: 60
+    env:
+      BUILD_CONFIGURATION: ${{ inputs.configuration || 'Debug' }}
 
     steps:
-      - name: Checkout master
+      - name: Checkout selected ref
         uses: actions/checkout@v6
         with:
-          ref: master
           fetch-depth: 0
+
+      - name: Verify selected commit
+        shell: bash
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::Checked out $actual_sha, expected $GITHUB_SHA" >&2
+            exit 1
+          fi
+          echo "Building ref $GITHUB_REF at $actual_sha"
 
       - name: Show toolchain
         run: |
@@ -42,10 +62,22 @@ jobs:
         id: release
         shell: bash
         run: |
+          set -euo pipefail
+
+          case "$BUILD_CONFIGURATION" in
+            Debug) build_slug="debug" ;;
+            Release) build_slug="release" ;;
+            *)
+              echo "::error::Unsupported build configuration: $BUILD_CONFIGURATION" >&2
+              exit 1
+              ;;
+          esac
+
           tag="mycli-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "build_slug=$build_slug" >> "$GITHUB_OUTPUT"
           echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "Build release: $tag"
+          echo "Build release: $tag ($BUILD_CONFIGURATION)"
 
       # mycli signs and exports the archive locally using the developer
       # machine's credentials, so CI intentionally leaves it unsigned.
@@ -61,7 +93,7 @@ jobs:
           xcodebuild \
             -project MyApps.xcodeproj \
             -scheme MyApps \
-            -configuration Release \
+            -configuration "$BUILD_CONFIGURATION" \
             -sdk iphoneos \
             -destination "generic/platform=iOS" \
             -derivedDataPath "$IOS_DERIVED" \
@@ -91,7 +123,7 @@ jobs:
           mkdir -p artifacts
           ditto -c -k --sequesterRsrc --keepParent \
             "$IOS_ARCHIVE" \
-            "artifacts/MyApps-iOS-unsigned-${{ steps.release.outputs.tag }}.xcarchive.zip"
+            "artifacts/MyApps-iOS-${{ steps.release.outputs.build_slug }}-unsigned-${{ steps.release.outputs.tag }}.xcarchive.zip"
 
           rm -rf "$IOS_DERIVED" "$IOS_ARCHIVE"
 
@@ -100,7 +132,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          ARCHIVE="artifacts/MyApps-iOS-unsigned-${{ steps.release.outputs.tag }}.xcarchive.zip"
+          ARCHIVE="artifacts/MyApps-iOS-${{ steps.release.outputs.build_slug }}-unsigned-${{ steps.release.outputs.tag }}.xcarchive.zip"
           test -f "$ARCHIVE"
           ls -lh "$ARCHIVE"
 
