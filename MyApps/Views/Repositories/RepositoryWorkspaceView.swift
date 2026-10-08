@@ -115,9 +115,10 @@ struct RepositoryWorkspaceView: View {
                 }
             }
         } else {
+            let graph = GitGraphLayout.make(logModel.commits)
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(logModel.commits.enumerated()), id: \.element.sha) { index, commit in
+                    ForEach(Array(graph.commits.enumerated()), id: \.element.sha) { index, commit in
                         NavigationLink {
                             GitCommitDetailView(
                                 repository: repository,
@@ -134,7 +135,9 @@ struct RepositoryWorkspaceView: View {
                             GitCommitRowView(
                                 commit: commit,
                                 references: logModel.references(for: commit),
-                                isLast: index == logModel.commits.count - 1 && !logModel.hasMoreCommits
+                                graph: graph.rows[index],
+                                graphWidth: graph.width,
+                                laneSpacing: graph.laneSpacing
                             )
                         }
                         .buttonStyle(.plain)

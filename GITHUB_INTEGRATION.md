@@ -610,6 +610,18 @@ No Git operations yet.
 
 **STOP. Wait for explicit approval.**
 
+## Git log graph and presentation refinement (PR #4)
+
+- Compute graph lanes from actual parent SHAs, not a fabricated second line for each merge commit.
+- Parent-child edges continue between rows at stable column positions, with lanes for additional parents and multiple children.
+- Normalize loaded history to child-before-parent (topological) order while retaining the GitHub order when unconstrained.
+- Track all visible lanes and keep unfinished parent edges through pagination; do not claim to show branches outside the loaded commits.
+- Render lines in a row-height-aware SwiftUI Canvas, making multi-line subjects and reference badges safe.
+- Keep history navigation, 40-commit paging, pull-to-refresh, and commit detail/actions unchanged.
+- Improve text hierarchy: branch/tag refs, commit subject, author/date, and subdued monospaced SHA.
+
+---
+
 ## Phase 3 — Beautified Git log
 
 **Status: implemented on PR #2.**
