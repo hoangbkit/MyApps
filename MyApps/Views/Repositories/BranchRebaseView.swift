@@ -197,7 +197,7 @@ private struct BranchRebasePrepareSection: View {
     @Binding var isConfirmingApply: Bool
 
     var body: some View {
-        Section("Prepare") {
+        Section {
             if let proposedHeadSHA = model.proposedHeadSHA {
                 LabeledContent(
                     "Proposed New Head",
@@ -238,6 +238,8 @@ private struct BranchRebasePrepareSection: View {
                 }
                 .disabled(model.isPreparing)
             }
+        } header: {
+            Text("Prepare")
         } footer: {
             Text("Preparing creates new Git objects only. The branch ref changes only after the final confirmation.")
         }
