@@ -54,6 +54,10 @@ struct GitHubAPIClient: Sendable {
         let ref: String
     }
 
+    private struct GitHubErrorMessage: Decodable {
+        let message: String?
+    }
+
     private struct CreateTreeBody: Encodable {
         let baseTree: String
         let tree: [GitHubTreeMutationEntry]
@@ -157,8 +161,8 @@ struct GitHubAPIClient: Sendable {
             body: body
         )
 
-        guard (200..<300).contains(response.statusCode) else {
-            throw GitHubAPIError.httpStatus(response.statusCode)
+        guard response.statusCode == 201 else {
+            throw tagWriteError(status: response.statusCode, data: data)
         }
 
         let tagObject = try decode(CreateTagObjectResponse.self, from: data)
@@ -522,11 +526,23 @@ struct GitHubAPIClient: Sendable {
             body: body
         )
 
-        guard (200..<300).contains(response.statusCode) else {
-            throw GitHubAPIError.httpStatus(response.statusCode)
+        guard response.statusCode == 201 else {
+            throw tagWriteError(status: response.statusCode, data: data)
         }
 
         _ = try decode(CreateRefResponse.self, from: data)
+    }
+
+    private func tagWriteError(status: Int, data: Data) -> GitHubAPIError {
+        // GitHub's error message usually identifies insufficient PAT scopes,
+        // tag protection rulesets, or an existing ref. Preserve that useful
+        // explanation rather than reducing every rejection to HTTP 403/422.
+        let message = (try? JSONDecoder().decode(GitHubErrorMessage.self, from: data))?
+            .message?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return .tagWriteFailed(status, message.flatMap {
+            $0.isEmpty ? nil : String($0.prefix(300))
+        })
     }
 
     private func paginated<Response: Decodable & Sendable>(
@@ -636,6 +652,7 @@ enum GitHubAPIError: LocalizedError {
     case invalidResponse
     case httpStatus(Int)
     case mergeConflict
+    case tagWriteFailed(Int, String?)
     case decoding(Error)
 
     var errorDescription: String? {
@@ -656,6 +673,22 @@ enum GitHubAPIError: LocalizedError {
             return "GitHub returned HTTP \(status)."
         case .mergeConflict:
             return "GitHub could not merge these branches automatically because they conflict."
+        case let .tagWriteFailed(status, detail):
+            let explanation: String
+            switch status {
+            case 401:
+                explanation = "GitHub rejected the token. Check Settings → GitHub."
+            case 403:
+                explanation = "GitHub denied tag creation. The PAT needs Contents: read/write access, and tag rulesets may restrict creation."
+            case 409, 422:
+                explanation = "GitHub rejected the tag. It may already exist or violate a tag naming/protection rule."
+            default:
+                explanation = "GitHub could not create the tag (HTTP \(status))."
+            }
+            if let detail {
+                return "\(explanation) GitHub: \(detail)"
+            }
+            return explanation
         case let .decoding(error):
             return "Could not read GitHub's response. \(error.localizedDescription)"
         }

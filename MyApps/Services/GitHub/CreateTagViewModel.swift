@@ -98,7 +98,9 @@ final class CreateTagViewModel: ObservableObject {
                 return false
             }
 
-            _ = try await client.gitCommit(repository: repository, sha: targetSHA)
+            // The commit SHA is already supplied by GitHub's branch or
+            // history endpoint. Creating the ref validates it authoritatively;
+            // a redundant Git Commit GET can fail before a valid write.
 
             switch kind {
             case .lightweight:

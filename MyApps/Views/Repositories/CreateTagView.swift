@@ -112,14 +112,13 @@ struct CreateTagView: View {
         ) {
             Button("Create \(model.normalizedName)") {
                 Task {
-                    if await model.create(
+                    // Tag creation raises its own success alert. Refresh the
+                    // parent only after Done dismisses that alert.
+                    await model.create(
                         repository: repository,
                         targetSHA: targetSHA,
                         client: client
-                    ) {
-                        // Wait for explicit dismissal before refreshing the
-                        // parent view, so success/error alerts cannot compete.
-                    }
+                    )
                 }
             }
 
