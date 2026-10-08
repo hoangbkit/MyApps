@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var gitHubSession: GitHubSession
     @Query private var apps: [ManagedApp]
     @Query private var notes: [QuickNote]
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
@@ -15,6 +16,9 @@ struct SettingsView: View {
     @State private var isConfirmingRestore = false
     @State private var resultMessage = ""
     @State private var isShowingResult = false
+    @State private var gitHubPAT = ""
+    @State private var isReplacingGitHubPAT = false
+    @State private var isConfirmingGitHubDisconnect = false
 
     private var unassignedNoteCount: Int {
         notes.filter { $0.app == nil }.count
@@ -31,6 +35,8 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.inline)
             }
+
+            gitHubSection
 
             Section("Storage") {
                 LabeledContent("Mode", value: "Offline")
@@ -117,6 +123,107 @@ struct SettingsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(resultMessage)
+        }
+        .alert(
+            "GitHub",
+            isPresented: Binding(
+                get: { gitHubSession.errorMessage != nil },
+                set: { if !$0 { gitHubSession.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(gitHubSession.errorMessage ?? "")
+        }
+        .confirmationDialog(
+            "Disconnect GitHub?",
+            isPresented: $isConfirmingGitHubDisconnect,
+            titleVisibility: .visible
+        ) {
+            Button("Disconnect GitHub", role: .destructive) {
+                gitHubPAT = ""
+                isReplacingGitHubPAT = false
+                gitHubSession.disconnect()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The stored personal access token will be deleted from this device. Your GitHub repositories are not changed.")
+        }
+    }
+
+    @ViewBuilder
+    private var gitHubSection: some View {
+        Section {
+            switch gitHubSession.connectionState {
+            case .loading:
+                HStack {
+                    ProgressView()
+                    Text("Checking GitHub connection…")
+                        .foregroundStyle(.secondary)
+                }
+
+            case .disconnected:
+                tokenEntry
+
+            case let .connected(account):
+                LabeledContent("Account", value: "@\(account.login)")
+                LabeledContent("Status", value: "Connected")
+
+                if isReplacingGitHubPAT {
+                    tokenEntry
+                    Button("Cancel Replacement") {
+                        gitHubPAT = ""
+                        isReplacingGitHubPAT = false
+                        gitHubSession.errorMessage = nil
+                    }
+                    .disabled(gitHubSession.isWorking)
+                } else {
+                    Button("Replace Personal Access Token") {
+                        gitHubPAT = ""
+                        isReplacingGitHubPAT = true
+                    }
+                    .disabled(gitHubSession.isWorking)
+                }
+
+                Button("Disconnect GitHub", role: .destructive) {
+                    isConfirmingGitHubDisconnect = true
+                }
+                .disabled(gitHubSession.isWorking)
+            }
+        } header: {
+            Text("GitHub")
+        } footer: {
+            Text("GitHub access uses a personal access token stored only in this device's Keychain. Use repository Contents read/write permission for private repositories and Git operations.")
+        }
+    }
+
+    private var tokenEntry: some View {
+        Group {
+            SecureField("Personal access token", text: $gitHubPAT)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .textContentType(.password)
+                .disabled(gitHubSession.isWorking)
+
+            Button {
+                Task {
+                    if await gitHubSession.connect(token: gitHubPAT) {
+                        gitHubPAT = ""
+                        isReplacingGitHubPAT = false
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    if gitHubSession.isWorking {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(gitHubSession.isWorking
+                         ? "Validating Token…"
+                         : (isReplacingGitHubPAT ? "Save New Token" : "Connect GitHub"))
+                }
+            }
+            .disabled(gitHubSession.isWorking ||
+                      gitHubPAT.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 

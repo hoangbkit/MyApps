@@ -33,6 +33,7 @@ MyApps
 │           └── leave app list/details behavior and design unchanged
 │
 ├── 2. Repos
+│   ├── connection guidance (PAT managed in Settings)
 │   ├── all accessible GitHub repositories
 │   └── tap repository
 │       └── Git workspace
@@ -48,6 +49,7 @@ MyApps
 │   └── existing global NotesInboxView
 │
 └── 5. Settings
+    ├── GitHub PAT management (connect / replace / disconnect)
     └── existing SettingsView
 ```
 
@@ -484,6 +486,8 @@ Product releases and disposable `mycli-build-*` prereleases should be visually d
 # Data and architecture rules
 
 - GitHub credentials live in Keychain only.
+- GitHub account connection is managed from Settings, not the Repos tab.
+- A single shared GitHubSession supplies both Settings and Repos; replacing or disconnecting resets repository navigation.
 - Never store credentials in SwiftData, UserDefaults, backups, logs, analytics, or source control.
 - Do not add Git-specific fields to `ManagedApp`.
 - Repositories and Git history are remote data.
