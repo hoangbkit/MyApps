@@ -17,6 +17,12 @@ final class GitLogViewModel: ObservableObject {
     private var loadedBranch: String?
     private var loadGeneration = 0
 
+    // Keep previously loaded commits cached without displaying them
+    // under the label of a branch that is still being fetched.
+    var isSwitchingBranch: Bool {
+        isLoading && loadedBranch != nil && loadedBranch != selectedBranch
+    }
+
     init(defaultBranch: String) {
         selectedBranch = defaultBranch
     }

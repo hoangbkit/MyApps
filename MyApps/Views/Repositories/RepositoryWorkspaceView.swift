@@ -99,7 +99,7 @@ struct RepositoryWorkspaceView: View {
 
     @ViewBuilder
     private var logView: some View {
-        if logModel.isLoading && logModel.commits.isEmpty {
+        if (logModel.isLoading && logModel.commits.isEmpty) || logModel.isSwitchingBranch {
             ProgressView("Loading \(logModel.selectedBranch)…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if logModel.commits.isEmpty {
