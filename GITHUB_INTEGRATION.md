@@ -622,6 +622,39 @@ No Git operations yet.
 
 ---
 
+## All Branches Git Log (PR #4)
+
+The branch picker includes **All Branches** (the default) alongside individual
+branch names. This fixes feature branches being invisible when `master` or
+`develop` was selected.
+
+- Fetch all branch refs, then a first history page from **each branch head**
+  (`sha=<captured head SHA>`). Only commits reachable from listed branches
+  are included; tag-only unreachable commits are not part of All Branches.
+- Every branch has its own cursor, with 20 commits per branch per request
+  (individual-branch mode retains 40 commits per page).
+- Commit SHAs are deduplicated across shared ancestors. Sort recent commits
+  and then topologically order them for the graph (children before parents).
+- **Load More** fetches the next page from every unfinished branch, deduplicates
+  again, and stops only when every branch is exhausted. It can advance with
+  no new unique rows if the pages contain shared ancestors.
+- Four concurrent branch history requests maximum. If any fails, show the
+  error instead of silently displaying an incomplete aggregate.
+- Pin each history cursor to the captured branch head, so force-pushes or
+  incoming commits do not shift pagination mid-session. Pull-to-refresh
+  fetches updated refs and resets the cursors.
+- Graph topology is computed when commits change, rather than on every
+  SwiftUI redraw. Wide graphs compress lanes to preserve commit text space.
+- Branch-head badges and tag badges remain labels on the exact SHA.
+- Users may switch back to an individual branch at any time. Tags actions
+  use the repository default branch when All Branches is selected.
+
+Performance note: All Branches makes one initial commit request per branch.
+Repos with many branches can take longer to load and use more API calls. The
+app does not silently cap the number of included branch heads.
+
+---
+
 ## Phase 3 — Beautified Git log
 
 **Status: implemented on PR #2.**
