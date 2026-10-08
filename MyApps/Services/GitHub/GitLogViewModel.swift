@@ -70,6 +70,14 @@ final class GitLogViewModel: ObservableObject {
                 ? selectedBranch
                 : repository.defaultBranch
 
+            // Publish lightweight refs immediately. Loading the combined
+            // commit graph can take much longer and must not block the Tags
+            // screen's create action or its list.
+            branches = freshBranches
+            if tagsGeneration == initialTagsGeneration {
+                tags = freshTags
+            }
+
             let firstPage = try await fetchFirstPage(
                 scope: scope,
                 branches: freshBranches,
@@ -77,11 +85,6 @@ final class GitLogViewModel: ObservableObject {
                 client: client
             )
             guard generation == loadGeneration, !Task.isCancelled else { return }
-
-            branches = freshBranches
-            if tagsGeneration == initialTagsGeneration {
-                tags = freshTags
-            }
             applyFirstPage(firstPage, scope: scope)
         } catch {
             guard generation == loadGeneration,

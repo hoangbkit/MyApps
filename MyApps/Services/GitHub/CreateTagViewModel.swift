@@ -28,8 +28,7 @@ final class CreateTagViewModel: ObservableObject {
     }
 
     var canCreate: Bool {
-        validationError == nil &&
-        (kind == .lightweight || !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        validationError == nil
     }
 
     var validationError: String? {
@@ -67,6 +66,11 @@ final class CreateTagViewModel: ObservableObject {
 
         if value.unicodeScalars.contains(where: { forbidden.contains($0) }) {
             return "Enter a valid Git tag name."
+        }
+
+        if kind == .annotated &&
+            message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Enter an annotation message for an annotated tag."
         }
 
         return nil

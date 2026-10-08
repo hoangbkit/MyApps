@@ -60,5 +60,9 @@ struct TagsView: View {
         .refreshable {
             await onRefresh()
         }
+        .task {
+            // Entering Tags must not wait for the entire All Branches log.
+            await onRefresh()
+        }
     }
 }

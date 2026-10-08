@@ -537,9 +537,8 @@ struct GitHubAPIClient: Sendable {
         // GitHub's error message usually identifies insufficient PAT scopes,
         // tag protection rulesets, or an existing ref. Preserve that useful
         // explanation rather than reducing every rejection to HTTP 403/422.
-        let message = (try? JSONDecoder().decode(GitHubErrorMessage.self, from: data))?
-            .message?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let response = try? JSONDecoder().decode(GitHubErrorMessage.self, from: data)
+        let message = response?.message?.trimmingCharacters(in: .whitespacesAndNewlines)
         return .tagWriteFailed(status, message.flatMap {
             $0.isEmpty ? nil : String($0.prefix(300))
         })

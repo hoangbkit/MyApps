@@ -69,10 +69,10 @@ struct CreateTagView: View {
                 }
             }
 
-            if let validationError = model.validationError,
-               !model.normalizedName.isEmpty {
+            if let validationError = model.validationError {
                 Section {
                     Label(validationError, systemImage: "exclamationmark.triangle")
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
