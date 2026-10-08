@@ -130,29 +130,27 @@ struct CreateTagView: View {
             )
         }
         .alert(
-            "Tag",
+            model.successMessage == nil ? "Tag Creation Failed" : "Tag Created",
             isPresented: Binding(
-                get: { model.errorMessage != nil },
-                set: { if !$0 { model.errorMessage = nil } }
+                get: { model.errorMessage != nil || model.successMessage != nil },
+                set: {
+                    if !$0 {
+                        model.errorMessage = nil
+                        model.successMessage = nil
+                    }
+                }
             )
         ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(model.errorMessage ?? "")
-        }
-        .alert(
-            "Tag Created",
-            isPresented: Binding(
-                get: { model.successMessage != nil },
-                set: { if !$0 { model.successMessage = nil } }
-            )
-        ) {
-            Button("Done") {
-                onCreated()
-                dismiss()
+            if model.successMessage != nil {
+                Button("Done") {
+                    onCreated()
+                    dismiss()
+                }
+            } else {
+                Button("OK", role: .cancel) {}
             }
         } message: {
-            Text(model.successMessage ?? "")
+            Text(model.successMessage ?? model.errorMessage ?? "")
         }
     }
 }
