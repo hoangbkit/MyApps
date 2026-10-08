@@ -50,8 +50,13 @@ struct GitHubAPIClient: Sendable {
         let sha: String
     }
 
-    private struct CreateRefResponse: Decodable {
+    private struct CreateRefResponse: Decodable, Sendable {
+        struct Object: Decodable, Sendable {
+            let sha: String
+        }
+
         let ref: String
+        let object: Object
     }
 
     private struct GitHubErrorMessage: Decodable {
@@ -124,7 +129,8 @@ struct GitHubAPIClient: Sendable {
 
     func tags(repository: GitHubRepository) async throws -> [GitHubTag] {
         try await paginated(
-            path: "/repos/\(repository.owner.login)/\(repository.name)/tags"
+            path: "/repos/\(repository.owner.login)/\(repository.name)/tags",
+            cachePolicy: .reloadIgnoringLocalCacheData
         )
     }
 
@@ -530,7 +536,26 @@ struct GitHubAPIClient: Sendable {
             throw tagWriteError(status: response.statusCode, data: data)
         }
 
-        _ = try decode(CreateRefResponse.self, from: data)
+        // A successful write does not invalidate URLSession's cached tags
+        // collection. Verify the exact ref with a fresh read before reporting
+        // success, for both lightweight and annotated tags.
+        do {
+            let created = try decode(CreateRefResponse.self, from: data)
+            let expectedRef = "refs/tags/\(name)"
+            guard created.ref == expectedRef, created.object.sha == objectSHA else {
+                throw GitHubAPIError.invalidResponse
+            }
+
+            let confirmed: CreateRefResponse = try await request(
+                path: "/repos/\(repository.owner.login)/\(repository.name)/git/ref/tags/\(name)",
+                cachePolicy: .reloadIgnoringLocalCacheData
+            )
+            guard confirmed.ref == expectedRef, confirmed.object.sha == objectSHA else {
+                throw GitHubAPIError.invalidResponse
+            }
+        } catch {
+            throw GitHubAPIError.tagVerificationFailed(name, error.localizedDescription)
+        }
     }
 
     private func tagWriteError(status: Int, data: Data) -> GitHubAPIError {
@@ -545,7 +570,8 @@ struct GitHubAPIClient: Sendable {
     }
 
     private func paginated<Response: Decodable & Sendable>(
-        path: String
+        path: String,
+        cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy
     ) async throws -> [Response] {
         let pageSize = 100
         var page = 1
@@ -559,7 +585,8 @@ struct GitHubAPIClient: Sendable {
                 queryItems: [
                     URLQueryItem(name: "per_page", value: String(pageSize)),
                     URLQueryItem(name: "page", value: String(page))
-                ]
+                ],
+                cachePolicy: cachePolicy
             )
 
             values.append(contentsOf: batch)
@@ -574,12 +601,14 @@ struct GitHubAPIClient: Sendable {
 
     private func request<Response: Decodable & Sendable>(
         path: String,
-        queryItems: [URLQueryItem] = []
+        queryItems: [URLQueryItem] = [],
+        cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy
     ) async throws -> Response {
         let (data, response) = try await perform(
             method: "GET",
             path: path,
-            queryItems: queryItems
+            queryItems: queryItems,
+            cachePolicy: cachePolicy
         )
 
         guard (200..<300).contains(response.statusCode) else {
@@ -593,7 +622,8 @@ struct GitHubAPIClient: Sendable {
         method: String,
         path: String,
         queryItems: [URLQueryItem] = [],
-        body: Data? = nil
+        body: Data? = nil,
+        cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy
     ) async throws -> (Data, HTTPURLResponse) {
         var components = URLComponents()
         components.scheme = "https"
@@ -605,13 +635,17 @@ struct GitHubAPIClient: Sendable {
             throw GitHubAPIError.invalidURL
         }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: url, cachePolicy: cachePolicy)
         request.httpMethod = method
         request.httpBody = body
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("2026-03-10", forHTTPHeaderField: "X-GitHub-Api-Version")
         request.setValue("MyApps", forHTTPHeaderField: "User-Agent")
+
+        if cachePolicy == .reloadIgnoringLocalCacheData {
+            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        }
 
         if body != nil {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -652,6 +686,7 @@ enum GitHubAPIError: LocalizedError {
     case httpStatus(Int)
     case mergeConflict
     case tagWriteFailed(Int, String?)
+    case tagVerificationFailed(String, String)
     case decoding(Error)
 
     var errorDescription: String? {
@@ -688,6 +723,8 @@ enum GitHubAPIError: LocalizedError {
                 return "\(explanation) GitHub: \(detail)"
             }
             return explanation
+        case let .tagVerificationFailed(name, detail):
+            return "GitHub accepted the creation of tag \(name), but its ref could not be verified. Refresh tags or check the repository on GitHub before retrying. \(detail)"
         case let .decoding(error):
             return "Could not read GitHub's response. \(error.localizedDescription)"
         }

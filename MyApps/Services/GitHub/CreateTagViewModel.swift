@@ -82,6 +82,8 @@ final class CreateTagViewModel: ObservableObject {
         targetSHA: String,
         client: GitHubAPIClient?
     ) async -> Bool {
+        guard !isCreating else { return false }
+
         guard let client else {
             errorMessage = "GitHub is not connected."
             return false
@@ -92,13 +94,18 @@ final class CreateTagViewModel: ObservableObject {
             return false
         }
 
+        let submittedName = normalizedName
+        let submittedKind = kind
+        let submittedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        errorMessage = nil
+        successMessage = nil
         isCreating = true
         defer { isCreating = false }
 
         do {
             let latestTags = try await client.tags(repository: repository)
-            guard !latestTags.contains(where: { $0.name == normalizedName }) else {
-                errorMessage = "Tag \(normalizedName) already exists."
+            guard !latestTags.contains(where: { $0.name == submittedName }) else {
+                errorMessage = "Tag \(submittedName) already exists."
                 return false
             }
 
@@ -106,24 +113,24 @@ final class CreateTagViewModel: ObservableObject {
             // history endpoint. Creating the ref validates it authoritatively;
             // a redundant Git Commit GET can fail before a valid write.
 
-            switch kind {
+            switch submittedKind {
             case .lightweight:
                 try await client.createLightweightTag(
                     repository: repository,
-                    name: normalizedName,
+                    name: submittedName,
                     targetSHA: targetSHA
                 )
 
             case .annotated:
                 try await client.createAnnotatedTag(
                     repository: repository,
-                    name: normalizedName,
-                    message: message.trimmingCharacters(in: .whitespacesAndNewlines),
+                    name: submittedName,
+                    message: submittedMessage,
                     targetSHA: targetSHA
                 )
             }
 
-            successMessage = "Created tag \(normalizedName)."
+            successMessage = "Created tag \(submittedName) in \(repository.fullName)."
             errorMessage = nil
             return true
         } catch {

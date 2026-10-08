@@ -50,6 +50,7 @@ struct CreateTagView: View {
                         .lineLimit(3...6)
                 }
             }
+            .disabled(model.isCreating)
 
             Section("Target") {
                 VStack(alignment: .leading, spacing: 6) {
