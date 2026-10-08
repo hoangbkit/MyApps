@@ -9,7 +9,7 @@ on:
         description: "Xcode build configuration"
         type: choice
         required: true
-        default: Release
+        default: Debug
         options:
           - Debug
           - Release
@@ -23,11 +23,11 @@ concurrency:
 
 jobs:
   release:
-    name: Build and release iOS (${{ inputs.configuration || 'Release' }})
+    name: Build and release iOS (${{ inputs.configuration || 'Debug' }})
     runs-on: macos-26
     timeout-minutes: 60
     env:
-      BUILD_CONFIGURATION: ${{ inputs.configuration || 'Release' }}
+      BUILD_CONFIGURATION: ${{ inputs.configuration || 'Debug' }}
 
     steps:
       - name: Checkout selected ref
