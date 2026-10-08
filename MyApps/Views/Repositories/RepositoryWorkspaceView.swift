@@ -8,6 +8,15 @@ struct RepositoryWorkspaceView: View {
         case releases = "Releases"
 
         var id: String { rawValue }
+
+        var symbolName: String {
+            switch self {
+            case .log: "point.3.connected.trianglepath.dotted"
+            case .branches: "arrow.triangle.branch"
+            case .tags: "tag"
+            case .releases: "shippingbox"
+            }
+        }
     }
 
     let repository: GitHubRepository
@@ -25,17 +34,7 @@ struct RepositoryWorkspaceView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Repository Section", selection: $selectedSection) {
-                ForEach(Section.allCases) { section in
-                    Text(section.rawValue)
-                        .tag(section)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, AppTheme.pagePadding)
-            .padding(.vertical, 10)
-
+        Group {
             switch selectedSection {
             case .log:
                 logView
@@ -85,6 +84,7 @@ struct RepositoryWorkspaceView: View {
         .navigationTitle(repository.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            sectionToolbar
             if selectedSection == .log {
                 branchToolbar
             }
@@ -182,6 +182,46 @@ struct RepositoryWorkspaceView: View {
             .refreshable {
                 await logModel.loadInitial(repository: repository, client: client)
             }
+        }
+    }
+
+    // A title menu scales to more repository screens without consuming
+    // vertical space or requiring an increasingly cramped segmented control.
+    @ToolbarContentBuilder
+    private var sectionToolbar: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            Menu {
+                ForEach(Section.allCases) { section in
+                    Button {
+                        selectedSection = section
+                    } label: {
+                        if selectedSection == section {
+                            Label(section.rawValue, systemImage: "checkmark")
+                        } else {
+                            Label(section.rawValue, systemImage: section.symbolName)
+                        }
+                    }
+                }
+            } label: {
+                VStack(spacing: 1) {
+                    Text(repository.name)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    HStack(spacing: 4) {
+                        Text(selectedSection.rawValue)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: 190)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Repository sections, currently \(selectedSection.rawValue)")
+            .accessibilityHint("Choose Log, Branches, Tags, or Releases")
         }
     }
 

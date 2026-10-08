@@ -709,6 +709,20 @@ Do not begin until supported cases and technical strategy are explicitly approve
 
 **STOP. Wait for explicit approval.**
 
+## Repository workspace navigation (PR #4)
+
+The persistent segmented control has been replaced with a native toolbar
+title menu. The navigation title shows the repository name above the active
+screen name and a chevron. Tapping it opens the list of repository sections
+(Log, Branches, Tags, Releases), with a checkmark for the selected screen.
+
+This removes fixed navigation height, leaves more room for the Git graph,
+scales as more screens are added, and retains the Log-only branch filter in
+the trailing toolbar. Existing section state, list refresh, and navigation
+flows remain unchanged.
+
+---
+
 ## Tag creation and refresh reliability (PR #4)
 
 - The Tags list supports native pull-to-refresh and fetches current tag refs
