@@ -709,6 +709,36 @@ Do not begin until supported cases and technical strategy are explicitly approve
 
 **STOP. Wait for explicit approval.**
 
+## Tag creation and refresh reliability (PR #4)
+
+- The Tags list supports native pull-to-refresh and fetches current tag refs
+  independently of the potentially expensive All Branches history.
+- Entering Tags performs a fresh refs request. A spinner distinguishes loading
+  from a genuinely empty tag list, and branch refs are published before the
+  combined commit graph finishes.
+- After a successful tag creation, dismiss the success alert and refresh only
+  tags. The same lightweight callback applies when tagging a commit or branch.
+  This avoids racing two different alerts and waiting for graph pagination.
+- The create form explains disabled actions (empty or invalid name; missing
+  annotated-tag message). Tag writes retain the confirmation and show one
+  unambiguous success/error alert.
+- Tag creation uses GitHub's documented Git refs API. Lightweight tags create
+  refs directly; annotated tags create a tag object then a ref. The redundant
+  Git Commit GET preflight was removed.
+- Write failures include GitHub's response message when present, especially
+  PAT Contents: write restrictions, repository rulesets, duplicates and
+  validation errors. No credentials are included in diagnostics.
+- Tag names remain validated against existing tags before the write; GitHub
+  makes the final determination of conflicts and permissions.
+
+Manual checks: create a new lightweight tag on a branch HEAD; verify success
+and the new tag in the list without waiting for All Branches; pull to refresh;
+create an annotated tag; attempt a duplicate; attempt with a read-only token;
+verify cancel/dismiss leaves the list unchanged. Do not create disposable tags
+in a real release repository merely to test.
+
+---
+
 ## Phase 6 — Tags
 
 **Status: implemented on PR #2.**
