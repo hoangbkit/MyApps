@@ -60,6 +60,7 @@ struct RepositoryWorkspaceView: View {
                 TagsView(
                     repository: repository,
                     tags: logModel.tags,
+                    isLoadingTags: logModel.isLoadingTags,
                     branches: logModel.branches,
                     selectedBranchName: logModel.selectedBranch,
                     client: client,

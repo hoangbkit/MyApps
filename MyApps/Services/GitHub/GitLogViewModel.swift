@@ -11,6 +11,7 @@ final class GitLogViewModel: ObservableObject {
     @Published private(set) var graph = GitGraphLayout.make([])
     @Published private(set) var isLoading = false
     @Published private(set) var isLoadingMore = false
+    @Published private(set) var isLoadingTags = false
     @Published private(set) var hasMoreCommits = true
     @Published var selectedBranch: String
     @Published var errorMessage: String?
@@ -62,21 +63,21 @@ final class GitLogViewModel: ObservableObject {
             async let branchesRequest = client.branches(repository: repository)
             async let tagsRequest = client.tags(repository: repository)
             let freshBranches = try await branchesRequest
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            branches = freshBranches
+
+            // Tags and branches become usable before the potentially slow
+            // combined-history fetch has finished.
             let freshTags = try await tagsRequest
             guard generation == loadGeneration, !Task.isCancelled else { return }
+            if tagsGeneration == initialTagsGeneration {
+                tags = freshTags
+            }
 
             let scope = selectedBranch == Self.allBranches ||
                 freshBranches.contains(where: { $0.name == selectedBranch })
                 ? selectedBranch
                 : repository.defaultBranch
-
-            // Publish lightweight refs immediately. Loading the combined
-            // commit graph can take much longer and must not block the Tags
-            // screen's create action or its list.
-            branches = freshBranches
-            if tagsGeneration == initialTagsGeneration {
-                tags = freshTags
-            }
 
             let firstPage = try await fetchFirstPage(
                 scope: scope,
@@ -107,6 +108,10 @@ final class GitLogViewModel: ObservableObject {
 
         tagsGeneration += 1
         let generation = tagsGeneration
+        isLoadingTags = true
+        defer {
+            if generation == tagsGeneration { isLoadingTags = false }
+        }
 
         do {
             let latestTags = try await client.tags(repository: repository)

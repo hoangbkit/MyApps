@@ -3,6 +3,7 @@ import SwiftUI
 struct TagsView: View {
     let repository: GitHubRepository
     let tags: [GitHubTag]
+    let isLoadingTags: Bool
     let branches: [GitHubBranch]
     let selectedBranchName: String
     let client: GitHubAPIClient?
@@ -38,7 +39,9 @@ struct TagsView: View {
             }
 
             Section("Tags") {
-                if tags.isEmpty {
+                if isLoadingTags && tags.isEmpty {
+                    ProgressView("Loading tags…")
+                } else if tags.isEmpty {
                     Text("No tags")
                         .foregroundStyle(.secondary)
                 } else {
