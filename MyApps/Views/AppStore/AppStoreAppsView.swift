@@ -10,6 +10,7 @@ struct AppStoreAppsView: View {
     @State private var searchText = ""
     @State private var isLoading = false
     @State private var hasLoaded = false
+    @State private var loadFailed = false
     @State private var errorMessage: String?
 
     private var filteredApps: [AppStoreConnectApp] {
@@ -78,7 +79,7 @@ struct AppStoreAppsView: View {
         List {
             if isLoading && !hasLoaded {
                 ProgressView("Loading apps…")
-            } else if !hasLoaded && errorMessage != nil {
+            } else if !hasLoaded && loadFailed {
                 ContentUnavailableView {
                     Label("Could Not Load Apps", systemImage: "exclamationmark.triangle")
                 } actions: {
@@ -136,9 +137,11 @@ struct AppStoreAppsView: View {
             guard !Task.isCancelled else { return }
             apps = fetched
             hasLoaded = true
+            loadFailed = false
             errorMessage = nil
         } catch {
             guard !Task.isCancelled else { return }
+            loadFailed = true
             errorMessage = error.localizedDescription
         }
     }
