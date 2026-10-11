@@ -2,14 +2,14 @@ import SwiftData
 import SwiftUI
 
 private enum RootTab: Hashable {
-    case apps, repos, appStore, notes, settings
+    case repos, apps, appStore, notes, settings
 }
 
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var gitHubSession = GitHubSession()
-    @State private var selectedTab: RootTab = .apps
+    @State private var selectedTab: RootTab = .repos
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
 
     private var appearance: AppAppearance {
@@ -18,14 +18,6 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack {
-                ProjectsView()
-            }
-            .tabItem {
-                Label("Apps", systemImage: "square.grid.2x2")
-            }
-            .tag(RootTab.apps)
-
             NavigationStack {
                 RepositoriesView {
                     selectedTab = .settings
@@ -36,6 +28,14 @@ struct RootView: View {
                 Label("Repos", systemImage: "shippingbox")
             }
             .tag(RootTab.repos)
+
+            NavigationStack {
+                ProjectsView()
+            }
+            .tabItem {
+                Label("Apps", systemImage: "square.grid.2x2")
+            }
+            .tag(RootTab.apps)
 
             NavigationStack {
                 AppStorePlaceholderView()
