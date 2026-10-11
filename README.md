@@ -21,7 +21,7 @@ brew install xcodegen
 ## P3.5 changes
 
 - Replaced the basic `UITextView` note editor with Runestone 0.5.2.
-- Added line wrapping, selected-line emphasis, overscroll, native find support, spell checking, and more reliable large-note editing.
+- Added line wrapping, an enlarged 18-point editing font without current-line highlighting, overscroll, native find support, spell checking, and more reliable large-note editing.
 - Replaced the handwritten Markdown renderer with MarkdownView 3.0.0.
 - Added CommonMark rendering, GitHub-style tables and block quotes, and highlighted fenced code blocks.
 - Preserved tappable task checkboxes in full preview mode.
