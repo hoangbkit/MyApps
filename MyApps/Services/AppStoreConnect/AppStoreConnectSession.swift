@@ -47,7 +47,7 @@ final class AppStoreConnectSession: ObservableObject {
         let proposed = AppStoreConnectCredentials(
             issuerID: issuerID.trimmingCharacters(in: .whitespacesAndNewlines),
             keyID: keyID.trimmingCharacters(in: .whitespacesAndNewlines),
-            privateKeyPEM: privateKeyPEM.trimmingCharacters(in: .whitespacesAndNewlines)
+            privateKeyPEM: Self.normalizedPEM(privateKeyPEM)
         )
         isWorking = true
         defer { isWorking = false }
@@ -68,6 +68,31 @@ final class AppStoreConnectSession: ObservableObject {
             errorMessage = error.localizedDescription
             return false
         }
+    }
+
+    private static func normalizedPEM(_ raw: String) -> String {
+        // iOS single-line SecureField paste may collapse the .p8 line breaks.
+        // Reconstruct the standard PKCS#8 PEM armor before CryptoKit validates it.
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\n", with: "\n")
+        let begin = "-----BEGIN PRIVATE KEY-----"
+        let end = "-----END PRIVATE KEY-----"
+        guard value.contains(begin), value.contains(end) else { return value }
+
+        let body = value
+            .replacingOccurrences(of: begin, with: "")
+            .replacingOccurrences(of: end, with: "")
+            .filter { !$0.isWhitespace }
+        guard !body.isEmpty else { return value }
+
+        var lines: [String] = []
+        var offset = body.startIndex
+        while offset < body.endIndex {
+            let endIndex = body.index(offset, offsetBy: 64, limitedBy: body.endIndex) ?? body.endIndex
+            lines.append(String(body[offset..<endIndex]))
+            offset = endIndex
+        }
+        return begin + "\n" + lines.joined(separator: "\n") + "\n" + end
     }
 
     func disconnect() {
