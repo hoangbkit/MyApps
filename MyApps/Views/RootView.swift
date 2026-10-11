@@ -9,6 +9,7 @@ struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var gitHubSession = GitHubSession()
+    @StateObject private var appStoreSession = AppStoreConnectSession()
     @State private var selectedTab: RootTab = .repos
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
 
@@ -38,8 +39,11 @@ struct RootView: View {
             .tag(RootTab.apps)
 
             NavigationStack {
-                AppStorePlaceholderView()
+                AppStoreAppsView {
+                    selectedTab = .settings
+                }
             }
+            .id(appStoreSession.connectionRevision)
             .tabItem {
                 Label("App Store", systemImage: "storefront")
             }
@@ -62,10 +66,13 @@ struct RootView: View {
             .tag(RootTab.settings)
         }
         .environmentObject(gitHubSession)
+        .environmentObject(appStoreSession)
         .preferredColorScheme(appearance.colorScheme)
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
-            await gitHubSession.restore()
+            async let restoreGitHub: Void = gitHubSession.restore()
+            async let restoreAppStore: Void = appStoreSession.restore()
+            _ = await (restoreGitHub, restoreAppStore)
         }
         .fontDesign(.rounded)
         .task { @MainActor in
