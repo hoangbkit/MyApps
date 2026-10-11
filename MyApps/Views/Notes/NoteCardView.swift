@@ -18,14 +18,14 @@ struct NoteCardView: View {
                         .font(.system(size: 15, weight: .regular, design: .rounded))
                         .foregroundStyle(excerpt.isEmpty ? .tertiary : .primary)
                         .lineSpacing(3)
-                        .lineLimit(showsApp ? 3 : 5)
+                        .lineLimit(showsApp && note.app != nil ? 3 : 5)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
 
-                    if showsApp {
+                    if showsApp, let app = note.app {
                         Label(
-                            note.app?.name ?? "Unassigned",
-                            systemImage: note.app == nil ? "tray" : "square.grid.2x2"
+                            app.name,
+                            systemImage: "square.grid.2x2"
                         )
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
