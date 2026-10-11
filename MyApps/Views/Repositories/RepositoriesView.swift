@@ -22,6 +22,30 @@ private enum RepositorySortOption: String, CaseIterable, Identifiable {
     }
 }
 
+private enum RepositorySortDirection: String, CaseIterable, Identifiable {
+    case ascending, descending
+
+    static let storageKey = "myapps.repositories.sortDirection"
+
+    var id: Self { self }
+
+    func title(for option: RepositorySortOption) -> String {
+        switch (self, option) {
+        case (.ascending, .name): "Ascending (A–Z)"
+        case (.descending, .name): "Descending (Z–A)"
+        case (.ascending, .updated): "Ascending (Oldest First)"
+        case (.descending, .updated): "Descending (Newest First)"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .ascending: "arrow.up"
+        case .descending: "arrow.down"
+        }
+    }
+}
+
 struct RepositoriesView: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var session: GitHubSession
@@ -31,10 +55,15 @@ struct RepositoriesView: View {
 
     @State private var searchText = ""
     @AppStorage(RepositorySortOption.storageKey) private var sortRawValue = RepositorySortOption.updated.rawValue
+    @AppStorage(RepositorySortDirection.storageKey) private var directionRawValue = RepositorySortDirection.descending.rawValue
     @AppStorage("myapps.repositories.pinnedIDs") private var pinnedIDsData = Data()
 
     private var sortOption: RepositorySortOption {
         RepositorySortOption(rawValue: sortRawValue) ?? .updated
+    }
+
+    private var sortDirection: RepositorySortDirection {
+        RepositorySortDirection(rawValue: directionRawValue) ?? .descending
     }
 
     private var pinnedRepositoryIDs: Set<Int> {
@@ -57,19 +86,29 @@ struct RepositoriesView: View {
                 let rhsPinned = pinned.contains(rhs.id)
                 if lhsPinned != rhsPinned { return lhsPinned }
 
+                let ascending = sortDirection == .ascending
                 if sortOption == .updated {
-                    let lhsDate = lhs.updatedAt ?? lhs.pushedAt ?? .distantPast
-                    let rhsDate = rhs.updatedAt ?? rhs.pushedAt ?? .distantPast
-                    if lhsDate != rhsDate { return lhsDate > rhsDate }
+                    let lhsDate = lhs.updatedAt ?? lhs.pushedAt
+                    let rhsDate = rhs.updatedAt ?? rhs.pushedAt
+                    // Repositories without a known update time remain last in either order.
+                    if lhsDate == nil && rhsDate != nil { return false }
+                    if lhsDate != nil && rhsDate == nil { return true }
+                    if let lhsDate, let rhsDate, lhsDate != rhsDate {
+                        return ascending ? lhsDate < rhsDate : lhsDate > rhsDate
+                    }
                 }
 
                 let nameComparison = lhs.name.localizedStandardCompare(rhs.name)
                 if nameComparison != .orderedSame {
-                    return nameComparison == .orderedAscending
+                    return sortOption == .name && !ascending
+                        ? nameComparison == .orderedDescending
+                        : nameComparison == .orderedAscending
                 }
                 let fullNameComparison = lhs.fullName.localizedStandardCompare(rhs.fullName)
                 if fullNameComparison != .orderedSame {
-                    return fullNameComparison == .orderedAscending
+                    return sortOption == .name && !ascending
+                        ? fullNameComparison == .orderedDescending
+                        : fullNameComparison == .orderedAscending
                 }
                 return lhs.id < rhs.id
             }
@@ -112,16 +151,23 @@ struct RepositoriesView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Picker("Sort Repositories", selection: $sortRawValue) {
+                    Picker("Sort By", selection: $sortRawValue) {
                         ForEach(RepositorySortOption.allCases) { option in
                             Label(option.title, systemImage: option.symbolName)
                                 .tag(option.rawValue)
                         }
                     }
+
+                    Picker("Sort Direction", selection: $directionRawValue) {
+                        ForEach(RepositorySortDirection.allCases) { direction in
+                            Label(direction.title(for: sortOption), systemImage: direction.symbolName)
+                                .tag(direction.rawValue)
+                        }
+                    }
                 } label: {
                     Image(systemName: "arrow.up.arrow.down")
                 }
-                .accessibilityLabel("Sort Repositories by \(sortOption.title)")
+                .accessibilityLabel("Sort Repositories by \(sortOption.title), \(sortDirection.title(for: sortOption))")
             }
         }
         .task(id: "\(session.connectionRevision)-\(scenePhase)") {
