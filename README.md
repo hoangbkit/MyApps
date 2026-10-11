@@ -25,9 +25,11 @@ The **App Store** tab lists apps available to a connected App Store Connect team
 - **Info** — name, Apple App ID, bundle ID, SKU, primary locale, Made for Kids, and App Store versions and statuses.
 - **Xcode Cloud** — product, workflows (including enabled state), and the latest 100 build runs with status and date.
 
+In **Xcode Cloud**, tap **Start Build**, select an enabled workflow, and choose a branch or tag from the workflow's own Git repository. The app confirms the exact workflow and reference before requesting `POST /v1/ciBuildRuns`. After Apple accepts the build, the new run is shown and the build list refreshed. An API key with Xcode Cloud build-start permission is required.
+
 Go to **Settings → App Store Connect** and enter the team key's **Issuer ID**, **Key ID**, and `.p8` signing key. You can also import a `.p8` file. Credentials are validated against Apple's API before being saved or replaced.
 
-Secrets are stored in this device's Keychain (this-device-only), never in SwiftData, UserDefaults, analytics, or library backups. The integration is **read-only**: it does not submit app versions, start builds, or change Xcode Cloud workflows. Access depends on the API key's team/app permissions.
+Secrets are stored in this device's Keychain (this-device-only), never in SwiftData, UserDefaults, analytics, or library backups. The integration can start Xcode Cloud builds for enabled workflows after confirmation. It does not submit App Store versions, edit workflows, or cancel builds. Access depends on the API key's team/app permissions.
 
 App Store apps and version history use paginated requests. Xcode Cloud build history displays the newest 100 runs returned by the API, sorted by descending build number.
 
