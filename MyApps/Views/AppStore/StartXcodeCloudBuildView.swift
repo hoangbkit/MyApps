@@ -85,7 +85,10 @@ struct StartXcodeCloudBuildView: View {
                 }
 
                 Section {
-                    if isLoadingReferences {
+                    if enabledWorkflows.isEmpty {
+                        Text("Select an enabled workflow to choose a branch or tag.")
+                            .foregroundStyle(.secondary)
+                    } else if isLoadingReferences {
                         HStack(spacing: 10) {
                             ProgressView()
                             Text("Loading branches and tags…")
