@@ -32,6 +32,32 @@ struct AppStoreConnectWorkflowAttributes: Decodable, Sendable {
     let lastModifiedDate: String?
 }
 
+struct AppStoreConnectSCMRepositoryAttributes: Decodable, Sendable {
+    let ownerName: String?
+    let repositoryName: String?
+}
+
+struct AppStoreConnectGitReferenceAttributes: Decodable, Sendable {
+    let name: String?
+    let canonicalName: String?
+    let kind: String?
+    let isDeleted: Bool?
+
+    var isBuildable: Bool {
+        guard isDeleted != true else { return false }
+        switch kind?.uppercased() {
+        case "BRANCH", "TAG": return true
+        default: return false
+        }
+    }
+
+    var displayName: String {
+        name ?? canonicalName ?? "Unknown reference"
+    }
+
+    var isBranch: Bool { kind?.uppercased() == "BRANCH" }
+}
+
 struct AppStoreConnectBuildRunAttributes: Decodable, Sendable {
     let number: Int?
     let createdDate: String?
@@ -50,6 +76,7 @@ struct AppStoreConnectResource<Attributes: Decodable & Sendable>: Decodable, Ide
 
 struct AppStoreConnectRelationships: Decodable, Sendable {
     let workflow: AppStoreConnectRelationship?
+    let defaultBranch: AppStoreConnectRelationship?
 }
 
 struct AppStoreConnectRelationship: Decodable, Sendable {
@@ -65,6 +92,8 @@ typealias AppStoreConnectVersion = AppStoreConnectResource<AppStoreConnectVersio
 typealias AppStoreConnectProduct = AppStoreConnectResource<AppStoreConnectProductAttributes>
 typealias AppStoreConnectWorkflow = AppStoreConnectResource<AppStoreConnectWorkflowAttributes>
 typealias AppStoreConnectBuildRun = AppStoreConnectResource<AppStoreConnectBuildRunAttributes>
+typealias AppStoreConnectSCMRepository = AppStoreConnectResource<AppStoreConnectSCMRepositoryAttributes>
+typealias AppStoreConnectGitReference = AppStoreConnectResource<AppStoreConnectGitReferenceAttributes>
 
 private struct AppStoreConnectPage<Item: Decodable & Sendable>: Decodable, Sendable {
     let data: [Item]
@@ -77,6 +106,39 @@ private struct AppStoreConnectPage<Item: Decodable & Sendable>: Decodable, Senda
 
 private struct AppStoreConnectSingle<Item: Decodable & Sendable>: Decodable, Sendable {
     let data: Item?
+}
+
+private struct AppStoreConnectBuildRunCreateRequest: Encodable {
+    let data: Resource
+
+    struct Resource: Encodable {
+        let type = "ciBuildRuns"
+        let attributes = Attributes()
+        let relationships: Relationships
+    }
+
+    struct Attributes: Encodable {}
+
+    struct Relationships: Encodable {
+        let workflow: Relationship
+        let sourceBranchOrTag: Relationship
+    }
+
+    struct Relationship: Encodable {
+        let data: Identifier
+    }
+
+    struct Identifier: Encodable {
+        let type: String
+        let id: String
+    }
+
+    init(workflowID: String, gitReferenceID: String) {
+        data = Resource(relationships: Relationships(
+            workflow: Relationship(data: Identifier(type: "ciWorkflows", id: workflowID)),
+            sourceBranchOrTag: Relationship(data: Identifier(type: "scmGitReferences", id: gitReferenceID))
+        ))
+    }
 }
 
 struct AppStoreConnectAPIClient: Sendable {
@@ -148,6 +210,76 @@ struct AppStoreConnectAPIClient: Sendable {
         return page.data.sorted {
             ($0.attributes.createdDate ?? "") > ($1.attributes.createdDate ?? "")
         }
+    }
+
+    /// Git references come from the repository associated with this exact
+    /// workflow; GitHub branch IDs are not interchangeable with Apple's SCM IDs.
+    func repository(for workflow: AppStoreConnectWorkflow) async throws -> AppStoreConnectSCMRepository {
+        let response: AppStoreConnectSingle<AppStoreConnectSCMRepository> = try await get(
+            path: "/v1/ciWorkflows/\(workflow.id)/repository",
+            query: [URLQueryItem(name: "include", value: "defaultBranch")]
+        )
+        guard let repository = response.data else {
+            throw AppStoreConnectAPIError.missingWorkflowRepository
+        }
+        return repository
+    }
+
+    func gitReferences(for repository: AppStoreConnectSCMRepository) async throws -> [AppStoreConnectGitReference] {
+        let references: [AppStoreConnectGitReference] = try await allPages(
+            path: "/v1/scmRepositories/\(repository.id)/gitReferences",
+            query: [URLQueryItem(name: "limit", value: "200")]
+        )
+        return references.filter { $0.attributes.isBuildable }.sorted { lhs, rhs in
+            if lhs.attributes.isBranch != rhs.attributes.isBranch {
+                return lhs.attributes.isBranch
+            }
+            let order = lhs.attributes.displayName.localizedStandardCompare(rhs.attributes.displayName)
+            return order == .orderedSame ? lhs.id < rhs.id : order == .orderedAscending
+        }
+    }
+
+    /// The only mutating App Store Connect endpoint in MyApps: manual build
+    /// creation. Report success only after Apple's 201 response and valid run.
+    func startBuild(
+        workflow: AppStoreConnectWorkflow,
+        source: AppStoreConnectGitReference
+    ) async throws -> AppStoreConnectBuildRun {
+        guard workflow.attributes.isEnabled == true else {
+            throw AppStoreConnectAPIError.disabledWorkflow
+        }
+        guard source.attributes.isBuildable else {
+            throw AppStoreConnectAPIError.invalidSourceReference
+        }
+
+        let body = try JSONEncoder().encode(
+            AppStoreConnectBuildRunCreateRequest(
+                workflowID: workflow.id,
+                gitReferenceID: source.id
+            )
+        )
+        let url = try apiURL(path: "/v1/ciBuildRuns", query: [])
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        request.httpMethod = "POST"
+        request.httpBody = body
+        request.setValue("Bearer \(try authorizationToken())", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try Task.checkCancellation()
+        guard let http = response as? HTTPURLResponse else {
+            throw AppStoreConnectAPIError.invalidResponse
+        }
+        guard http.statusCode == 201 else {
+            throw AppStoreConnectAPIError.httpStatus(http.statusCode)
+        }
+        guard let buildRun = try JSONDecoder()
+            .decode(AppStoreConnectSingle<AppStoreConnectBuildRun>.self, from: data).data else {
+            throw AppStoreConnectAPIError.invalidResponse
+        }
+        return buildRun
     }
 
     private func allPages<Item: Decodable & Sendable>(
@@ -245,6 +377,9 @@ struct AppStoreConnectAPIClient: Sendable {
 }
 
 enum AppStoreConnectAPIError: LocalizedError, Equatable {
+    case missingWorkflowRepository
+    case disabledWorkflow
+    case invalidSourceReference
     case invalidCredentials
     case invalidPrivateKey
     case invalidResponse
@@ -252,6 +387,12 @@ enum AppStoreConnectAPIError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
+        case .missingWorkflowRepository:
+            "This Xcode Cloud workflow has no connected Git repository."
+        case .disabledWorkflow:
+            "Choose an enabled Xcode Cloud workflow."
+        case .invalidSourceReference:
+            "Choose an existing Git branch or tag from this workflow's repository."
         case .invalidCredentials:
             "Enter a valid issuer ID and API key ID."
         case .invalidPrivateKey:
@@ -264,6 +405,10 @@ enum AppStoreConnectAPIError: LocalizedError, Equatable {
             "Access denied. Check the API key role and app/Xcode Cloud permissions in App Store Connect."
         case .httpStatus(404):
             "The requested App Store Connect resource was not found."
+        case .httpStatus(409):
+            "Xcode Cloud could not start this build because of a conflict. Refresh the workflow and reference."
+        case .httpStatus(422):
+            "Xcode Cloud rejected the workflow or source reference. Refresh and try again."
         case .httpStatus(429):
             "App Store Connect rate limit reached. Try again later."
         case let .httpStatus(status):
