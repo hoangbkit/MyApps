@@ -25,6 +25,7 @@ struct GitHubRepository: Codable, Identifiable, Hashable, Sendable {
     let defaultBranch: String
     let htmlURL: URL
     let pushedAt: Date?
+    let updatedAt: Date?
     let permissions: Permissions?
 
     enum CodingKeys: String, CodingKey {
@@ -40,6 +41,7 @@ struct GitHubRepository: Codable, Identifiable, Hashable, Sendable {
         case defaultBranch = "default_branch"
         case htmlURL = "html_url"
         case pushedAt = "pushed_at"
+        case updatedAt = "updated_at"
         case permissions
     }
 
