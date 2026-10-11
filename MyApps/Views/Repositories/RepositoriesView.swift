@@ -1,5 +1,27 @@
 import SwiftUI
 
+private enum RepositorySortOption: String, CaseIterable, Identifiable {
+    case updated, name
+
+    static let storageKey = "myapps.repositories.sortOption"
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .updated: "Recently Updated"
+        case .name: "Name"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .updated: "clock"
+        case .name: "textformat.abc"
+        }
+    }
+}
+
 struct RepositoriesView: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var session: GitHubSession
@@ -8,18 +30,59 @@ struct RepositoriesView: View {
     let onOpenSettings: () -> Void
 
     @State private var searchText = ""
+    @AppStorage(RepositorySortOption.storageKey) private var sortRawValue = RepositorySortOption.updated.rawValue
+    @AppStorage("myapps.repositories.pinnedIDs") private var pinnedIDsData = Data()
+
+    private var sortOption: RepositorySortOption {
+        RepositorySortOption(rawValue: sortRawValue) ?? .updated
+    }
+
+    private var pinnedRepositoryIDs: Set<Int> {
+        (try? JSONDecoder().decode(Set<Int>.self, from: pinnedIDsData)) ?? []
+    }
 
     private var filteredRepositories: [GitHubRepository] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
-            return repositoriesModel.repositories
-        }
+        let pinned = pinnedRepositoryIDs
 
-        return repositoriesModel.repositories.filter { repository in
-            repository.name.localizedCaseInsensitiveContains(query) ||
-            repository.fullName.localizedCaseInsensitiveContains(query) ||
-            (repository.language?.localizedCaseInsensitiveContains(query) ?? false)
-        }
+        return repositoriesModel.repositories
+            .filter { repository in
+                query.isEmpty ||
+                repository.name.localizedCaseInsensitiveContains(query) ||
+                repository.fullName.localizedCaseInsensitiveContains(query) ||
+                (repository.language?.localizedCaseInsensitiveContains(query) ?? false)
+            }
+            .sorted { lhs, rhs in
+                let lhsPinned = pinned.contains(lhs.id)
+                let rhsPinned = pinned.contains(rhs.id)
+                if lhsPinned != rhsPinned { return lhsPinned }
+
+                if sortOption == .updated {
+                    let lhsDate = lhs.updatedAt ?? lhs.pushedAt ?? .distantPast
+                    let rhsDate = rhs.updatedAt ?? rhs.pushedAt ?? .distantPast
+                    if lhsDate != rhsDate { return lhsDate > rhsDate }
+                }
+
+                let nameComparison = lhs.name.localizedStandardCompare(rhs.name)
+                if nameComparison != .orderedSame {
+                    return nameComparison == .orderedAscending
+                }
+                let fullNameComparison = lhs.fullName.localizedStandardCompare(rhs.fullName)
+                if fullNameComparison != .orderedSame {
+                    return fullNameComparison == .orderedAscending
+                }
+                return lhs.id < rhs.id
+            }
+    }
+
+    private var pinnedRepositories: [GitHubRepository] {
+        let pinned = pinnedRepositoryIDs
+        return filteredRepositories.filter { pinned.contains($0.id) }
+    }
+
+    private var unpinnedRepositories: [GitHubRepository] {
+        let pinned = pinnedRepositoryIDs
+        return filteredRepositories.filter { !pinned.contains($0.id) }
     }
 
     var body: some View {
@@ -46,6 +109,21 @@ struct RepositoriesView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Repos")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker("Sort Repositories", selection: $sortRawValue) {
+                        ForEach(RepositorySortOption.allCases) { option in
+                            Label(option.title, systemImage: option.symbolName)
+                                .tag(option.rawValue)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .accessibilityLabel("Sort Repositories by \(sortOption.title)")
+            }
+        }
         .task(id: "\(session.connectionRevision)-\(scenePhase)") {
             guard scenePhase == .active else { return }
             switch session.connectionState {
@@ -100,19 +178,24 @@ struct RepositoriesView: View {
                     )
                     .listRowBackground(Color.clear)
                 } else {
-                    Section {
-                        ForEach(filteredRepositories) { repository in
-                            NavigationLink {
-                                RepositoryWorkspaceView(
-                                    repository: repository,
-                                    client: session.client()
-                                )
-                            } label: {
-                                repositoryRow(repository)
+                    if !pinnedRepositories.isEmpty {
+                        Section {
+                            ForEach(pinnedRepositories) { repository in
+                                repositoryLink(repository)
                             }
+                        } header: {
+                            Text("Pinned (\(pinnedRepositories.count))")
                         }
-                    } header: {
-                        Text("\(filteredRepositories.count) Repositories")
+                    }
+
+                    if !unpinnedRepositories.isEmpty {
+                        Section {
+                            ForEach(unpinnedRepositories) { repository in
+                                repositoryLink(repository)
+                            }
+                        } header: {
+                            Text("\(unpinnedRepositories.count) Repositories")
+                        }
                     }
                 }
             }
@@ -128,9 +211,56 @@ struct RepositoriesView: View {
         }
     }
 
+    private func repositoryLink(_ repository: GitHubRepository) -> some View {
+        let isPinned = pinnedRepositoryIDs.contains(repository.id)
+
+        return NavigationLink {
+            RepositoryWorkspaceView(
+                repository: repository,
+                client: session.client()
+            )
+        } label: {
+            repositoryRow(repository)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                togglePin(repository)
+            } label: {
+                Label(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin")
+            }
+            .tint(.orange)
+        }
+        .contextMenu {
+            Button {
+                togglePin(repository)
+            } label: {
+                Label(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin")
+            }
+        }
+    }
+
+    private func togglePin(_ repository: GitHubRepository) {
+        var ids = pinnedRepositoryIDs
+        if ids.contains(repository.id) {
+            ids.remove(repository.id)
+        } else {
+            ids.insert(repository.id)
+        }
+        if let data = try? JSONEncoder().encode(ids) {
+            pinnedIDsData = data
+        }
+    }
+
     private func repositoryRow(_ repository: GitHubRepository) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
+                if pinnedRepositoryIDs.contains(repository.id) {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        .accessibilityLabel("Pinned")
+                }
+
                 Text(repository.name)
                     .font(.system(size: 17, weight: .semibold, design: .rounded))
                     .lineLimit(1)
