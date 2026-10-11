@@ -18,6 +18,21 @@ brew install xcodegen
 
 `generate.sh` removes any stale generated project before recreating `MyApps.xcodeproj`.
 
+## App Store Connect integration (PR #5)
+
+The **App Store** tab lists apps available to a connected App Store Connect team API key. Tap an app to see a workspace with a title dropdown:
+
+- **Info** — name, Apple App ID, bundle ID, SKU, primary locale, Made for Kids, and App Store versions and statuses.
+- **Xcode Cloud** — product, workflows (including enabled state), and the latest 100 build runs with status and date.
+
+Go to **Settings → App Store Connect** and enter the team key's **Issuer ID**, **Key ID**, and `.p8` signing key. You can also import a `.p8` file. Credentials are validated against Apple's API before being saved or replaced.
+
+Secrets are stored in this device's Keychain (this-device-only), never in SwiftData, UserDefaults, analytics, or library backups. The integration is **read-only**: it does not submit app versions, start builds, or change Xcode Cloud workflows. Access depends on the API key's team/app permissions.
+
+App Store apps and version history use paginated requests. Xcode Cloud build history displays the newest 100 runs returned by the API, sorted by descending build number.
+
+The Xcode project is generated from `project.yml`; run `./generate.sh` after pulling changes. The release workflow regenerates the project before building.
+
 ## P3.5 changes
 
 - Replaced the basic `UITextView` note editor with Runestone 0.5.2.
