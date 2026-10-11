@@ -38,6 +38,8 @@ struct SettingsView: View {
 
             gitHubSection
 
+            AppStoreConnectSettingsSection()
+
             Section("Storage") {
                 LabeledContent("Mode", value: "Offline")
                 Text("MyApps stores its library locally on this device with SwiftData.")
