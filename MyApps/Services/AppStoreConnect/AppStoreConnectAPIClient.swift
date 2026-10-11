@@ -76,7 +76,7 @@ private struct AppStoreConnectPage<Item: Decodable & Sendable>: Decodable, Senda
 }
 
 private struct AppStoreConnectSingle<Item: Decodable & Sendable>: Decodable, Sendable {
-    let data: Item
+    let data: Item?
 }
 
 struct AppStoreConnectAPIClient: Sendable {
