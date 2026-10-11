@@ -84,7 +84,7 @@ struct StartXcodeCloudBuildView: View {
                     }
                 }
 
-                Section("Source") {
+                Section {
                     if isLoadingReferences {
                         HStack(spacing: 10) {
                             ProgressView()
@@ -122,6 +122,8 @@ struct StartXcodeCloudBuildView: View {
                             }
                         }
                     }
+                } header: {
+                    Text("Source")
                 } footer: {
                     Text("The build uses the latest commit at the selected branch or the commit referenced by the selected tag. Starting a build uses Xcode Cloud resources.")
                 }
