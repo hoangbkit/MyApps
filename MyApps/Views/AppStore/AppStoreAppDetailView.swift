@@ -30,6 +30,8 @@ struct AppStoreAppDetailView: View {
     @State private var hasLoadedCloud = false
     @State private var isLoadingCloud = false
     @State private var cloudError: String?
+    @State private var isPresentingStartBuild = false
+    @State private var recentlyStartedRun: AppStoreConnectBuildRun?
 
     var body: some View {
         Group {
@@ -44,6 +46,19 @@ struct AppStoreAppDetailView: View {
         .navigationTitle(app.attributes.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if selectedSection == .xcodeCloud && product != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isPresentingStartBuild = true
+                    } label: {
+                        Label("Start Build", systemImage: "play.circle")
+                    }
+                    .disabled(!hasLoadedCloud || isLoadingCloud ||
+                              !workflows.contains(where: { $0.attributes.isEnabled == true }))
+                    .accessibilityLabel("Start Xcode Cloud Build")
+                }
+            }
+
             ToolbarItem(placement: .principal) {
                 Menu {
                     ForEach(Section.allCases) { section in
@@ -75,6 +90,18 @@ struct AppStoreAppDetailView: View {
                 }
                 .accessibilityLabel("App sections, currently \(selectedSection.rawValue)")
                 .accessibilityHint("Choose Info or Xcode Cloud")
+            }
+        }
+        .sheet(isPresented: $isPresentingStartBuild) {
+            StartXcodeCloudBuildView(
+                appName: app.attributes.name,
+                workflows: workflows,
+                client: client
+            ) { created in
+                recentlyStartedRun = created
+                runs.removeAll { $0.id == created.id }
+                runs.insert(created, at: 0)
+                Task { await loadCloud() }
             }
         }
         .task(id: selectedSection) {
@@ -179,6 +206,25 @@ struct AppStoreAppDetailView: View {
                         LabeledContent("Name", value: product.attributes.name ?? app.attributes.name)
                         if let productType = product.attributes.productType {
                             LabeledContent("Type", value: displayState(productType))
+                        }
+                    }
+                }
+
+                if let recentlyStartedRun {
+                    Section {
+                        Label {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(recentlyStartedRun.attributes.number.map {
+                                    "Build #\($0) requested"
+                                } ?? "Build requested")
+                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                Text("Xcode Cloud accepted the request. Pull down to refresh its progress.")
+                                    .font(.system(size: 12, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
                         }
                     }
                 }
@@ -301,7 +347,13 @@ struct AppStoreAppDetailView: View {
             guard !Task.isCancelled else { return }
             product = fetchedProduct
             workflows = loadedWorkflows
-            runs = loadedRuns
+            var visibleRuns = loadedRuns
+            if let recentlyStartedRun,
+               !visibleRuns.contains(where: { $0.id == recentlyStartedRun.id }) {
+                // Apple's listing may lag behind a successful 201 response.
+                visibleRuns.insert(recentlyStartedRun, at: 0)
+            }
+            runs = visibleRuns
             hasLoadedCloud = true
             cloudError = nil
         } catch {
