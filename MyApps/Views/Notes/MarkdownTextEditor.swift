@@ -15,11 +15,12 @@ struct MarkdownTextEditor: UIViewRepresentable {
         let textView = Runestone.TextView()
         textView.editorDelegate = context.coordinator
         textView.backgroundColor = .clear
+        textView.theme = NoteEditorTheme()
         textView.alwaysBounceVertical = true
         textView.keyboardDismissMode = .interactive
         textView.isLineWrappingEnabled = true
         textView.showLineNumbers = false
-        textView.lineSelectionDisplayType = .line
+        textView.lineSelectionDisplayType = .disabled
         textView.lineHeightMultiplier = 1.28
         textView.textContainerInset = UIEdgeInsets(top: 16, left: 13, bottom: 120, right: 13)
         textView.smartDashesType = .no
@@ -84,6 +85,35 @@ struct MarkdownTextEditor: UIViewRepresentable {
         func textViewDidChangeSelection(_ textView: Runestone.TextView) {
             parent.selectedRange = textView.selectedRange
         }
+    }
+}
+
+
+/// Keeps Runestone's default colors and syntax styling while making Markdown
+/// notes readable at the same comfortable size as other iOS body text.
+private final class NoteEditorTheme: Runestone.Theme {
+    private let base = Runestone.DefaultTheme()
+
+    let font = UIFont.monospacedSystemFont(ofSize: 18, weight: .regular)
+    var textColor: UIColor { base.textColor }
+    var gutterBackgroundColor: UIColor { base.gutterBackgroundColor }
+    var gutterHairlineColor: UIColor { base.gutterHairlineColor }
+    var lineNumberColor: UIColor { base.lineNumberColor }
+    var lineNumberFont: UIFont { base.lineNumberFont }
+    var selectedLineBackgroundColor: UIColor { base.selectedLineBackgroundColor }
+    var selectedLinesLineNumberColor: UIColor { base.selectedLinesLineNumberColor }
+    var selectedLinesGutterBackgroundColor: UIColor { base.selectedLinesGutterBackgroundColor }
+    var invisibleCharactersColor: UIColor { base.invisibleCharactersColor }
+    var pageGuideHairlineColor: UIColor { base.pageGuideHairlineColor }
+    var pageGuideBackgroundColor: UIColor { base.pageGuideBackgroundColor }
+    var markedTextBackgroundColor: UIColor { base.markedTextBackgroundColor }
+
+    func textColor(for highlightName: String) -> UIColor? {
+        base.textColor(for: highlightName)
+    }
+
+    func fontTraits(for highlightName: String) -> Runestone.FontTraits {
+        base.fontTraits(for: highlightName)
     }
 }
 
