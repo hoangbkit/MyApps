@@ -1,5 +1,7 @@
 # Git Operations Companion
 
+> **Historical design note:** The App Store placeholder described below was implemented in PR #5 with App Store Connect API-key authentication, an app list, Info, and Xcode Cloud read-only screens. The rest of this document records the earlier Git operations design.
+
 This branch extends the iOS-only MyApps app from the latest `master` with a separate Git operations area for iPhone.
 
 ## Implementation status
