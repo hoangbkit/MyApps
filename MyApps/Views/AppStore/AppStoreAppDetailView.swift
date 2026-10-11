@@ -109,7 +109,7 @@ struct AppStoreAppDetailView: View {
             Section("App Store Versions") {
                 if isLoadingInfo && !hasLoadedInfo {
                     ProgressView("Loading versions…")
-                } else if !hasLoadedInfo && infoError != nil {
+                } else if !hasLoadedInfo {
                     Button("Retry Loading Versions") {
                         Task { await loadInfo() }
                     }
@@ -159,7 +159,7 @@ struct AppStoreAppDetailView: View {
         List {
             if isLoadingCloud && !hasLoadedCloud {
                 ProgressView("Loading Xcode Cloud…")
-            } else if !hasLoadedCloud && cloudError != nil {
+            } else if !hasLoadedCloud {
                 ContentUnavailableView {
                     Label("Could Not Load Xcode Cloud", systemImage: "exclamationmark.triangle")
                 } actions: {
