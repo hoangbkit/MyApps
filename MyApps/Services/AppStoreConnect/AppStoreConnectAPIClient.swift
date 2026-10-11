@@ -136,11 +136,14 @@ struct AppStoreConnectAPIClient: Sendable {
     }
 
     func recentBuildRuns(for product: AppStoreConnectProduct) async throws -> [AppStoreConnectBuildRun] {
-        // The endpoint returns its current page of build history. Limit the
-        // first response and explicitly sort those runs by creation time in the UI.
+        // Apple's API supports descending build number ordering, so the
+        // first page contains the most recent runs without fetching full history.
         let page: AppStoreConnectPage<AppStoreConnectBuildRun> = try await get(
             path: "/v1/ciProducts/\(product.id)/buildRuns",
-            query: [URLQueryItem(name: "limit", value: "100")]
+            query: [
+                URLQueryItem(name: "limit", value: "100"),
+                URLQueryItem(name: "sort", value: "-number")
+            ]
         )
         return page.data.sorted {
             ($0.attributes.createdDate ?? "") > ($1.attributes.createdDate ?? "")
