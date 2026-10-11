@@ -151,17 +151,21 @@ struct RepositoriesView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Picker("Sort By", selection: $sortRawValue) {
-                        ForEach(RepositorySortOption.allCases) { option in
-                            Label(option.title, systemImage: option.symbolName)
-                                .tag(option.rawValue)
+                    Section("Sort By") {
+                        Picker("Sort Field", selection: $sortRawValue) {
+                            ForEach(RepositorySortOption.allCases) { option in
+                                Label(option.title, systemImage: option.symbolName)
+                                    .tag(option.rawValue)
+                            }
                         }
                     }
 
-                    Picker("Sort Direction", selection: $directionRawValue) {
-                        ForEach(RepositorySortDirection.allCases) { direction in
-                            Label(direction.title(for: sortOption), systemImage: direction.symbolName)
-                                .tag(direction.rawValue)
+                    Section("Direction") {
+                        Picker("Sort Direction", selection: $directionRawValue) {
+                            ForEach(RepositorySortDirection.allCases) { direction in
+                                Label(direction.title(for: sortOption), systemImage: direction.symbolName)
+                                    .tag(direction.rawValue)
+                            }
                         }
                     }
                 } label: {
