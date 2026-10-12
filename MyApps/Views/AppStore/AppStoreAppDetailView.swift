@@ -1,6 +1,8 @@
+import AppFoundation
 import SwiftUI
 
 struct AppStoreAppDetailView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.scenePhase) private var scenePhase
     private enum AppDetailMode: String, CaseIterable, Identifiable {
         case info = "Info"
@@ -45,7 +47,7 @@ struct AppStoreAppDetailView: View {
                 xcodeCloudView
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(foundationTheme.backgroundColor)
         .navigationTitle(app.attributes.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -199,6 +201,7 @@ struct AppStoreAppDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .refreshable { await loadInfo() }
         .alert(
             "App Information",
@@ -358,6 +361,7 @@ struct AppStoreAppDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .refreshable { await loadCloud() }
         .alert(
             "Xcode Cloud",
