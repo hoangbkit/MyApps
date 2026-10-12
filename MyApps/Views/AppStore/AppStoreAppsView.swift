@@ -215,6 +215,7 @@ struct AppStoreAppsView: View {
                             }
                             .padding(.vertical, 5)
                         }
+                        .listRowBackground(foundationTheme.elevatedSurfaceColor)
                     }
                 } header: {
                     Text("\(filteredApps.count) Apps")
