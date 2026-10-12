@@ -25,6 +25,7 @@ struct GitHubRepository: Codable, Identifiable, Hashable, Sendable {
     let defaultBranch: String
     let htmlURL: URL
     let pushedAt: Date?
+    var createdAt: Date? // GitHub supplies created_at; optional for older decoded payloads.
     let updatedAt: Date?
     let permissions: Permissions?
 
@@ -41,6 +42,7 @@ struct GitHubRepository: Codable, Identifiable, Hashable, Sendable {
         case defaultBranch = "default_branch"
         case htmlURL = "html_url"
         case pushedAt = "pushed_at"
+        case createdAt = "created_at"
         case updatedAt = "updated_at"
         case permissions
     }
