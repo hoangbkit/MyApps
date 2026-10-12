@@ -20,9 +20,9 @@ brew install xcodegen
 
 ## App Store Connect integration (PR #5)
 
-The **App Store** tab lists apps available to a connected App Store Connect team API key. Tap an app to see a workspace with a title dropdown:
+The **App Store** tab lists apps available to a connected App Store Connect team API key, with each app's artwork shown beside its name and bundle ID. Artwork comes from Apple's included `appStoreIcon` / `buildIcons` resources in the paginated app-list response. Apps without available artwork show an initials fallback. Tap an app to see a workspace with a title dropdown:
 
-- **Info** — name, Apple App ID, bundle ID, SKU, primary locale, Made for Kids, and App Store versions and statuses.
+- **Info** — app artwork, name, Apple App ID, bundle ID, SKU, primary locale, Made for Kids, and App Store versions and statuses.
 - **Xcode Cloud** — product, workflows (including enabled state), and the latest 100 build runs with status and date.
 
 In **Xcode Cloud**, tap **Start Build**, select an enabled workflow, and choose a branch or tag from the workflow's own Git repository. The app confirms the exact workflow and reference before requesting `POST /v1/ciBuildRuns`. After Apple accepts the build, the new run is shown and the build list refreshed. An API key with Xcode Cloud build-start permission is required.
