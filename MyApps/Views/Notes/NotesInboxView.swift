@@ -1,3 +1,4 @@
+import AppFoundation
 import SwiftData
 import SwiftUI
 
@@ -9,6 +10,7 @@ private enum NotesScope: String, CaseIterable, Identifiable {
 }
 
 struct NotesInboxView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \QuickNote.updatedAt, order: .reverse) private var notes: [QuickNote]
     @AppStorage(NoteSortOption.storageKey) private var noteSortRawValue = NoteSortOption.updated.rawValue
@@ -52,7 +54,7 @@ struct NotesInboxView: View {
                 notesGrid
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(foundationTheme.backgroundColor)
         .navigationTitle("Notes")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
