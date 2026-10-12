@@ -258,7 +258,7 @@ private struct XcodeCloudActionDetailView: View {
                                 systemImage: XcodeCloudDisplay.isFailed(issue.attributes.issueType) ? "xmark.circle.fill" : "exclamationmark.triangle"
                             )
                             .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundStyle(XcodeCloudDisplay.isFailed(issue.attributes.issueType) ? .red : .orange)
+                            .foregroundStyle(XcodeCloudDisplay.isFailed(issue.attributes.issueType) ? Color.red : Color.orange)
 
                             if let message = issue.attributes.message {
                                 Text(message)
@@ -292,7 +292,7 @@ private struct XcodeCloudActionDetailView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: XcodeCloudDisplay.isFailed(test.attributes.status)
                                       ? "xmark.circle.fill" : "checkmark.circle")
-                                    .foregroundStyle(XcodeCloudDisplay.isFailed(test.attributes.status) ? .red : .secondary)
+                                    .foregroundStyle(XcodeCloudDisplay.isFailed(test.attributes.status) ? Color.red : Color.secondary)
                                 Text(test.attributes.name ?? "Test")
                                     .font(.system(size: 15, weight: .medium, design: .rounded))
                                 Spacer()
@@ -366,8 +366,9 @@ enum XcodeCloudDisplay {
     }
 
     static func isInProgress(_ attributes: AppStoreConnectBuildRunAttributes) -> Bool {
-        guard attributes.completionStatus == nil else { return false }
-        return attributes.executionProgress?.uppercased() != "COMPLETE"
+        guard attributes.completionStatus == nil,
+              let progress = attributes.executionProgress?.uppercased() else { return false }
+        return progress == "PENDING" || progress == "RUNNING"
     }
 
     static func isFailed(_ status: String?) -> Bool {
