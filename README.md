@@ -23,7 +23,7 @@ brew install xcodegen
 The **App Store** tab lists apps available to a connected App Store Connect team API key, with each app's artwork shown beside its name and bundle ID. Artwork comes from Apple's included `appStoreIcon` / `buildIcons` resources in the paginated app-list response. Apps without available artwork show an initials fallback. Tap an app to see a workspace with a title dropdown:
 
 - **Info** — app artwork, name, Apple App ID, bundle ID, SKU, primary locale, Made for Kids, and App Store versions and statuses.
-- **Xcode Cloud** — product, workflows (including enabled state), and the latest 100 build runs with status and date.
+- **Xcode Cloud** — product, workflows (including enabled state), the latest 100 build runs with status and date, and a pushable build detail screen. Each build shows workflow, branch/tag, source commit, timing, issue counts, and build actions. Tap an action to inspect Apple's reported compiler/build issues (with file and line location) and individual test results.
 
 In **Xcode Cloud**, tap **Start Build**, select an enabled workflow, and choose a branch or tag from the workflow's own Git repository. The app confirms the exact workflow and reference before requesting `POST /v1/ciBuildRuns`. After Apple accepts the build, the new run is shown and the build list refreshed. An API key with Xcode Cloud build-start permission is required.
 
@@ -31,7 +31,7 @@ Go to **Settings → App Store Connect** and enter the team key's **Issuer ID**,
 
 Secrets are stored in this device's Keychain (this-device-only), never in SwiftData, UserDefaults, analytics, or library backups. The integration can start Xcode Cloud builds for enabled workflows after confirmation. It does not submit App Store versions, edit workflows, or cancel builds. Access depends on the API key's team/app permissions.
 
-App Store apps and version history use paginated requests. Xcode Cloud build history displays the newest 100 runs returned by the API, sorted by descending build number.
+App Store apps and version history use paginated requests. Xcode Cloud build history displays the newest 100 runs returned by the API, sorted by descending build number. Active build history and individual build details refresh every 30 seconds while the relevant screen is active and the app is foregrounded; pull-to-refresh remains available. Diagnostics use Apple's structured build issues and test results APIs, **not** raw Xcode build logs. The app does not currently offer artifact downloads or build cancellation.
 
 The Xcode project is generated from `project.yml`; run `./generate.sh` after pulling changes. The release workflow regenerates the project before building.
 
