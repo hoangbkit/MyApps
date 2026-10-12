@@ -10,9 +10,15 @@ private enum NoteDisplayMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+private struct NoteWritingUndo {
+    let before: String
+    let after: String
+}
+
 struct NoteEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var aiWriting: AIWritingSession
     @Query(sort: \ManagedApp.name) private var apps: [ManagedApp]
 
     @Bindable var note: QuickNote
@@ -23,6 +29,8 @@ struct NoteEditorView: View {
     @State private var isConfirmingDelete = false
     @State private var isDeleting = false
     @State private var copyFeedback = 0
+    @State private var aiRequest: NoteAIRequest?
+    @State private var writingUndo: NoteWritingUndo?
 
     init(note: QuickNote, startsInEditMode: Bool = false) {
         self.note = note
@@ -60,6 +68,59 @@ struct NoteEditorView: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Section("Rewrite") {
+                        ForEach([
+                            NoteAIAction.proofread, .improve, .shorten, .expand,
+                            .summarize, .bullets
+                        ]) { action in
+                            Button {
+                                transform(action)
+                            } label: {
+                                Label(action.title, systemImage: action.symbol)
+                            }
+                        }
+                    }
+                    Menu("Tone") {
+                        ForEach([NoteAIAction.professional, .casual]) { action in
+                            Button(action.title) { transform(action) }
+                        }
+                    }
+                    Menu("Text Case") {
+                        ForEach([
+                            NoteAIAction.lowercaseAll, .lowercaseProtected,
+                            .uppercaseAll, .titleCase, .sentenceCase
+                        ]) { action in
+                            Button(action.title) { transform(action) }
+                        }
+                    }
+                    Button {
+                        transform(.translate)
+                    } label: {
+                        Label("Translate…", systemImage: "character.book.closed")
+                    }
+                    Button {
+                        transform(.custom)
+                    } label: {
+                        Label("Custom Rewrite…", systemImage: "pencil.line")
+                    }
+                } label: {
+                    Image(systemName: "sparkles")
+                }
+                .disabled(note.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel("AI Writing Actions")
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    if let writingUndo, writingUndo.after == note.body {
+                        Button {
+                            restoreLastTransformation()
+                        } label: {
+                            Label("Undo Last Transformation", systemImage: "arrow.uturn.backward")
+                        }
+                        Divider()
+                    }
+
                     Button {
                         copyWholeText()
                     } label: {
@@ -93,6 +154,11 @@ struct NoteEditorView: View {
                 ToolbarItem(placement: .keyboard) {
                     markdownKeyboardToolbar
                 }
+            }
+        }
+        .sheet(item: $aiRequest) { request in
+            NoteAIReviewView(request: request) { operation, proposedText in
+                applyAIResult(request: request, mode: operation, text: proposedText)
             }
         }
         .onChange(of: mode) { _, newMode in
@@ -331,6 +397,74 @@ struct NoteEditorView: View {
     private func copyWholeText() {
         UIPasteboard.general.string = note.body
         copyFeedback += 1
+    }
+
+    private func transform(_ action: NoteAIAction) {
+        guard let request = NoteAIRequest.capture(
+            action: action,
+            text: note.body,
+            range: selectedRange,
+            allowSelection: mode == .edit
+        ) else { return }
+
+        if action.isLocal {
+            let output = NoteAIProtectedText.applyLocal(action, to: request.selectedText)
+            _ = applyAIResult(request: request, mode: .replace, text: output)
+        } else {
+            aiRequest = request
+        }
+    }
+
+    /// Never apply stale AI output to a note that changed while the sheet was
+    /// open; preserve existing attachment references in the final Markdown.
+    private func applyAIResult(request: NoteAIRequest, mode operation: NoteAIApplyMode, text: String) -> Bool {
+        guard note.body == request.sourceBody else { return false }
+        let source = request.sourceBody as NSString
+        guard request.targetRange.location != NSNotFound,
+              request.targetRange.location >= 0,
+              request.targetRange.length <= source.length,
+              request.targetRange.location <= source.length - request.targetRange.length else {
+            return false
+        }
+
+        let editRange: NSRange
+        let insertion: String
+        switch operation {
+        case .replace:
+            editRange = request.targetRange
+            insertion = text
+        case .insertBelow:
+            // Inserting source attachment references again would duplicate
+            // their use within a note; offer Replace/Copy instead.
+            guard NoteAIProtectedText.attachmentReferences(in: request.selectedText).isEmpty else {
+                return false
+            }
+            editRange = NSRange(
+                location: request.targetRange.location + request.targetRange.length,
+                length: 0
+            )
+            insertion = "\n\n" + text
+        }
+
+        let updated = source.replacingCharacters(in: editRange, with: insertion)
+        guard NoteAIProtectedText.attachmentReferences(in: updated) ==
+              NoteAIProtectedText.attachmentReferences(in: request.sourceBody) else {
+            return false
+        }
+        writingUndo = NoteWritingUndo(before: request.sourceBody, after: updated)
+        note.body = updated
+        selectedRange = NSRange(location: editRange.location + insertion.utf16.count, length: 0)
+        mode = .edit
+        touchNote()
+        return true
+    }
+
+    private func restoreLastTransformation() {
+        guard let writingUndo, note.body == writingUndo.after else { return }
+        note.body = writingUndo.before
+        selectedRange = NSRange(location: (note.body as NSString).length, length: 0)
+        self.writingUndo = nil
+        touchNote()
     }
 
     private func touchNote() {
