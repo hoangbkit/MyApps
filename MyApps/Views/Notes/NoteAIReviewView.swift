@@ -20,6 +20,7 @@ struct NoteAIReviewView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var currentTask: Task<Void, Never>?
+    @State private var activeGenerationID = UUID()
 
     private var selectedProfile: AIWritingProfile {
         ai.profiles.first(where: { $0.id == (selectedProfileID ?? ai.defaultProfileID) }) ?? ai.defaultProfile
@@ -52,6 +53,7 @@ struct NoteAIReviewView: View {
                         }
                     }
                     .onChange(of: selectedProfileID) { _, _ in
+                        cancelGeneration()
                         output = nil
                         errorMessage = nil
                     }
@@ -62,6 +64,11 @@ struct NoteAIReviewView: View {
                             axis: .vertical
                         )
                         .lineLimit(2...5)
+                        .onChange(of: instruction) { _, _ in
+                            cancelGeneration()
+                            output = nil
+                            errorMessage = nil
+                        }
                     }
                 }
 
@@ -79,9 +86,7 @@ struct NoteAIReviewView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Button("Cancel Request") {
-                            currentTask?.cancel()
-                            currentTask = nil
-                            isGenerating = false
+                            cancelGeneration()
                         }
                     } else if let output {
                         Text(output)
@@ -132,12 +137,9 @@ struct NoteAIReviewView: View {
             }
             .task {
                 if selectedProfileID == nil { selectedProfileID = ai.defaultProfileID }
-                if !requiresInstruction { await generate() }
+                if !requiresInstruction { startGeneration() }
             }
-            .onDisappear {
-                currentTask?.cancel()
-                currentTask = nil
-            }
+            .onDisappear { cancelGeneration() }
             .alert(
                 "Cannot Apply Result",
                 isPresented: Binding(
@@ -160,36 +162,48 @@ struct NoteAIReviewView: View {
         dismiss()
     }
 
-    private func startGeneration() {
+    private func cancelGeneration() {
+        activeGenerationID = UUID()
         currentTask?.cancel()
-        currentTask = Task { await generate() }
+        currentTask = nil
+        isGenerating = false
+    }
+
+    private func startGeneration() {
+        cancelGeneration()
+        let id = activeGenerationID
+        currentTask = Task { await generate(id: id) }
     }
 
     @MainActor
-    private func generate() async {
+    private func generate(id: UUID) async {
         guard canGenerate else { return }
         isGenerating = true
         output = nil
         errorMessage = nil
-        defer { isGenerating = false }
+        defer {
+            if activeGenerationID == id { isGenerating = false }
+        }
 
         do {
             let client = try ai.client()
+            let profile = selectedProfile
+            let direction = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
             let value = try await client.transform(
                 request.selectedText,
                 action: request.action,
-                profile: selectedProfile,
-                extraInstruction: instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+                profile: profile,
+                extraInstruction: direction
             )
             try Task.checkCancellation()
-            // Reject attempts to modify or omit existing image attachments.
+            guard activeGenerationID == id else { return }
             guard NoteAIProtectedText.attachmentReferences(in: request.selectedText) ==
                     NoteAIProtectedText.attachmentReferences(in: value) else {
                 throw NoteAITextError.protectedContentChanged
             }
             output = value
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, activeGenerationID == id else { return }
             errorMessage = error.localizedDescription
         }
     }
