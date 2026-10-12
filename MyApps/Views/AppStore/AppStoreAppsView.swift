@@ -1,3 +1,4 @@
+import AppFoundation
 import SwiftUI
 
 private enum StoreAppSortOption: String, CaseIterable, Identifiable {
@@ -24,6 +25,7 @@ private enum StoreAppSortOption: String, CaseIterable, Identifiable {
 }
 
 struct AppStoreAppsView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var session: AppStoreConnectSession
 
@@ -101,7 +103,7 @@ struct AppStoreAppsView: View {
                 appList
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(foundationTheme.backgroundColor)
         .navigationTitle("Apps")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -220,6 +222,7 @@ struct AppStoreAppsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .searchable(text: $searchText, prompt: "Search apps")
         .refreshable {
             await loadApps()
