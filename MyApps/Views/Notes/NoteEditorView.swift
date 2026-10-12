@@ -1,3 +1,4 @@
+import Combine
 import PhotosUI
 import SwiftData
 import SwiftUI
@@ -8,11 +9,6 @@ private enum NoteDisplayMode: String, CaseIterable, Identifiable {
     case preview = "Preview"
 
     var id: String { rawValue }
-}
-
-private struct NoteWritingUndo {
-    let before: String
-    let after: String
 }
 
 struct NoteEditorView: View {
@@ -30,7 +26,7 @@ struct NoteEditorView: View {
     @State private var isDeleting = false
     @State private var copyFeedback = 0
     @State private var aiRequest: NoteAIRequest?
-    @State private var writingUndo: NoteWritingUndo?
+    @StateObject private var editorController = MarkdownEditorController()
 
     init(note: QuickNote, startsInEditMode: Bool = false) {
         self.note = note
@@ -39,20 +35,24 @@ struct NoteEditorView: View {
     }
 
     var body: some View {
-        Group {
-            switch mode {
-            case .edit:
-                MarkdownTextEditor(
-                    text: $note.body,
-                    selectedRange: $selectedRange,
-                    focusOnAppear: true
-                )
-                .background(Color(uiColor: .systemBackground))
+        ZStack {
+            // Retain the same Runestone instance through Edit/Preview changes.
+            // Recreating the UIView would discard its native undo history.
+            MarkdownTextEditor(
+                text: $note.body,
+                selectedRange: $selectedRange,
+                editorController: editorController,
+                focusOnAppear: mode == .edit
+            )
+            .opacity(mode == .edit ? 1 : 0)
+            .allowsHitTesting(mode == .edit)
+            .accessibilityHidden(mode != .edit)
 
-            case .preview:
+            if mode == .preview {
                 preview
             }
         }
+        .background(Color(uiColor: .systemBackground))
         .navigationTitle("Note")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -112,14 +112,21 @@ struct NoteEditorView: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    if let writingUndo, writingUndo.after == note.body {
-                        Button {
-                            restoreLastTransformation()
-                        } label: {
-                            Label("Undo Last Transformation", systemImage: "arrow.uturn.backward")
-                        }
-                        Divider()
+                    Button {
+                        editorController.undo()
+                    } label: {
+                        Label("Undo", systemImage: "arrow.uturn.backward")
                     }
+                    .disabled(!editorController.canUndo)
+
+                    Button {
+                        editorController.redo()
+                    } label: {
+                        Label("Redo", systemImage: "arrow.uturn.forward")
+                    }
+                    .disabled(!editorController.canRedo)
+
+                    Divider()
 
                     Button {
                         copyWholeText()
@@ -161,6 +168,15 @@ struct NoteEditorView: View {
                 applyAIResult(request: request, mode: operation, text: proposedText)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerCheckpoint)) { _ in
+            editorController.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in
+            editorController.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange)) { _ in
+            editorController.refresh()
+        }
         .onChange(of: mode) { _, newMode in
             if newMode == .preview {
                 dismissKeyboard()
@@ -193,8 +209,11 @@ struct NoteEditorView: View {
                 attachments: note.attachments,
                 interactiveTasks: true
             ) { lineIndex in
-                note.body = MarkdownTaskParser.togglingTask(at: lineIndex, in: note.body)
-                touchNote()
+                let before = note.body
+                let after = MarkdownTaskParser.togglingTask(at: lineIndex, in: before)
+                if editorController.applyChange(before: before, after: after, selectionAfter: selectedRange) {
+                    touchNote()
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 18)
@@ -303,6 +322,16 @@ struct NoteEditorView: View {
             Divider()
                 .frame(height: 24)
 
+            markdownToolbarButton("arrow.uturn.backward", label: "Undo") {
+                editorController.undo()
+            }
+            .disabled(!editorController.canUndo)
+
+            markdownToolbarButton("arrow.uturn.forward", label: "Redo") {
+                editorController.redo()
+            }
+            .disabled(!editorController.canRedo)
+
             Button("Done") {
                 dismissKeyboard()
             }
@@ -329,33 +358,40 @@ struct NoteEditorView: View {
             .contentShape(Rectangle())
     }
 
+    private func performMarkdownCommand(_ command: (inout String, inout NSRange) -> Void) {
+        let before = note.body
+        var after = before
+        var selectionAfter = selectedRange
+        command(&after, &selectionAfter)
+        if editorController.applyChange(before: before, after: after, selectionAfter: selectionAfter) {
+            touchNote()
+        }
+    }
+
     private func insertLinePrefix(_ prefix: String) {
-        MarkdownEditingCommand.insertLinePrefix(prefix, text: &note.body, selection: &selectedRange)
-        touchNote()
+        performMarkdownCommand { text, selection in
+            MarkdownEditingCommand.insertLinePrefix(prefix, text: &text, selection: &selection)
+        }
     }
 
     private func wrapSelection(with marker: String) {
-        MarkdownEditingCommand.wrapSelection(
-            with: marker,
-            text: &note.body,
-            selection: &selectedRange
-        )
-        touchNote()
+        performMarkdownCommand { text, selection in
+            MarkdownEditingCommand.wrapSelection(with: marker, text: &text, selection: &selection)
+        }
     }
 
     private func insertSnippet(_ snippet: String) {
-        MarkdownEditingCommand.insert(snippet, text: &note.body, selection: &selectedRange)
-        touchNote()
+        performMarkdownCommand { text, selection in
+            MarkdownEditingCommand.insert(snippet, text: &text, selection: &selection)
+        }
     }
 
     private func insertTemplate(_ template: String, placeholder: String) {
-        MarkdownEditingCommand.insertTemplate(
-            template,
-            selecting: placeholder,
-            text: &note.body,
-            selection: &selectedRange
-        )
-        touchNote()
+        performMarkdownCommand { text, selection in
+            MarkdownEditingCommand.insertTemplate(
+                template, selecting: placeholder, text: &text, selection: &selection
+            )
+        }
     }
 
     @MainActor
@@ -374,11 +410,16 @@ struct NoteEditorView: View {
             pixelHeight: processed.pixelHeight,
             data: processed.data
         )
+        let token = "\n\n![Image](attachment://\(attachmentID.uuidString))\n\n"
+        let before = note.body
+        var after = before
+        var selectionAfter = selectedRange
+        MarkdownEditingCommand.insert(token, text: &after, selection: &selectionAfter)
+        guard editorController.applyChange(before: before, after: after, selectionAfter: selectionAfter) else {
+            return
+        }
         modelContext.insert(attachment)
         attachment.note = note
-
-        let token = "\n\n![Image](attachment://\(attachmentID.uuidString))\n\n"
-        MarkdownEditingCommand.insert(token, text: &note.body, selection: &selectedRange)
         mode = .edit
         touchNote()
     }
@@ -451,20 +492,17 @@ struct NoteEditorView: View {
               NoteAIProtectedText.attachmentReferences(in: request.sourceBody) else {
             return false
         }
-        writingUndo = NoteWritingUndo(before: request.sourceBody, after: updated)
-        note.body = updated
-        selectedRange = NSRange(location: editRange.location + insertion.utf16.count, length: 0)
+        let selectionAfter = NSRange(
+            location: editRange.location + insertion.utf16.count, length: 0
+        )
+        guard editorController.applyChange(
+            before: request.sourceBody,
+            after: updated,
+            selectionAfter: selectionAfter
+        ) else { return false }
         mode = .edit
         touchNote()
         return true
-    }
-
-    private func restoreLastTransformation() {
-        guard let writingUndo, note.body == writingUndo.after else { return }
-        note.body = writingUndo.before
-        selectedRange = NSRange(location: (note.body as NSString).length, length: 0)
-        self.writingUndo = nil
-        touchNote()
     }
 
     private func touchNote() {
