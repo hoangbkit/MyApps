@@ -17,6 +17,7 @@ struct AppStoreAppDetailView: View {
 
     let app: AppStoreConnectApp
     let client: AppStoreConnectAPIClient?
+    let iconURL: URL?
 
     @State private var selectedSection: AppDetailMode = .info
     @State private var versions: [AppStoreConnectVersion] = []
@@ -117,7 +118,16 @@ struct AppStoreAppDetailView: View {
     private var infoView: some View {
         List {
             Section("App Information") {
-                LabeledContent("Name", value: app.attributes.name)
+                HStack(spacing: 14) {
+                    AppStoreAppIconView(
+                        name: app.attributes.name,
+                        url: iconURL,
+                        size: 64
+                    )
+                    Text(app.attributes.name)
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                }
+                .padding(.vertical, 4)
                 if let bundleID = app.attributes.bundleId {
                     LabeledContent("Bundle ID", value: bundleID)
                 }
