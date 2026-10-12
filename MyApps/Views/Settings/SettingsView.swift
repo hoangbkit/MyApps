@@ -273,8 +273,17 @@ struct SettingsView: View {
 
         do {
             try MyAppsBackupService.restore(pendingRestore, in: modelContext)
-            if let restoredAI = pendingRestore.manifest.preferences?.aiWritingPreferences {
-                aiWriting.restoreProfiles(restoredAI)
+            if let preferences = pendingRestore.manifest.preferences {
+                // The backup service restores the persisted theme state; also
+                // update the scene's live manager so the new colors appear
+                // immediately without relaunching the app.
+                _ = themes.select(themeID: MyAppsThemeCatalog.restoredThemeID(
+                    themeID: preferences.themeID,
+                    legacyAppearance: preferences.appearanceRawValue
+                ))
+                if let restoredAI = preferences.aiWritingPreferences {
+                    aiWriting.restoreProfiles(restoredAI)
+                }
             }
             self.pendingRestore = nil
             showResult("Backup restored successfully.")
