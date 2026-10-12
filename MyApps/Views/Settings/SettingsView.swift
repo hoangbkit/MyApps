@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var gitHubSession: GitHubSession
+    @EnvironmentObject private var aiWriting: AIWritingSession
     @Query private var apps: [ManagedApp]
     @Query private var notes: [QuickNote]
     @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
@@ -140,6 +141,17 @@ struct SettingsView: View {
         } message: {
             Text(gitHubSession.errorMessage ?? "")
         }
+        .alert(
+            "DeepSeek",
+            isPresented: Binding(
+                get: { aiWriting.errorMessage != nil },
+                set: { if !$0 { aiWriting.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(aiWriting.errorMessage ?? "")
+        }
         .confirmationDialog(
             "Disconnect GitHub?",
             isPresented: $isConfirmingGitHubDisconnect,
@@ -256,6 +268,9 @@ struct SettingsView: View {
 
         do {
             try MyAppsBackupService.restore(pendingRestore, in: modelContext)
+            if let restoredAI = pendingRestore.manifest.preferences?.aiWritingPreferences {
+                aiWriting.restoreProfiles(restoredAI)
+            }
             self.pendingRestore = nil
             showResult("Backup restored successfully.")
         } catch {
