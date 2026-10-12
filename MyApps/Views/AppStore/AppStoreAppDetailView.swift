@@ -259,7 +259,7 @@ struct AppStoreAppDetailView: View {
                     }
                 }
 
-                Section("Build Runs") {
+                Section {
                     if runs.isEmpty {
                         Text("No Xcode Cloud builds found.")
                             .foregroundStyle(.secondary)
@@ -289,6 +289,8 @@ struct AppStoreAppDetailView: View {
                             .padding(.vertical, 3)
                         }
                     }
+                } header: {
+                    Text("Build Runs")
                 } footer: {
                     Text("Showing the latest loaded Xcode Cloud build runs. Pull down to refresh.")
                 }
