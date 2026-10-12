@@ -1,3 +1,4 @@
+import AppFoundation
 import Combine
 import PhotosUI
 import SwiftData
@@ -12,6 +13,7 @@ private enum NoteDisplayMode: String, CaseIterable, Identifiable {
 }
 
 struct NoteEditorView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var aiWriting: AIWritingSession
@@ -52,7 +54,7 @@ struct NoteEditorView: View {
                 preview
             }
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(foundationTheme.backgroundColor)
         .navigationTitle("Note")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -221,7 +223,7 @@ struct NoteEditorView: View {
             .textSelection(.enabled)
         }
         .scrollIndicators(.hidden)
-        .background(Color(uiColor: .systemBackground))
+        .background(foundationTheme.backgroundColor)
     }
 
     @ViewBuilder
