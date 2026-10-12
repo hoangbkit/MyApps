@@ -4,6 +4,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.modelContext) private var modelContext
     @Environment(ThemeManager.self) private var themes
     @Environment(\.appFoundationTheme) private var currentTheme
@@ -82,6 +83,8 @@ struct SettingsView: View {
                 LabeledContent("Bundle ID", value: "com.hoangbkit.myapps")
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(currentTheme.backgroundColor)
         .font(.system(size: 17, weight: .regular, design: .rounded))
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
