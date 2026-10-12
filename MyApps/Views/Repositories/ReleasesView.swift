@@ -8,12 +8,20 @@ struct ReleasesView: View {
 
     private var tags: [GitHubTag] { model.tags }
 
+    private var sortedReleases: [GitHubRelease] {
+        model.releases.sorted { lhs, rhs in
+            if lhs.displayDate != rhs.displayDate { return lhs.displayDate > rhs.displayDate }
+            let order = lhs.tagName.localizedStandardCompare(rhs.tagName)
+            return order == .orderedSame ? lhs.id < rhs.id : order == .orderedAscending
+        }
+    }
+
     private var productReleases: [GitHubRelease] {
-        model.releases.filter { !$0.isMyCLIBuild }
+        sortedReleases.filter { !$0.isMyCLIBuild }
     }
 
     private var buildReleases: [GitHubRelease] {
-        model.releases.filter { $0.isMyCLIBuild }
+        sortedReleases.filter { $0.isMyCLIBuild }
     }
 
     var body: some View {
