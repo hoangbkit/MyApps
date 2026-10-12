@@ -7,6 +7,7 @@ struct AppStoreAppsView: View {
     let onOpenSettings: () -> Void
 
     @State private var apps: [AppStoreConnectApp] = []
+    @State private var iconURLsByAppID: [String: URL] = [:]
     @State private var searchText = ""
     @State private var isLoading = false
     @State private var hasLoaded = false
@@ -56,6 +57,7 @@ struct AppStoreAppsView: View {
                 break
             case .disconnected:
                 apps = []
+                iconURLsByAppID = [:]
                 hasLoaded = false
                 searchText = ""
             case .connected:
@@ -100,16 +102,27 @@ struct AppStoreAppsView: View {
                 Section {
                     ForEach(filteredApps) { app in
                         NavigationLink {
-                            AppStoreAppDetailView(app: app, client: session.client())
+                            AppStoreAppDetailView(
+                                app: app,
+                                client: session.client(),
+                                iconURL: iconURLsByAppID[app.id]
+                            )
                         } label: {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(app.attributes.name)
-                                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                                if let bundleID = app.attributes.bundleId {
-                                    Text(bundleID)
-                                        .font(.system(size: 13, design: .rounded))
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
+                            HStack(spacing: 12) {
+                                AppStoreAppIconView(
+                                    name: app.attributes.name,
+                                    url: iconURLsByAppID[app.id]
+                                )
+
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(app.attributes.name)
+                                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                    if let bundleID = app.attributes.bundleId {
+                                        Text(bundleID)
+                                            .font(.system(size: 13, design: .rounded))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
                                 }
                             }
                             .padding(.vertical, 5)
@@ -133,9 +146,10 @@ struct AppStoreAppsView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            let fetched = try await client.apps()
+            let catalog = try await client.appsWithIcons()
             guard !Task.isCancelled else { return }
-            apps = fetched
+            apps = catalog.apps
+            iconURLsByAppID = catalog.iconURLsByAppID
             hasLoaded = true
             loadFailed = false
             errorMessage = nil
