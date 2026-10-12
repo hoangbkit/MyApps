@@ -43,8 +43,8 @@ struct XcodeCloudBuildDetailView: View {
                         )
                         .foregroundStyle(XcodeCloudDisplay.color(run.attributes.completionStatus, progress: run.attributes.executionProgress))
                     }
-                    if let workflowName {
-                        LabeledContent("Workflow", value: workflowName)
+                    if let name = detail?.workflowName ?? workflowName {
+                        LabeledContent("Workflow", value: name)
                     }
                     if let branch = detail?.sourceReferenceName {
                         LabeledContent("Branch / Tag", value: branch)
