@@ -53,6 +53,14 @@ The Xcode project is generated from `project.yml`; run `./generate.sh` after pul
 
 The Notes editor remains fully usable without an AI key. XcodeGen includes new Swift files under `MyApps` automatically.
 
+## Notes Undo & Redo (PR #5)
+
+- **Undo** and **Redo** are available beside **Done** in the Notes editing keyboard toolbar and under the note's **…** menu (also available in Preview).
+- Uses the **existing Runestone native undo manager**, so keyboard typing, Markdown formatting commands, imported image tokens, Preview task checkbox toggles, local text-case changes, and accepted AI edits share one history.
+- Programmatic commands are routed through `Runestone.TextView.replace(_:withText:)` with one undo group per action; they no longer reset the text view or bypass native Undo.
+- The Runestone editor remains mounted while switching **Edit ↔ Preview**, keeping the undo stack intact. Undo and Redo button availability follows the native undo manager.
+- Undo history is **editor-session-only**; it is not persisted across closing a note or relaunching MyApps. The document content remains stored in SwiftData.
+
 ## P3.5 changes
 
 - Replaced the basic `UITextView` note editor with Runestone 0.5.2.
