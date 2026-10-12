@@ -11,11 +11,27 @@ enum MyAppsThemeCatalog {
 
     @MainActor
     static func makeManager() -> ThemeManager {
-        ThemeManager(
+        let defaults = UserDefaults.standard
+        let storageKey = "myapps.appfoundation.theme-state"
+        // Preserve an explicit Light/Dark choice on upgrade. "System" has no
+        // corresponding AppFoundation theme, so use the catalog's Rose default.
+        let legacyChoice = defaults.object(forKey: storageKey) == nil
+            ? defaults.string(forKey: "myapps.appearance")
+            : nil
+        let manager = ThemeManager(
             catalog: catalog,
-            stateStore: UserDefaultsThemeStateStore(storageKey: "myapps.appfoundation.theme-state"),
+            stateStore: UserDefaultsThemeStateStore(storageKey: storageKey),
             hasPro: false,
             previewBehavior: .disabled
         )
+        switch legacyChoice {
+        case "Light":
+            _ = manager.select(themeID: FoundationThemes.paper.id)
+        case "Dark":
+            _ = manager.select(themeID: FoundationThemes.rose.id)
+        default:
+            break
+        }
+        return manager
     }
 }
