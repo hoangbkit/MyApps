@@ -20,7 +20,7 @@ brew install xcodegen
 
 ## App Store Connect integration (PR #5)
 
-The **App Store** tab lists apps available to a connected App Store Connect team API key, with each app's artwork shown beside its name and bundle ID. Artwork comes from Apple's included `appStoreIcon` / `buildIcons` resources in the paginated app-list response. Apps without available artwork show an initials fallback. Tap an app to see a workspace with a title dropdown:
+The **App Store** tab lists apps available to a connected App Store Connect team API key, with each app's artwork shown beside its name and bundle ID. Artwork first comes from Apple's included `appStoreIcon` / `buildIcons` resources. When absent or its CDN download fails, MyApps uses a batched public App Store lookup by the exact Apple App ID (checking multiple storefronts), verifies matching IDs and bundle IDs, and tries the returned artwork. Successfully loaded images are cached in memory and via the shared URL cache. Apps with no usable artwork show a stable, colorful gradient tile with initials rather than a blank gray icon. Public lookup happens after the app list is displayed; unreleased apps still appear normally. Tap an app to see a workspace with a title dropdown:
 
 - **Info** — app artwork, name, Apple App ID, bundle ID, SKU, primary locale, Made for Kids, and App Store versions and statuses.
 - **Xcode Cloud** — product, workflows (including enabled state), the latest 100 build runs with status and date, and a pushable build detail screen. Each build shows workflow, branch/tag, source commit, timing, issue counts, and build actions. Tap an action to inspect Apple's reported compiler/build issues (with file and line location) and individual test results.
