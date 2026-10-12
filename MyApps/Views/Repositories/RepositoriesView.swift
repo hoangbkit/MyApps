@@ -139,7 +139,7 @@ struct RepositoriesView: View {
                 repositoriesView
             }
         }
-        .background(foundationTheme.backgroundColor)
+        .myAppsPage()
         .navigationTitle("Repos")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -202,54 +202,60 @@ struct RepositoriesView: View {
     @ViewBuilder
     private var repositoriesView: some View {
         List {
-            if repositoriesModel.isLoading && repositoriesModel.repositories.isEmpty {
-                ProgressView("Loading repositories…")
-            } else if repositoriesModel.repositories.isEmpty {
-                ContentUnavailableView {
-                    Label("No Repositories", systemImage: "shippingbox")
-                } description: {
-                    Text("No repositories are available to this GitHub connection.")
-                } actions: {
-                    Button("Try Again") {
-                        Task {
-                            await repositoriesModel.load(using: session.client(), force: true)
+            Group {
+                if repositoriesModel.isLoading && repositoriesModel.repositories.isEmpty {
+                    ProgressView("Loading repositories…")
+                } else if repositoriesModel.repositories.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Repositories", systemImage: "shippingbox")
+                    } description: {
+                        Text("No repositories are available to this GitHub connection.")
+                    } actions: {
+                        Button("Try Again") {
+                            Task {
+                                await repositoriesModel.load(using: session.client(), force: true)
+                            }
                         }
                     }
-                }
-                .listRowBackground(Color.clear)
-            } else {
-                if filteredRepositories.isEmpty {
-                    ContentUnavailableView(
-                        "No Matching Repositories",
-                        systemImage: "magnifyingglass",
-                        description: Text("No repositories match “\(searchText)”.")
-                    )
                     .listRowBackground(Color.clear)
                 } else {
-                    if !pinnedRepositories.isEmpty {
-                        Section {
-                            ForEach(pinnedRepositories) { repository in
-                                repositoryLink(repository)
+                    if filteredRepositories.isEmpty {
+                        ContentUnavailableView(
+                            "No Matching Repositories",
+                            systemImage: "magnifyingglass",
+                            description: Text("No repositories match “\(searchText)”.")
+                        )
+                        .listRowBackground(Color.clear)
+                    } else {
+                        if !pinnedRepositories.isEmpty {
+                            Section {
+                                ForEach(pinnedRepositories) { repository in
+                                    repositoryLink(repository)
+                                }
+                            } header: {
+                                Text("Pinned (\(pinnedRepositories.count))")
                             }
-                        } header: {
-                            Text("Pinned (\(pinnedRepositories.count))")
                         }
-                    }
 
-                    if !unpinnedRepositories.isEmpty {
-                        Section {
-                            ForEach(unpinnedRepositories) { repository in
-                                repositoryLink(repository)
+                        if !unpinnedRepositories.isEmpty {
+                            Section {
+                                ForEach(unpinnedRepositories) { repository in
+                                    repositoryLink(repository)
+                                }
+                            } header: {
+                                Text("\(unpinnedRepositories.count) Repositories")
                             }
-                        } header: {
-                            Text("\(unpinnedRepositories.count) Repositories")
                         }
                     }
                 }
             }
+            .listRowBackground(Color.clear)
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
-        .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .myAppsPage()
+        .listStyle(.plain)
+
         .scrollDismissesKeyboard(.interactively)
         .searchable(
             text: $searchText,
@@ -274,7 +280,7 @@ struct RepositoriesView: View {
         } label: {
             repositoryRow(repository)
         }
-        .listRowBackground(foundationTheme.elevatedSurfaceColor)
+        .listRowBackground(Color.clear)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
                 togglePin(repository)
@@ -321,25 +327,25 @@ struct RepositoriesView: View {
                 if repository.isPrivate {
                     Text("Private")
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.12), in: Capsule())
+                        .background(foundationTheme.secondaryForegroundColor.opacity(0.12), in: Capsule())
                 }
 
                 if repository.isArchived {
                     Text("Archived")
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.12), in: Capsule())
+                        .background(foundationTheme.secondaryForegroundColor.opacity(0.12), in: Capsule())
                 }
             }
 
             Text(repository.fullName)
                 .font(.system(size: 13, weight: .regular, design: .rounded))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(foundationTheme.secondaryForegroundColor)
                 .lineLimit(1)
 
             HStack(spacing: 8) {
@@ -356,7 +362,7 @@ struct RepositoriesView: View {
                 }
             }
             .font(.system(size: 12, weight: .regular, design: .rounded))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(foundationTheme.secondaryForegroundColor)
         }
         .padding(.vertical, 3)
     }

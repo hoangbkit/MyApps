@@ -87,7 +87,7 @@ struct ProjectsView: View {
                 projectsList
             }
         }
-        .background(foundationTheme.backgroundColor)
+        .myAppsPage()
         .navigationTitle("Projects")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -159,85 +159,90 @@ struct ProjectsView: View {
 
     private var projectsList: some View {
         List {
-            statusFilters
-                .listRowInsets(EdgeInsets(top: 7, leading: 0, bottom: 5, trailing: 0))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-
-            if displayedProjects.isEmpty {
-                filteredEmptyState
-                    .listRowInsets(EdgeInsets())
+            Group {
+                statusFilters
+                    .listRowInsets(EdgeInsets(top: 7, leading: 0, bottom: 5, trailing: 0))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-            } else {
-                ForEach(displayedProjects) { project in
-                    NavigationLink {
-                        AppDetailView(app: project)
-                    } label: {
-                        AppRowView(app: project, showsChevron: false)
-                    }
-                    .navigationLinkIndicatorVisibility(.hidden)
-                    .buttonStyle(.plain)
-                    .listRowInsets(
-                        EdgeInsets(
-                            top: 6,
-                            leading: AppTheme.pagePadding,
-                            bottom: 6,
-                            trailing: AppTheme.pagePadding
-                        )
-                    )
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button {
-                            projectPendingEdit = project
-                        } label: {
-                            Label("Edit", systemImage: "pencil")
-                        }
-                        .tint(.blue)
 
-                        Button {
-                            project.setPinned(!project.isPinned)
+                if displayedProjects.isEmpty {
+                    filteredEmptyState
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                } else {
+                    ForEach(displayedProjects) { project in
+                        NavigationLink {
+                            AppDetailView(app: project)
                         } label: {
-                            Label(project.isPinned ? "Unpin" : "Pin", systemImage: project.isPinned ? "pin.slash" : "pin")
+                            AppRowView(app: project, showsChevron: false)
                         }
-                        .tint(.orange)
-
-                        Button(role: .destructive) {
-                            projectPendingDeletion = project
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
-                    .contextMenu {
-                        Button {
-                            projectPendingEdit = project
-                        } label: {
-                            Label("Edit App", systemImage: "pencil")
-                        }
-
-                        Button {
-                            project.setPinned(!project.isPinned)
-                        } label: {
-                            Label(
-                                project.isPinned ? "Unpin" : "Pin",
-                                systemImage: project.isPinned ? "pin.slash" : "pin"
+                        .navigationLinkIndicatorVisibility(.hidden)
+                        .buttonStyle(.plain)
+                        .listRowInsets(
+                            EdgeInsets(
+                                top: 6,
+                                leading: AppTheme.pagePadding,
+                                bottom: 6,
+                                trailing: AppTheme.pagePadding
                             )
-                        }
+                        )
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                projectPendingEdit = project
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            .tint(foundationTheme.accentColor)
 
-                        Button(role: .destructive) {
-                            projectPendingDeletion = project
-                        } label: {
-                            Label("Delete App", systemImage: "trash")
+                            Button {
+                                project.setPinned(!project.isPinned)
+                            } label: {
+                                Label(project.isPinned ? "Unpin" : "Pin", systemImage: project.isPinned ? "pin.slash" : "pin")
+                            }
+                            .tint(.orange)
+
+                            Button(role: .destructive) {
+                                projectPendingDeletion = project
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        .contextMenu {
+                            Button {
+                                projectPendingEdit = project
+                            } label: {
+                                Label("Edit App", systemImage: "pencil")
+                            }
+
+                            Button {
+                                project.setPinned(!project.isPinned)
+                            } label: {
+                                Label(
+                                    project.isPinned ? "Unpin" : "Pin",
+                                    systemImage: project.isPinned ? "pin.slash" : "pin"
+                                )
+                            }
+
+                            Button(role: .destructive) {
+                                projectPendingDeletion = project
+                            } label: {
+                                Label("Delete App", systemImage: "trash")
+                            }
                         }
                     }
                 }
             }
+            .listRowBackground(Color.clear)
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
-        .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .myAppsPage()
+        .listStyle(.plain)
+
         .contentMargins(.top, 0, for: .scrollContent)
-        .background(foundationTheme.backgroundColor)
     }
 
     private var statusFilters: some View {
@@ -287,23 +292,23 @@ struct ProjectsView: View {
 
                 Text(count.formatted())
                     .font(.system(size: 12, weight: .bold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(isSelected ? color : .secondary)
+                    .foregroundStyle(isSelected ? color : foundationTheme.secondaryForegroundColor)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
-                    .background(Color.primary.opacity(isSelected ? 0.08 : 0.055), in: Capsule())
+                    .background(foundationTheme.primaryForegroundColor.opacity(isSelected ? 0.08 : 0.055), in: Capsule())
             }
-            .foregroundStyle(.primary)
+            .foregroundStyle(foundationTheme.primaryForegroundColor)
             .padding(.leading, 11)
             .padding(.trailing, 8)
             .padding(.vertical, 8)
             .background(
-                isSelected ? color.opacity(0.15) : Color(uiColor: .secondarySystemGroupedBackground),
+                isSelected ? color.opacity(0.15) : foundationTheme.surfaceColor,
                 in: Capsule()
             )
             .overlay {
                 Capsule()
                     .stroke(
-                        isSelected ? color.opacity(0.48) : Color.primary.opacity(0.07),
+                        isSelected ? color.opacity(0.48) : foundationTheme.primaryForegroundColor.opacity(0.07),
                         lineWidth: 0.8
                     )
             }
@@ -316,14 +321,14 @@ struct ProjectsView: View {
         VStack(spacing: 12) {
             Image(systemName: selectedStatus?.symbolName ?? "line.3.horizontal.decrease.circle")
                 .font(.system(size: 34, weight: .medium, design: .rounded))
-                .foregroundStyle(selectedStatus?.color ?? Color.secondary)
+                .foregroundStyle(selectedStatus?.color ?? foundationTheme.secondaryForegroundColor)
 
             Text("No \(selectedStatus?.rawValue ?? "matching") apps")
                 .font(.system(size: 19, weight: .semibold, design: .rounded))
 
             Text("Choose another status or update an app’s status.")
                 .font(.system(size: 15, weight: .regular, design: .rounded))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(foundationTheme.secondaryForegroundColor)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

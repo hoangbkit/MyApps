@@ -1,6 +1,9 @@
+import AppFoundation
 import SwiftUI
 
 struct TagsView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let repository: GitHubRepository
     let tags: [GitHubTag]
     let isLoadingTags: Bool
@@ -26,48 +29,54 @@ struct TagsView: View {
 
     var body: some View {
         List {
-            if let selectedBranch {
-                Section {
-                    NavigationLink {
-                        CreateTagView(
-                            repository: repository,
-                            targetSHA: selectedBranch.commit.sha,
-                            targetDescription: "HEAD of \(selectedBranch.name)",
-                            existingTags: tags,
-                            client: client,
-                            onCreated: onCreated
-                        )
-                    } label: {
-                        Label(
-                            "Create Tag at \(selectedBranch.name) HEAD",
-                            systemImage: "plus.circle"
-                        )
-                    }
-                    .disabled(!repository.canAttemptWrite)
-                }
-            }
-
-            Section("Tags") {
-                if isLoadingTags && tags.isEmpty {
-                    ProgressView("Loading tags…")
-                } else if tags.isEmpty {
-                    Text("No tags")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(sortedTags) { tag in
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(tag.name)
-                                .font(.system(size: 16, weight: .semibold, design: .rounded))
-
-                            Text(String(tag.commit.sha.prefix(12)))
-                                .font(.system(size: 12, weight: .regular, design: .monospaced))
-                                .foregroundStyle(.secondary)
+            Group {
+                if let selectedBranch {
+                    Section {
+                        NavigationLink {
+                            CreateTagView(
+                                repository: repository,
+                                targetSHA: selectedBranch.commit.sha,
+                                targetDescription: "HEAD of \(selectedBranch.name)",
+                                existingTags: tags,
+                                client: client,
+                                onCreated: onCreated
+                            )
+                        } label: {
+                            Label(
+                                "Create Tag at \(selectedBranch.name) HEAD",
+                                systemImage: "plus.circle"
+                            )
                         }
-                        .padding(.vertical, 3)
+                        .disabled(!repository.canAttemptWrite)
+                    }
+                }
+
+                Section("Tags") {
+                    if isLoadingTags && tags.isEmpty {
+                        ProgressView("Loading tags…")
+                    } else if tags.isEmpty {
+                        Text("No tags")
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                    } else {
+                        ForEach(sortedTags) { tag in
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(tag.name)
+                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+
+                                Text(String(tag.commit.sha.prefix(12)))
+                                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                                    .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                            }
+                            .padding(.vertical, 3)
+                        }
                     }
                 }
             }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
         .listStyle(.insetGrouped)
         .refreshable {
             await onRefresh()

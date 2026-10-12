@@ -1,8 +1,11 @@
+import AppFoundation
 import SwiftUI
 
 /// Detail and diagnostics for one Xcode Cloud build. All data comes from the
 /// App Store Connect API, including the branch and source commit.
 struct XcodeCloudBuildDetailView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     @Environment(\.scenePhase) private var scenePhase
 
     let initialRun: AppStoreConnectBuildRun
@@ -23,137 +26,143 @@ struct XcodeCloudBuildDetailView: View {
 
     var body: some View {
         List {
-            if isLoading && !hasLoaded {
-                ProgressView("Loading build details…")
-            } else if !hasLoaded {
-                ContentUnavailableView {
-                    Label("Build Details Unavailable", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(errorMessage ?? "Could not load the Xcode Cloud build.")
-                } actions: {
-                    Button("Try Again") { Task { await load() } }
-                }
-                .listRowBackground(Color.clear)
-            } else {
-                Section("Build") {
-                    LabeledContent("Status") {
-                        Label(
-                            XcodeCloudDisplay.status(run.attributes.completionStatus, progress: run.attributes.executionProgress),
-                            systemImage: XcodeCloudDisplay.symbol(run.attributes.completionStatus, progress: run.attributes.executionProgress)
-                        )
-                        .foregroundStyle(XcodeCloudDisplay.color(run.attributes.completionStatus, progress: run.attributes.executionProgress))
+            Group {
+                if isLoading && !hasLoaded {
+                    ProgressView("Loading build details…")
+                } else if !hasLoaded {
+                    ContentUnavailableView {
+                        Label("Build Details Unavailable", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(errorMessage ?? "Could not load the Xcode Cloud build.")
+                    } actions: {
+                        Button("Try Again") { Task { await load() } }
                     }
-                    if let name = detail?.workflowName ?? workflowName {
-                        LabeledContent("Workflow", value: name)
-                    }
-                    if let branch = detail?.sourceReferenceName {
-                        LabeledContent("Branch / Tag", value: branch)
-                    }
-                    if let reason = run.attributes.startReason {
-                        LabeledContent("Triggered By", value: XcodeCloudDisplay.readable(reason))
-                    }
-                    if let created = XcodeCloudDisplay.date(run.attributes.createdDate) {
-                        LabeledContent("Created", value: created.formatted(date: .abbreviated, time: .shortened))
-                    }
-                    if let started = XcodeCloudDisplay.date(run.attributes.startedDate) {
-                        LabeledContent("Started", value: started.formatted(date: .abbreviated, time: .shortened))
-                        if let finished = XcodeCloudDisplay.date(run.attributes.finishedDate) {
-                            LabeledContent("Duration", value: XcodeCloudDisplay.duration(from: started, to: finished))
+                    .listRowBackground(Color.clear)
+                } else {
+                    Section("Build") {
+                        LabeledContent("Status") {
+                            Label(
+                                XcodeCloudDisplay.status(run.attributes.completionStatus, progress: run.attributes.executionProgress),
+                                systemImage: XcodeCloudDisplay.symbol(run.attributes.completionStatus, progress: run.attributes.executionProgress)
+                            )
+                            .foregroundStyle(XcodeCloudDisplay.color(run.attributes.completionStatus, progress: run.attributes.executionProgress))
                         }
-                    }
-                    if let finished = XcodeCloudDisplay.date(run.attributes.finishedDate) {
-                        LabeledContent("Finished", value: finished.formatted(date: .abbreviated, time: .shortened))
-                    }
-                }
-
-                if let commit = run.attributes.sourceCommit {
-                    Section("Source Commit") {
-                        if let sha = commit.commitSha {
-                            LabeledContent("Commit") {
-                                Text(String(sha.prefix(12)))
-                                    .font(.system(.subheadline, design: .monospaced))
-                                    .textSelection(.enabled)
+                        if let name = detail?.workflowName ?? workflowName {
+                            LabeledContent("Workflow", value: name)
+                        }
+                        if let branch = detail?.sourceReferenceName {
+                            LabeledContent("Branch / Tag", value: branch)
+                        }
+                        if let reason = run.attributes.startReason {
+                            LabeledContent("Triggered By", value: XcodeCloudDisplay.readable(reason))
+                        }
+                        if let created = XcodeCloudDisplay.date(run.attributes.createdDate) {
+                            LabeledContent("Created", value: created.formatted(date: .abbreviated, time: .shortened))
+                        }
+                        if let started = XcodeCloudDisplay.date(run.attributes.startedDate) {
+                            LabeledContent("Started", value: started.formatted(date: .abbreviated, time: .shortened))
+                            if let finished = XcodeCloudDisplay.date(run.attributes.finishedDate) {
+                                LabeledContent("Duration", value: XcodeCloudDisplay.duration(from: started, to: finished))
                             }
                         }
-                        if let message = commit.message, !message.isEmpty {
-                            Text(message)
-                                .font(.system(size: 15, design: .rounded))
-                                .textSelection(.enabled)
-                        }
-                        if let author = commit.author?.displayName {
-                            LabeledContent("Author", value: author)
-                        }
-                        if let value = commit.webUrl,
-                           let url = URL(string: value),
-                           url.scheme == "https",
-                           url.host != nil {
-                            Link("View Commit", destination: url)
+                        if let finished = XcodeCloudDisplay.date(run.attributes.finishedDate) {
+                            LabeledContent("Finished", value: finished.formatted(date: .abbreviated, time: .shortened))
                         }
                     }
-                }
 
-                if let counts = run.attributes.issueCounts, counts.total > 0 {
-                    Section("Issues") {
-                        if let errors = counts.errors, errors > 0 {
-                            LabeledContent("Errors", value: errors.formatted())
-                        }
-                        if let tests = counts.testFailures, tests > 0 {
-                            LabeledContent("Test Failures", value: tests.formatted())
-                        }
-                        if let warnings = counts.warnings, warnings > 0 {
-                            LabeledContent("Warnings", value: warnings.formatted())
-                        }
-                        if let analyzer = counts.analyzerWarnings, analyzer > 0 {
-                            LabeledContent("Analyzer Warnings", value: analyzer.formatted())
-                        }
-                        Text("Select an action below to inspect individual issues and test results.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section("Actions") {
-                    if actions.isEmpty {
-                        Text("No build actions available yet.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(actions) { action in
-                            NavigationLink {
-                                XcodeCloudActionDetailView(action: action, client: client)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: XcodeCloudDisplay.symbol(
-                                        action.attributes.completionStatus,
-                                        progress: action.attributes.executionProgress
-                                    ))
-                                    .foregroundStyle(XcodeCloudDisplay.color(
-                                        action.attributes.completionStatus,
-                                        progress: action.attributes.executionProgress
-                                    ))
-                                    .frame(width: 22)
-                                    VStack(alignment: .leading, spacing: 5) {
-                                        Text(action.attributes.name ?? XcodeCloudDisplay.readable(action.attributes.actionType ?? "Action"))
-                                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                        HStack(spacing: 8) {
-                                            Text(XcodeCloudDisplay.status(
-                                                action.attributes.completionStatus,
-                                                progress: action.attributes.executionProgress
-                                            ))
-                                            if let counts = action.attributes.issueCounts, counts.total > 0 {
-                                                Text("• \(counts.total) issues")
-                                            }
-                                        }
-                                        .font(.system(size: 12, design: .rounded))
-                                        .foregroundStyle(.secondary)
-                                    }
+                    if let commit = run.attributes.sourceCommit {
+                        Section("Source Commit") {
+                            if let sha = commit.commitSha {
+                                LabeledContent("Commit") {
+                                    Text(String(sha.prefix(12)))
+                                        .font(.system(.subheadline, design: .monospaced))
+                                        .textSelection(.enabled)
                                 }
-                                .padding(.vertical, 4)
+                            }
+                            if let message = commit.message, !message.isEmpty {
+                                Text(message)
+                                    .font(.system(size: 15, design: .rounded))
+                                    .textSelection(.enabled)
+                            }
+                            if let author = commit.author?.displayName {
+                                LabeledContent("Author", value: author)
+                            }
+                            if let value = commit.webUrl,
+                               let url = URL(string: value),
+                               url.scheme == "https",
+                               url.host != nil {
+                                Link("View Commit", destination: url)
+                            }
+                        }
+                    }
+
+                    if let counts = run.attributes.issueCounts, counts.total > 0 {
+                        Section("Issues") {
+                            if let errors = counts.errors, errors > 0 {
+                                LabeledContent("Errors", value: errors.formatted())
+                            }
+                            if let tests = counts.testFailures, tests > 0 {
+                                LabeledContent("Test Failures", value: tests.formatted())
+                            }
+                            if let warnings = counts.warnings, warnings > 0 {
+                                LabeledContent("Warnings", value: warnings.formatted())
+                            }
+                            if let analyzer = counts.analyzerWarnings, analyzer > 0 {
+                                LabeledContent("Analyzer Warnings", value: analyzer.formatted())
+                            }
+                            Text("Select an action below to inspect individual issues and test results.")
+                                .font(.footnote)
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        }
+                    }
+
+                    Section("Actions") {
+                        if actions.isEmpty {
+                            Text("No build actions available yet.")
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        } else {
+                            ForEach(actions) { action in
+                                NavigationLink {
+                                    XcodeCloudActionDetailView(action: action, client: client)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: XcodeCloudDisplay.symbol(
+                                            action.attributes.completionStatus,
+                                            progress: action.attributes.executionProgress
+                                        ))
+                                        .foregroundStyle(XcodeCloudDisplay.color(
+                                            action.attributes.completionStatus,
+                                            progress: action.attributes.executionProgress
+                                        ))
+                                        .frame(width: 22)
+                                        VStack(alignment: .leading, spacing: 5) {
+                                            Text(action.attributes.name ?? XcodeCloudDisplay.readable(action.attributes.actionType ?? "Action"))
+                                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                            HStack(spacing: 8) {
+                                                Text(XcodeCloudDisplay.status(
+                                                    action.attributes.completionStatus,
+                                                    progress: action.attributes.executionProgress
+                                                ))
+                                                if let counts = action.attributes.issueCounts, counts.total > 0 {
+                                                    Text("• \(counts.total) issues")
+                                                }
+                                            }
+                                            .font(.system(size: 12, design: .rounded))
+                                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                                        }
+                                    }
+                                    .padding(.vertical, 4)
+                                }
                             }
                         }
                     }
                 }
             }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
         .listStyle(.insetGrouped)
         .navigationTitle(run.attributes.number.map { "Build #\($0)" } ?? "Build Details")
         .navigationBarTitleDisplayMode(.inline)
@@ -209,6 +218,8 @@ struct XcodeCloudBuildDetailView: View {
 /// Issue and test diagnostics are loaded on demand, not for every row in the
 /// build list, avoiding large/expensive N+1 API queries.
 private struct XcodeCloudActionDetailView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let action: AppStoreConnectBuildAction
     let client: AppStoreConnectAPIClient?
 
@@ -230,98 +241,104 @@ private struct XcodeCloudActionDetailView: View {
 
     var body: some View {
         List {
-            Section("Action") {
-                LabeledContent("Type", value: XcodeCloudDisplay.readable(action.attributes.actionType ?? "Action"))
-                LabeledContent("Status", value: XcodeCloudDisplay.status(
-                    action.attributes.completionStatus,
-                    progress: action.attributes.executionProgress
-                ))
-                if let required = action.attributes.isRequiredToPass {
-                    LabeledContent("Required", value: required ? "Yes" : "No")
+            Group {
+                Section("Action") {
+                    LabeledContent("Type", value: XcodeCloudDisplay.readable(action.attributes.actionType ?? "Action"))
+                    LabeledContent("Status", value: XcodeCloudDisplay.status(
+                        action.attributes.completionStatus,
+                        progress: action.attributes.executionProgress
+                    ))
+                    if let required = action.attributes.isRequiredToPass {
+                        LabeledContent("Required", value: required ? "Yes" : "No")
+                    }
                 }
-            }
 
-            Section("Issues") {
-                if isLoading && !hasLoaded {
-                    ProgressView("Loading issues…")
-                } else if let issuesError {
-                    Text(issuesError).foregroundStyle(.secondary)
-                    Button("Retry") { Task { await load() } }
-                } else if issues.isEmpty {
-                    Text("No compiler or build issues reported.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(issues) { issue in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label(
-                                XcodeCloudDisplay.readable(issue.attributes.issueType ?? "Issue"),
-                                systemImage: XcodeCloudDisplay.isFailed(issue.attributes.issueType) ? "xmark.circle.fill" : "exclamationmark.triangle"
-                            )
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundStyle(XcodeCloudDisplay.isFailed(issue.attributes.issueType) ? Color.red : Color.orange)
+                Section("Issues") {
+                    if isLoading && !hasLoaded {
+                        ProgressView("Loading issues…")
+                    } else if let issuesError {
+                        Text(issuesError).foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        Button("Retry") { Task { await load() } }
+                    } else if issues.isEmpty {
+                        Text("No compiler or build issues reported.")
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                    } else {
+                        ForEach(issues) { issue in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Label(
+                                    XcodeCloudDisplay.readable(issue.attributes.issueType ?? "Issue"),
+                                    systemImage: XcodeCloudDisplay.isFailed(issue.attributes.issueType) ? "xmark.circle.fill" : "exclamationmark.triangle"
+                                )
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(XcodeCloudDisplay.isFailed(issue.attributes.issueType) ? Color.red : Color.orange)
 
-                            if let message = issue.attributes.message {
-                                Text(message)
-                                    .font(.system(size: 15, design: .rounded))
-                                    .textSelection(.enabled)
+                                if let message = issue.attributes.message {
+                                    Text(message)
+                                        .font(.system(size: 15, design: .rounded))
+                                        .textSelection(.enabled)
+                                }
+                                if let location = XcodeCloudDisplay.location(issue.attributes.fileSource) {
+                                    Text(location)
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                                        .textSelection(.enabled)
+                                }
                             }
-                            if let location = XcodeCloudDisplay.location(issue.attributes.fileSource) {
-                                Text(location)
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
-                            }
+                            .padding(.vertical, 4)
                         }
-                        .padding(.vertical, 4)
+                    }
+                }
+
+                Section("Test Results") {
+                    if isLoading && !hasLoaded {
+                        ProgressView("Loading test results…")
+                    } else if let testsError {
+                        Text(testsError).foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        Button("Retry") { Task { await load() } }
+                    } else if tests.isEmpty {
+                        Text("No test results for this action.")
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                    } else {
+                        ForEach(sortedTests) { test in
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: XcodeCloudDisplay.isFailed(test.attributes.status)
+                                          ? "xmark.circle.fill" : "checkmark.circle")
+                                        .foregroundStyle(XcodeCloudDisplay.isFailed(test.attributes.status) ? Color.red : foundationTheme.secondaryForegroundColor)
+                                    Text(test.attributes.name ?? "Test")
+                                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                                    Spacer()
+                                    Text(XcodeCloudDisplay.readable(test.attributes.status ?? "Unknown"))
+                                        .font(.caption)
+                                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                                }
+                                if let className = test.attributes.className {
+                                    Text(className)
+                                        .font(.caption)
+                                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                                }
+                                if let message = test.attributes.message, !message.isEmpty {
+                                    Text(message)
+                                        .font(.system(size: 13, design: .rounded))
+                                        .textSelection(.enabled)
+                                }
+                                if let location = XcodeCloudDisplay.location(test.attributes.fileSource) {
+                                    Text(location)
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                                        .textSelection(.enabled)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
                     }
                 }
             }
-
-            Section("Test Results") {
-                if isLoading && !hasLoaded {
-                    ProgressView("Loading test results…")
-                } else if let testsError {
-                    Text(testsError).foregroundStyle(.secondary)
-                    Button("Retry") { Task { await load() } }
-                } else if tests.isEmpty {
-                    Text("No test results for this action.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(sortedTests) { test in
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack(spacing: 8) {
-                                Image(systemName: XcodeCloudDisplay.isFailed(test.attributes.status)
-                                      ? "xmark.circle.fill" : "checkmark.circle")
-                                    .foregroundStyle(XcodeCloudDisplay.isFailed(test.attributes.status) ? Color.red : Color.secondary)
-                                Text(test.attributes.name ?? "Test")
-                                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                                Spacer()
-                                Text(XcodeCloudDisplay.readable(test.attributes.status ?? "Unknown"))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if let className = test.attributes.className {
-                                Text(className)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if let message = test.attributes.message, !message.isEmpty {
-                                Text(message)
-                                    .font(.system(size: 13, design: .rounded))
-                                    .textSelection(.enabled)
-                            }
-                            if let location = XcodeCloudDisplay.location(test.attributes.fileSource) {
-                                Text(location)
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-            }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
         .listStyle(.insetGrouped)
         .navigationTitle(action.attributes.name ?? "Action")
         .navigationBarTitleDisplayMode(.inline)

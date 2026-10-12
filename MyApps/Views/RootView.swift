@@ -60,6 +60,8 @@ struct RootView: View {
             }
             .tag(RootTab.settings)
         }
+        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
         .environmentObject(gitHubSession)
         .environmentObject(appStoreSession)
         .environmentObject(aiWritingSession)

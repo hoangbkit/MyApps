@@ -54,7 +54,7 @@ struct NoteEditorView: View {
                 preview
             }
         }
-        .background(foundationTheme.backgroundColor)
+        .myAppsPage()
         .navigationTitle("Note")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -223,7 +223,7 @@ struct NoteEditorView: View {
             .textSelection(.enabled)
         }
         .scrollIndicators(.hidden)
-        .background(foundationTheme.backgroundColor)
+        .background(Color.clear)
     }
 
     @ViewBuilder

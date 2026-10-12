@@ -63,7 +63,7 @@ struct AppDetailView: View {
             .padding(.bottom, 28)
         }
         .scrollIndicators(.hidden)
-        .background(foundationTheme.backgroundColor)
+        .myAppsPage()
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -203,14 +203,14 @@ struct AppDetailView: View {
         VStack(spacing: 12) {
             Image(systemName: "note.text")
                 .font(.system(size: 34, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(foundationTheme.secondaryForegroundColor)
 
             Text("No notes yet")
                 .font(.system(size: 19, weight: .semibold, design: .rounded))
 
             Text("Use the plus button to create a Markdown note.")
                 .font(.system(size: 15, design: .rounded))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(foundationTheme.secondaryForegroundColor)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

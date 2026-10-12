@@ -1,3 +1,4 @@
+import AppFoundation
 import Combine
 import Runestone
 import SwiftUI
@@ -92,6 +93,7 @@ final class MarkdownEditorController: ObservableObject {
 
 
 struct MarkdownTextEditor: UIViewRepresentable {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Binding var text: String
     @Binding var selectedRange: NSRange
     @ObservedObject var editorController: MarkdownEditorController
@@ -105,7 +107,7 @@ struct MarkdownTextEditor: UIViewRepresentable {
         let textView = Runestone.TextView()
         textView.editorDelegate = context.coordinator
         textView.backgroundColor = .clear
-        textView.theme = NoteEditorTheme()
+        applyTheme(to: textView, coordinator: context.coordinator)
         textView.alwaysBounceVertical = true
         textView.keyboardDismissMode = .interactive
         textView.isLineWrappingEnabled = true
@@ -119,9 +121,6 @@ struct MarkdownTextEditor: UIViewRepresentable {
         textView.autocapitalizationType = .sentences
         textView.autocorrectionType = .yes
         textView.spellCheckingType = .yes
-        textView.insertionPointColor = .systemBlue
-        textView.selectionBarColor = .systemBlue
-        textView.selectionHighlightColor = UIColor.systemBlue.withAlphaComponent(0.22)
         textView.verticalOverscrollFactor = 0.35
         textView.isFindInteractionEnabled = true
         textView.text = text
@@ -132,6 +131,7 @@ struct MarkdownTextEditor: UIViewRepresentable {
 
     func updateUIView(_ textView: Runestone.TextView, context: Context) {
         context.coordinator.parent = self
+        applyTheme(to: textView, coordinator: context.coordinator)
         editorController.attach(textView)
 
         if textView.text != text {
@@ -153,6 +153,18 @@ struct MarkdownTextEditor: UIViewRepresentable {
         }
     }
 
+    private func applyTheme(to textView: Runestone.TextView, coordinator: Coordinator) {
+        let appearance = foundationTheme.appearance
+        guard coordinator.appliedAppearance != appearance else { return }
+        coordinator.appliedAppearance = appearance
+        textView.theme = NoteEditorTheme(appearance: appearance)
+        let accent = appearance.accent.myAppsUIColor
+        textView.insertionPointColor = accent
+        textView.selectionBarColor = accent
+        textView.selectionHighlightColor = accent.withAlphaComponent(0.22)
+        textView.keyboardAppearance = appearance.preferredColorScheme == .dark ? .dark : .light
+    }
+
     private func clampedSelection(for value: String) -> NSRange {
         let length = (value as NSString).length
         let location = min(max(0, selectedRange.location), length)
@@ -164,6 +176,7 @@ struct MarkdownTextEditor: UIViewRepresentable {
     final class Coordinator: NSObject, @preconcurrency TextViewDelegate {
         var parent: MarkdownTextEditor
         var didRequestFocus = false
+        var appliedAppearance: ThemeAppearance?
 
         init(_ parent: MarkdownTextEditor) {
             self.parent = parent
@@ -182,27 +195,34 @@ struct MarkdownTextEditor: UIViewRepresentable {
 }
 
 
-/// Keeps Runestone's default colors and syntax styling while making Markdown
-/// notes readable at the same comfortable size as other iOS body text.
+/// Uses the active palette without replacing the native editor or its undo stack.
 private final class NoteEditorTheme: Runestone.Theme {
     private let base = Runestone.DefaultTheme()
+    private let appearance: ThemeAppearance
+
+    init(appearance: ThemeAppearance) {
+        self.appearance = appearance
+    }
 
     let font = UIFont.monospacedSystemFont(ofSize: 18, weight: .regular)
-    var textColor: UIColor { base.textColor }
-    var gutterBackgroundColor: UIColor { base.gutterBackgroundColor }
-    var gutterHairlineColor: UIColor { base.gutterHairlineColor }
-    var lineNumberColor: UIColor { base.lineNumberColor }
+    var textColor: UIColor { appearance.primaryForeground.myAppsUIColor }
+    var gutterBackgroundColor: UIColor { .clear }
+    var gutterHairlineColor: UIColor { appearance.border.myAppsUIColor }
+    var lineNumberColor: UIColor { appearance.secondaryForeground.myAppsUIColor }
     var lineNumberFont: UIFont { base.lineNumberFont }
-    var selectedLineBackgroundColor: UIColor { base.selectedLineBackgroundColor }
-    var selectedLinesLineNumberColor: UIColor { base.selectedLinesLineNumberColor }
-    var selectedLinesGutterBackgroundColor: UIColor { base.selectedLinesGutterBackgroundColor }
-    var invisibleCharactersColor: UIColor { base.invisibleCharactersColor }
-    var pageGuideHairlineColor: UIColor { base.pageGuideHairlineColor }
-    var pageGuideBackgroundColor: UIColor { base.pageGuideBackgroundColor }
-    var markedTextBackgroundColor: UIColor { base.markedTextBackgroundColor }
+    var selectedLineBackgroundColor: UIColor { appearance.surface.myAppsUIColor }
+    var selectedLinesLineNumberColor: UIColor { appearance.accent.myAppsUIColor }
+    var selectedLinesGutterBackgroundColor: UIColor { appearance.surface.myAppsUIColor }
+    var invisibleCharactersColor: UIColor { appearance.secondaryForeground.myAppsUIColor }
+    var pageGuideHairlineColor: UIColor { appearance.border.myAppsUIColor }
+    var pageGuideBackgroundColor: UIColor { appearance.surface.myAppsUIColor }
+    var markedTextBackgroundColor: UIColor { appearance.accent.myAppsUIColor.withAlphaComponent(0.18) }
 
     func textColor(for highlightName: String) -> UIColor? {
-        base.textColor(for: highlightName)
+        if highlightName.hasPrefix("comment") || highlightName.hasPrefix("punctuation") {
+            return appearance.secondaryForeground.myAppsUIColor
+        }
+        return base.textColor(for: highlightName) == nil ? nil : appearance.accent.myAppsUIColor
     }
 
     func fontTraits(for highlightName: String) -> Runestone.FontTraits {

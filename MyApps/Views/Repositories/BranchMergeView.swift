@@ -1,6 +1,9 @@
+import AppFoundation
 import SwiftUI
 
 struct BranchMergeView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let repository: GitHubRepository
     let sourceBranch: GitHubBranch
     let branches: [GitHubBranch]
@@ -44,85 +47,91 @@ struct BranchMergeView: View {
 
     var body: some View {
         List {
-            Section("Direction") {
-                LabeledContent("Source", value: sourceBranch.name)
+            Group {
+                Section("Direction") {
+                    LabeledContent("Source", value: sourceBranch.name)
 
-                Picker("Destination", selection: $model.destinationName) {
-                    ForEach(destinations) { branch in
-                        Text(branch.name)
-                            .tag(branch.name)
+                    Picker("Destination", selection: $model.destinationName) {
+                        ForEach(destinations) { branch in
+                            Text(branch.name)
+                                .tag(branch.name)
+                        }
                     }
                 }
-            }
 
-            Section("Current Heads") {
-                LabeledContent("Source", value: String(model.sourceHeadSHA.prefix(12)))
+                Section("Current Heads") {
+                    LabeledContent("Source", value: String(model.sourceHeadSHA.prefix(12)))
 
-                if let destinationHeadSHA = model.destinationHeadSHA {
-                    LabeledContent("Destination", value: String(destinationHeadSHA.prefix(12)))
+                    if let destinationHeadSHA = model.destinationHeadSHA {
+                        LabeledContent("Destination", value: String(destinationHeadSHA.prefix(12)))
+                    }
                 }
-            }
 
-            Section("Preview") {
-                if model.isLoading {
-                    ProgressView("Comparing branches…")
-                } else if let comparison = model.comparison {
-                    LabeledContent("Ahead", value: comparison.aheadBy.formatted())
-                    LabeledContent("Behind", value: comparison.behindBy.formatted())
+                Section("Preview") {
+                    if model.isLoading {
+                        ProgressView("Comparing branches…")
+                    } else if let comparison = model.comparison {
+                        LabeledContent("Ahead", value: comparison.aheadBy.formatted())
+                        LabeledContent("Behind", value: comparison.behindBy.formatted())
 
-                    if comparison.aheadBy == 0 {
-                        Text("\(model.destinationName) already contains the source branch.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(comparison.commits.prefix(10)) { commit in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(commit.subject)
-                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                Text(commit.shortSHA)
-                                    .font(.system(size: 12, weight: .regular, design: .monospaced))
-                                    .foregroundStyle(.secondary)
+                        if comparison.aheadBy == 0 {
+                            Text("\(model.destinationName) already contains the source branch.")
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        } else {
+                            ForEach(comparison.commits.prefix(10)) { commit in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(commit.subject)
+                                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                    Text(commit.shortSHA)
+                                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                                }
+                            }
+
+                            if comparison.commits.count > 10 {
+                                Text("+ \(comparison.commits.count - 10) more commits")
+                                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                                    .foregroundStyle(foundationTheme.secondaryForegroundColor)
                             }
                         }
-
-                        if comparison.commits.count > 10 {
-                            Text("+ \(comparison.commits.count - 10) more commits")
-                                .font(.system(size: 13, weight: .regular, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                } else {
-                    Text("Choose a destination branch to preview the merge.")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section {
-                Button {
-                    isConfirmingMerge = true
-                } label: {
-                    if model.isMerging {
-                        HStack {
-                            ProgressView()
-                            Text("Merging…")
-                        }
                     } else {
-                        Label(
-                            "Merge \(sourceBranch.name) into \(model.destinationName)",
-                            systemImage: "arrow.triangle.merge"
-                        )
+                        Text("Choose a destination branch to preview the merge.")
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
                     }
                 }
-                .disabled(
-                    model.isLoading ||
-                    model.isMerging ||
-                    model.comparison?.aheadBy == 0 ||
-                    model.comparison == nil ||
-                    !repository.canAttemptWrite
-                )
-            } footer: {
-                Text("Before writing, MyApps refreshes both branch heads and recomputes the comparison.")
+
+                Section {
+                    Button {
+                        isConfirmingMerge = true
+                    } label: {
+                        if model.isMerging {
+                            HStack {
+                                ProgressView()
+                                Text("Merging…")
+                            }
+                        } else {
+                            Label(
+                                "Merge \(sourceBranch.name) into \(model.destinationName)",
+                                systemImage: "arrow.triangle.merge"
+                            )
+                        }
+                    }
+                    .disabled(
+                        model.isLoading ||
+                        model.isMerging ||
+                        model.comparison?.aheadBy == 0 ||
+                        model.comparison == nil ||
+                        !repository.canAttemptWrite
+                    )
+                } footer: {
+                    Text("Before writing, MyApps refreshes both branch heads and recomputes the comparison.")
+                }
             }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
         .disabled(model.isMerging)
         .navigationTitle("Merge")
         .navigationBarTitleDisplayMode(.inline)

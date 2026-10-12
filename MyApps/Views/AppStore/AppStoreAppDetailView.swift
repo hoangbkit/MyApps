@@ -47,7 +47,7 @@ struct AppStoreAppDetailView: View {
                 xcodeCloudView
             }
         }
-        .background(foundationTheme.backgroundColor)
+        .myAppsPage()
         .navigationTitle(app.attributes.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -80,7 +80,7 @@ struct AppStoreAppDetailView: View {
                     VStack(spacing: 1) {
                         Text(app.attributes.name)
                             .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(foundationTheme.primaryForegroundColor)
                             .lineLimit(1)
                         HStack(spacing: 4) {
                             Text(selectedSection.rawValue)
@@ -88,7 +88,7 @@ struct AppStoreAppDetailView: View {
                                 .font(.system(size: 9, weight: .semibold))
                         }
                         .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                     }
                     .frame(maxWidth: 190)
                     .contentShape(Rectangle())
@@ -138,70 +138,76 @@ struct AppStoreAppDetailView: View {
 
     private var infoView: some View {
         List {
-            Section("App Information") {
-                HStack(spacing: 14) {
-                    AppStoreAppIconView(
-                        name: app.attributes.name,
-                        url: iconURL,
-                        fallbackURL: publicIconURL,
-                        size: 64,
-                        appID: app.id
-                    )
-                    Text(app.attributes.name)
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                }
-                .padding(.vertical, 4)
-                if let bundleID = app.attributes.bundleId {
-                    LabeledContent("Bundle ID", value: bundleID)
-                }
-                if let sku = app.attributes.sku {
-                    LabeledContent("SKU", value: sku)
-                }
-                if let primaryLocale = app.attributes.primaryLocale {
-                    LabeledContent("Primary Locale", value: primaryLocale)
-                }
-                LabeledContent("Apple App ID", value: app.id)
-                if let madeForKids = app.attributes.isOrEverWasMadeForKids {
-                    LabeledContent("Made for Kids", value: madeForKids ? "Yes" : "No")
-                }
-            }
-
-            Section("App Store Versions") {
-                if isLoadingInfo && !hasLoadedInfo {
-                    ProgressView("Loading versions…")
-                } else if !hasLoadedInfo {
-                    Button("Retry Loading Versions") {
-                        Task { await loadInfo() }
+            Group {
+                Section("App Information") {
+                    HStack(spacing: 14) {
+                        AppStoreAppIconView(
+                            name: app.attributes.name,
+                            url: iconURL,
+                            fallbackURL: publicIconURL,
+                            size: 64,
+                            appID: app.id
+                        )
+                        Text(app.attributes.name)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
                     }
-                } else if versions.isEmpty {
-                    Text("No App Store versions were returned.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(versions.sorted(by: versionSort)) { version in
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack {
-                                Text(version.attributes.versionString ?? "Unknown version")
-                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                Spacer()
-                                if let platform = version.attributes.platform {
-                                    Text(displayPlatform(platform))
-                                        .font(.caption.weight(.medium))
-                                        .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+                    if let bundleID = app.attributes.bundleId {
+                        LabeledContent("Bundle ID", value: bundleID)
+                    }
+                    if let sku = app.attributes.sku {
+                        LabeledContent("SKU", value: sku)
+                    }
+                    if let primaryLocale = app.attributes.primaryLocale {
+                        LabeledContent("Primary Locale", value: primaryLocale)
+                    }
+                    LabeledContent("Apple App ID", value: app.id)
+                    if let madeForKids = app.attributes.isOrEverWasMadeForKids {
+                        LabeledContent("Made for Kids", value: madeForKids ? "Yes" : "No")
+                    }
+                }
+
+                Section("App Store Versions") {
+                    if isLoadingInfo && !hasLoadedInfo {
+                        ProgressView("Loading versions…")
+                    } else if !hasLoadedInfo {
+                        Button("Retry Loading Versions") {
+                            Task { await loadInfo() }
+                        }
+                    } else if versions.isEmpty {
+                        Text("No App Store versions were returned.")
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                    } else {
+                        ForEach(versions.sorted(by: versionSort)) { version in
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack {
+                                    Text(version.attributes.versionString ?? "Unknown version")
+                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                    Spacer()
+                                    if let platform = version.attributes.platform {
+                                        Text(displayPlatform(platform))
+                                            .font(.caption.weight(.medium))
+                                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                                    }
+                                }
+                                if let state = version.attributes.state {
+                                    Text(displayState(state))
+                                        .font(.system(size: 13, design: .rounded))
+                                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                                 }
                             }
-                            if let state = version.attributes.state {
-                                Text(displayState(state))
-                                    .font(.system(size: 13, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                            }
+                            .padding(.vertical, 3)
                         }
-                        .padding(.vertical, 3)
                     }
                 }
             }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
-        .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        .myAppsPage()
+        .listStyle(.insetGrouped)
+
         .refreshable { await loadInfo() }
         .alert(
             "App Information",
@@ -218,150 +224,156 @@ struct AppStoreAppDetailView: View {
 
     private var xcodeCloudView: some View {
         List {
-            if isLoadingCloud && !hasLoadedCloud {
-                ProgressView("Loading Xcode Cloud…")
-            } else if !hasLoadedCloud {
-                ContentUnavailableView {
-                    Label("Could Not Load Xcode Cloud", systemImage: "exclamationmark.triangle")
-                } actions: {
-                    Button("Retry") { Task { await loadCloud() } }
-                }
-                .listRowBackground(Color.clear)
-            } else if product == nil {
-                ContentUnavailableView {
-                    Label("Xcode Cloud Not Configured", systemImage: "cloud")
-                } description: {
-                    Text("This app has no Xcode Cloud product in App Store Connect.")
-                }
-                .listRowBackground(Color.clear)
-            } else {
-                if let product {
-                    Section("Product") {
-                        LabeledContent("Name", value: product.attributes.name ?? app.attributes.name)
-                        if let productType = product.attributes.productType {
-                            LabeledContent("Type", value: displayState(productType))
-                        }
+            Group {
+                if isLoadingCloud && !hasLoadedCloud {
+                    ProgressView("Loading Xcode Cloud…")
+                } else if !hasLoadedCloud {
+                    ContentUnavailableView {
+                        Label("Could Not Load Xcode Cloud", systemImage: "exclamationmark.triangle")
+                    } actions: {
+                        Button("Retry") { Task { await loadCloud() } }
                     }
-                }
-
-                if let recentlyStartedRun {
-                    Section {
-                        Label {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(recentlyStartedRun.attributes.number.map {
-                                    "Build #\($0) requested"
-                                } ?? "Build requested")
-                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                Text("Xcode Cloud accepted the request. Pull down to refresh its progress.")
-                                    .font(.system(size: 12, design: .rounded))
-                                    .foregroundStyle(.secondary)
+                    .listRowBackground(Color.clear)
+                } else if product == nil {
+                    ContentUnavailableView {
+                        Label("Xcode Cloud Not Configured", systemImage: "cloud")
+                    } description: {
+                        Text("This app has no Xcode Cloud product in App Store Connect.")
+                    }
+                    .listRowBackground(Color.clear)
+                } else {
+                    if let product {
+                        Section("Product") {
+                            LabeledContent("Name", value: product.attributes.name ?? app.attributes.name)
+                            if let productType = product.attributes.productType {
+                                LabeledContent("Type", value: displayState(productType))
                             }
-                        } icon: {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
                         }
                     }
-                }
 
-                Section("Workflows") {
-                    if workflows.isEmpty {
-                        Text("No workflows found.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(workflows.sorted {
-                            $0.attributes.name.localizedStandardCompare($1.attributes.name) == .orderedAscending
-                        }) { workflow in
-                            VStack(alignment: .leading, spacing: 5) {
-                                HStack {
-                                    Text(workflow.attributes.name)
-                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                    Spacer()
-                                    if let enabled = workflow.attributes.isEnabled {
-                                        Text(enabled ? "Enabled" : "Disabled")
-                                            .font(.caption.weight(.medium))
-                                            .foregroundStyle(enabled ? Color.green : Color.secondary)
+                    if let recentlyStartedRun {
+                        Section {
+                            Label {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(recentlyStartedRun.attributes.number.map {
+                                        "Build #\($0) requested"
+                                    } ?? "Build requested")
+                                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                    Text("Xcode Cloud accepted the request. Pull down to refresh its progress.")
+                                        .font(.system(size: 12, design: .rounded))
+                                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                                }
+                            } icon: {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            }
+                        }
+                    }
+
+                    Section("Workflows") {
+                        if workflows.isEmpty {
+                            Text("No workflows found.")
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        } else {
+                            ForEach(workflows.sorted {
+                                $0.attributes.name.localizedStandardCompare($1.attributes.name) == .orderedAscending
+                            }) { workflow in
+                                VStack(alignment: .leading, spacing: 5) {
+                                    HStack {
+                                        Text(workflow.attributes.name)
+                                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                        Spacer()
+                                        if let enabled = workflow.attributes.isEnabled {
+                                            Text(enabled ? "Enabled" : "Disabled")
+                                                .font(.caption.weight(.medium))
+                                                .foregroundStyle(enabled ? Color.green : foundationTheme.secondaryForegroundColor)
+                                        }
                                     }
-                                }
-                                if let description = workflow.attributes.description, !description.isEmpty {
-                                    Text(description)
-                                        .font(.system(size: 13, design: .rounded))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding(.vertical, 3)
-                        }
-                    }
-                }
-
-                Section {
-                    if runs.isEmpty {
-                        Text("No Xcode Cloud builds found.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(runs) { run in
-                            NavigationLink {
-                                XcodeCloudBuildDetailView(
-                                    initialRun: run,
-                                    workflowName: workflows.first(where: {
-                                        $0.id == run.relationships?.workflow?.data?.id
-                                    })?.attributes.name,
-                                    client: client
-                                )
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: XcodeCloudDisplay.symbol(
-                                        run.attributes.completionStatus,
-                                        progress: run.attributes.executionProgress
-                                    ))
-                                    .foregroundStyle(XcodeCloudDisplay.color(
-                                        run.attributes.completionStatus,
-                                        progress: run.attributes.executionProgress
-                                    ))
-                                    .frame(width: 20)
-
-                                    VStack(alignment: .leading, spacing: 5) {
-                                        HStack {
-                                            Text(run.attributes.number.map { "Build #\($0)" } ?? "Build")
-                                                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                            Spacer()
-                                            Text(buildStatus(run))
-                                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        if let workflowID = run.relationships?.workflow?.data?.id,
-                                           let workflow = workflows.first(where: { $0.id == workflowID }) {
-                                            Text(workflow.attributes.name)
-                                                .font(.system(size: 13, design: .rounded))
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        if let message = run.attributes.sourceCommit?.message,
-                                           let firstLine = message.components(separatedBy: .newlines).first,
-                                           !firstLine.isEmpty {
-                                            Text(firstLine)
-                                                .font(.system(size: 13, design: .rounded))
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(1)
-                                        }
-                                        if let created = formattedDate(run.attributes.createdDate) {
-                                            Text(created)
-                                                .font(.system(size: 12, design: .rounded))
-                                                .foregroundStyle(.tertiary)
-                                        }
+                                    if let description = workflow.attributes.description, !description.isEmpty {
+                                        Text(description)
+                                            .font(.system(size: 13, design: .rounded))
+                                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
                                     }
                                 }
                                 .padding(.vertical, 3)
                             }
                         }
                     }
-                } header: {
-                    Text("Build Runs")
-                } footer: {
-                    Text("Showing the latest loaded Xcode Cloud build runs. Pull down to refresh.")
+
+                    Section {
+                        if runs.isEmpty {
+                            Text("No Xcode Cloud builds found.")
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        } else {
+                            ForEach(runs) { run in
+                                NavigationLink {
+                                    XcodeCloudBuildDetailView(
+                                        initialRun: run,
+                                        workflowName: workflows.first(where: {
+                                            $0.id == run.relationships?.workflow?.data?.id
+                                        })?.attributes.name,
+                                        client: client
+                                    )
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: XcodeCloudDisplay.symbol(
+                                            run.attributes.completionStatus,
+                                            progress: run.attributes.executionProgress
+                                        ))
+                                        .foregroundStyle(XcodeCloudDisplay.color(
+                                            run.attributes.completionStatus,
+                                            progress: run.attributes.executionProgress
+                                        ))
+                                        .frame(width: 20)
+
+                                        VStack(alignment: .leading, spacing: 5) {
+                                            HStack {
+                                                Text(run.attributes.number.map { "Build #\($0)" } ?? "Build")
+                                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                                Spacer()
+                                                Text(buildStatus(run))
+                                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                                    .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                                            }
+                                            if let workflowID = run.relationships?.workflow?.data?.id,
+                                               let workflow = workflows.first(where: { $0.id == workflowID }) {
+                                                Text(workflow.attributes.name)
+                                                    .font(.system(size: 13, design: .rounded))
+                                                    .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                                            }
+                                            if let message = run.attributes.sourceCommit?.message,
+                                               let firstLine = message.components(separatedBy: .newlines).first,
+                                               !firstLine.isEmpty {
+                                                Text(firstLine)
+                                                    .font(.system(size: 13, design: .rounded))
+                                                    .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                                                    .lineLimit(1)
+                                            }
+                                            if let created = formattedDate(run.attributes.createdDate) {
+                                                Text(created)
+                                                    .font(.system(size: 12, design: .rounded))
+                                                    .foregroundStyle(foundationTheme.secondaryForegroundColor.opacity(0.75))
+                                            }
+                                        }
+                                    }
+                                    .padding(.vertical, 3)
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Build Runs")
+                    } footer: {
+                        Text("Showing the latest loaded Xcode Cloud build runs. Pull down to refresh.")
+                    }
                 }
             }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
-        .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        .myAppsPage()
+        .listStyle(.insetGrouped)
+
         .refreshable { await loadCloud() }
         .alert(
             "Xcode Cloud",

@@ -1,7 +1,10 @@
+import AppFoundation
 import SwiftData
 import SwiftUI
 
 struct AddNotesToAppView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \QuickNote.updatedAt, order: .reverse) private var notes: [QuickNote]
     @AppStorage(NoteSortOption.storageKey) private var noteSortRawValue = NoteSortOption.updated.rawValue
@@ -34,30 +37,37 @@ struct AddNotesToAppView: View {
                     )
                 } else {
                     List(unassignedNotes) { note in
-                        Button {
-                            if selectedIDs.contains(note.id) {
-                                selectedIDs.remove(note.id)
-                            } else {
-                                selectedIDs.insert(note.id)
-                            }
-                        } label: {
-                            HStack(alignment: .top, spacing: 12) {
-                                RoundedCheckbox(isChecked: selectedIDs.contains(note.id), size: 20)
-                                    .padding(.top, 2)
+                        Group {
+                            Button {
+                                if selectedIDs.contains(note.id) {
+                                    selectedIDs.remove(note.id)
+                                } else {
+                                    selectedIDs.insert(note.id)
+                                }
+                            } label: {
+                                HStack(alignment: .top, spacing: 12) {
+                                    RoundedCheckbox(isChecked: selectedIDs.contains(note.id), size: 20)
+                                        .padding(.top, 2)
 
-                                Text(note.plainTextPreview.isEmpty ? "Empty note" : note.plainTextPreview)
-                                    .font(.system(size: 17, design: .rounded))
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(4)
-                                    .multilineTextAlignment(.leading)
+                                    Text(note.plainTextPreview.isEmpty ? "Empty note" : note.plainTextPreview)
+                                        .font(.system(size: 17, design: .rounded))
+                                        .foregroundStyle(foundationTheme.primaryForegroundColor)
+                                        .lineLimit(4)
+                                        .multilineTextAlignment(.leading)
+                                }
+                                .contentShape(Rectangle())
                             }
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparatorTint(foundationTheme.borderColor)
                     }
+                    .scrollContentBackground(.hidden)
+                    .myAppsPage()
                     .listStyle(.plain)
                 }
             }
+            .myAppsPage()
             .onChange(of: noteSortRawValue) { _, _ in
                 directionRawValue = SortDirection.descending.rawValue
             }

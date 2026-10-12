@@ -1,8 +1,11 @@
+import AppFoundation
 import SwiftUI
 
 /// A row-height-aware section of the commit DAG.
 /// Adjacent rows share the same lane coordinates, so edges remain connected.
 struct GitGraphMarkerView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let layout: GitGraphRowLayout
     let laneSpacing: CGFloat
     let nodeY: CGFloat
@@ -70,7 +73,7 @@ struct GitGraphMarkerView: View {
                 width: (nodeRadius + 2) * 2,
                 height: (nodeRadius + 2) * 2
             )
-            context.fill(Path(ellipseIn: outer), with: .color(Color(uiColor: .systemGroupedBackground)))
+            context.fill(Path(ellipseIn: outer), with: .color(foundationTheme.backgroundColor))
 
             let inner = CGRect(
                 x: nodeX - nodeRadius,

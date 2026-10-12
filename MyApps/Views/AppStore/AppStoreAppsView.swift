@@ -103,7 +103,7 @@ struct AppStoreAppsView: View {
                 appList
             }
         }
-        .background(foundationTheme.backgroundColor)
+        .myAppsPage()
         .navigationTitle("Apps")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -164,66 +164,72 @@ struct AppStoreAppsView: View {
 
     private var appList: some View {
         List {
-            if isLoading && !hasLoaded {
-                ProgressView("Loading apps…")
-            } else if !hasLoaded && loadFailed {
-                ContentUnavailableView {
-                    Label("Could Not Load Apps", systemImage: "exclamationmark.triangle")
-                } actions: {
-                    Button("Retry") { Task { await loadApps() } }
-                }
-                .listRowBackground(Color.clear)
-            } else if apps.isEmpty {
-                ContentUnavailableView {
-                    Label("No Apps", systemImage: "square.grid.2x2")
-                } description: {
-                    Text("No apps are available to this App Store Connect API key.")
-                }
-                .listRowBackground(Color.clear)
-            } else if filteredApps.isEmpty {
-                ContentUnavailableView.search(text: searchText)
+            Group {
+                if isLoading && !hasLoaded {
+                    ProgressView("Loading apps…")
+                } else if !hasLoaded && loadFailed {
+                    ContentUnavailableView {
+                        Label("Could Not Load Apps", systemImage: "exclamationmark.triangle")
+                    } actions: {
+                        Button("Retry") { Task { await loadApps() } }
+                    }
                     .listRowBackground(Color.clear)
-            } else {
-                Section {
-                    ForEach(filteredApps) { app in
-                        NavigationLink {
-                            AppStoreAppDetailView(
-                                app: app,
-                                client: session.client(),
-                                iconURL: iconURLsByAppID[app.id],
-                                publicIconURL: publicIconURLsByAppID[app.id]
-                            )
-                        } label: {
-                            HStack(spacing: 12) {
-                                AppStoreAppIconView(
-                                    name: app.attributes.name,
-                                    url: iconURLsByAppID[app.id],
-                                    fallbackURL: publicIconURLsByAppID[app.id],
-                                    appID: app.id
+                } else if apps.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Apps", systemImage: "square.grid.2x2")
+                    } description: {
+                        Text("No apps are available to this App Store Connect API key.")
+                    }
+                    .listRowBackground(Color.clear)
+                } else if filteredApps.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
+                        .listRowBackground(Color.clear)
+                } else {
+                    Section {
+                        ForEach(filteredApps) { app in
+                            NavigationLink {
+                                AppStoreAppDetailView(
+                                    app: app,
+                                    client: session.client(),
+                                    iconURL: iconURLsByAppID[app.id],
+                                    publicIconURL: publicIconURLsByAppID[app.id]
                                 )
+                            } label: {
+                                HStack(spacing: 12) {
+                                    AppStoreAppIconView(
+                                        name: app.attributes.name,
+                                        url: iconURLsByAppID[app.id],
+                                        fallbackURL: publicIconURLsByAppID[app.id],
+                                        appID: app.id
+                                    )
 
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(app.attributes.name)
-                                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                                    if let bundleID = app.attributes.bundleId {
-                                        Text(bundleID)
-                                            .font(.system(size: 13, design: .rounded))
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(app.attributes.name)
+                                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                        if let bundleID = app.attributes.bundleId {
+                                            Text(bundleID)
+                                                .font(.system(size: 13, design: .rounded))
+                                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                                                .lineLimit(1)
+                                        }
                                     }
                                 }
+                                .padding(.vertical, 5)
                             }
-                            .padding(.vertical, 5)
+                            .listRowBackground(Color.clear)
                         }
-                        .listRowBackground(foundationTheme.elevatedSurfaceColor)
+                    } header: {
+                        Text("\(filteredApps.count) Apps")
                     }
-                } header: {
-                    Text("\(filteredApps.count) Apps")
                 }
             }
+            .listRowBackground(Color.clear)
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
-        .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .myAppsPage()
+        .listStyle(.plain)
+
         .searchable(text: $searchText, prompt: "Search apps")
         .refreshable {
             await loadApps()

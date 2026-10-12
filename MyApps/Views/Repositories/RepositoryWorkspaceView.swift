@@ -84,7 +84,7 @@ struct RepositoryWorkspaceView: View {
                 )
             }
         }
-        .background(foundationTheme.backgroundColor)
+        .myAppsPage()
         .navigationTitle(repository.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -227,7 +227,7 @@ struct RepositoryWorkspaceView: View {
                 VStack(spacing: 1) {
                     Text(repository.name)
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(foundationTheme.primaryForegroundColor)
                         .lineLimit(1)
 
                     HStack(spacing: 4) {
@@ -236,7 +236,7 @@ struct RepositoryWorkspaceView: View {
                             .font(.system(size: 9, weight: .semibold))
                     }
                     .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(foundationTheme.secondaryForegroundColor)
                 }
                 .frame(maxWidth: 190)
                 .contentShape(Rectangle())

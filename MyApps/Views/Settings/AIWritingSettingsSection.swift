@@ -1,3 +1,4 @@
+import AppFoundation
 import SwiftUI
 
 struct DeepSeekSettingsSection: View {
@@ -75,6 +76,8 @@ struct DeepSeekSettingsSection: View {
 }
 
 struct AIProfilesSettingsSection: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     @EnvironmentObject private var ai: AIWritingSession
     @State private var editingProfile: AIWritingProfile?
 
@@ -96,20 +99,20 @@ struct AIProfilesSettingsSection: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: ai.defaultProfileID == profile.id ? "checkmark.circle.fill" : "person.crop.circle")
-                                .foregroundStyle(ai.defaultProfileID == profile.id ? Color.accentColor : Color.secondary)
+                                .foregroundStyle(ai.defaultProfileID == profile.id ? Color.accentColor : foundationTheme.secondaryForegroundColor)
                                 .frame(width: 22)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(profile.name)
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(foundationTheme.primaryForegroundColor)
                                 Text(profile.style.isEmpty ? "Custom writing profile" : profile.style)
                                     .font(.footnote)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(foundationTheme.secondaryForegroundColor)
                                     .lineLimit(1)
                             }
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.caption)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor.opacity(0.75))
                         }
                     }
                     .buttonStyle(.plain)
@@ -142,6 +145,8 @@ struct AIProfilesSettingsSection: View {
 }
 
 private struct AIProfileEditorView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     @Environment(\.dismiss) private var dismiss
     @State private var draft: AIWritingProfile
     let onSave: (AIWritingProfile) -> Void
@@ -154,31 +159,37 @@ private struct AIProfileEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Profile") {
-                    TextField("Name", text: $draft.name)
-                        .textInputAutocapitalization(.words)
-                    TextField("Identity", text: $draft.identity, axis: .vertical)
-                        .lineLimit(3...8)
+                Group {
+                    Section("Profile") {
+                        TextField("Name", text: $draft.name)
+                            .textInputAutocapitalization(.words)
+                        TextField("Identity", text: $draft.identity, axis: .vertical)
+                            .lineLimit(3...8)
+                    }
+                    Section("Writing Preferences") {
+                        TextField("Writing Style", text: $draft.style, axis: .vertical)
+                            .lineLimit(3...8)
+                        TextField("Audience", text: $draft.audience, axis: .vertical)
+                            .lineLimit(2...6)
+                        TextField("Topics", text: $draft.topics, axis: .vertical)
+                            .lineLimit(2...6)
+                        TextField("Custom Instructions", text: $draft.instructions, axis: .vertical)
+                            .lineLimit(3...8)
+                    }
+                    Section {
+                        TextField("Protected Terms", text: $draft.protectedTerms, axis: .vertical)
+                            .lineLimit(3...8)
+                    } header: {
+                        Text("Protected Terminology")
+                    } footer: {
+                        Text("Separate terms with commas. Case-preserving rewrites keep these names, brands and technical terms unchanged.")
+                    }
                 }
-                Section("Writing Preferences") {
-                    TextField("Writing Style", text: $draft.style, axis: .vertical)
-                        .lineLimit(3...8)
-                    TextField("Audience", text: $draft.audience, axis: .vertical)
-                        .lineLimit(2...6)
-                    TextField("Topics", text: $draft.topics, axis: .vertical)
-                        .lineLimit(2...6)
-                    TextField("Custom Instructions", text: $draft.instructions, axis: .vertical)
-                        .lineLimit(3...8)
-                }
-                Section {
-                    TextField("Protected Terms", text: $draft.protectedTerms, axis: .vertical)
-                        .lineLimit(3...8)
-                } header: {
-                    Text("Protected Terminology")
-                } footer: {
-                    Text("Separate terms with commas. Case-preserving rewrites keep these names, brands and technical terms unchanged.")
-                }
+                .listRowBackground(MyAppsGlassSurface())
+                .listRowSeparatorTint(foundationTheme.borderColor)
             }
+            .scrollContentBackground(.hidden)
+            .myAppsPage()
             .navigationTitle("AI Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

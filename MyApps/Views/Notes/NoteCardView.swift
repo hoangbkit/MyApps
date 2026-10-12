@@ -1,7 +1,10 @@
+import AppFoundation
 import SwiftUI
 import UIKit
 
 struct NoteCardView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let note: QuickNote
     var showsApp: Bool = false
     let onOpen: () -> Void
@@ -16,7 +19,7 @@ struct NoteCardView: View {
 
                     Text(excerpt.isEmpty ? "Empty note" : excerpt)
                         .font(.system(size: 15, weight: .regular, design: .rounded))
-                        .foregroundStyle(excerpt.isEmpty ? .tertiary : .primary)
+                        .foregroundStyle(excerpt.isEmpty ? foundationTheme.secondaryForegroundColor.opacity(0.75) : foundationTheme.primaryForegroundColor)
                         .lineSpacing(3)
                         .lineLimit(showsApp && note.app != nil ? 3 : 5)
                         .multilineTextAlignment(.leading)
@@ -28,11 +31,11 @@ struct NoteCardView: View {
                             systemImage: "square.grid.2x2"
                         )
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                         .lineLimit(1)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 5)
-                        .background(Color.primary.opacity(0.055), in: Capsule())
+                        .background(foundationTheme.primaryForegroundColor.opacity(0.055), in: Capsule())
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -69,7 +72,7 @@ struct NoteCardView: View {
         HStack(alignment: .firstTextBaseline) {
             Image(systemName: "doc.text")
                 .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(foundationTheme.secondaryForegroundColor)
 
             if note.isPinned {
                 Image(systemName: "pin.fill")
@@ -81,7 +84,7 @@ struct NoteCardView: View {
 
             Text(note.updatedAt.formatted(date: .abbreviated, time: .omitted))
                 .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(foundationTheme.secondaryForegroundColor.opacity(0.75))
         }
     }
 }

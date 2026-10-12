@@ -1,3 +1,4 @@
+import AppFoundation
 import SwiftUI
 import UIKit
 
@@ -8,6 +9,8 @@ enum NoteAIApplyMode {
 /// Review results without mutating the original note. The editor validates
 /// the captured note snapshot again when the user explicitly applies a result.
 struct NoteAIReviewView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var ai: AIWritingSession
 
@@ -52,117 +55,123 @@ struct NoteAIReviewView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Action") {
-                    LabeledContent("Transform", value: request.action.title)
-                    LabeledContent("Scope", value: request.isSelection ? "Selected Text" : "Whole Note")
-                    Picker("Profile", selection: Binding(
-                        get: { selectedProfileID ?? ai.defaultProfileID },
-                        set: { selectedProfileID = $0 }
-                    )) {
-                        ForEach(ai.profiles) { profile in
-                            Text(profile.name).tag(profile.id)
-                        }
-                    }
-                    .onChange(of: selectedProfileID) { _, _ in
-                        cancelGeneration()
-                        clearCandidates()
-                        errorMessage = nil
-                    }
-
-                    if request.action.supportsMultipleCandidates {
-                        Picker("Candidates", selection: $candidateCount) {
-                            ForEach(1...3, id: \.self) { count in
-                                Text("\(count)").tag(count)
+                Group {
+                    Section("Action") {
+                        LabeledContent("Transform", value: request.action.title)
+                        LabeledContent("Scope", value: request.isSelection ? "Selected Text" : "Whole Note")
+                        Picker("Profile", selection: Binding(
+                            get: { selectedProfileID ?? ai.defaultProfileID },
+                            set: { selectedProfileID = $0 }
+                        )) {
+                            ForEach(ai.profiles) { profile in
+                                Text(profile.name).tag(profile.id)
                             }
                         }
-                        .pickerStyle(.segmented)
-                        .onChange(of: candidateCount) { _, _ in
+                        .onChange(of: selectedProfileID) { _, _ in
                             cancelGeneration()
                             clearCandidates()
                             errorMessage = nil
                         }
-                    }
-                    if requiresInstruction {
-                        TextField(
-                            request.action == .translate ? "Target language (e.g. Vietnamese)" : "What should AI change?",
-                            text: $instruction,
-                            axis: .vertical
-                        )
-                        .lineLimit(2...5)
-                        .onChange(of: instruction) { _, _ in
-                            cancelGeneration()
-                            clearCandidates()
-                            errorMessage = nil
-                        }
-                    }
-                }
 
-                Section("Original") {
-                    Text(request.selectedText)
-                        .font(.system(size: 14, design: .monospaced))
-                        .textSelection(.enabled)
-                }
-
-                Section("Result") {
-                    if candidates.count > 1 {
-                        Picker("Candidate", selection: $selectedCandidateIndex) {
-                            ForEach(candidates.indices, id: \.self) { index in
-                                Text("Candidate \(index + 1)").tag(index)
+                        if request.action.supportsMultipleCandidates {
+                            Picker("Candidates", selection: $candidateCount) {
+                                ForEach(1...3, id: \.self) { count in
+                                    Text("\(count)").tag(count)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .onChange(of: candidateCount) { _, _ in
+                                cancelGeneration()
+                                clearCandidates()
+                                errorMessage = nil
                             }
                         }
-                        .pickerStyle(.segmented)
-                        .accessibilityLabel("Choose generated candidate")
+                        if requiresInstruction {
+                            TextField(
+                                request.action == .translate ? "Target language (e.g. Vietnamese)" : "What should AI change?",
+                                text: $instruction,
+                                axis: .vertical
+                            )
+                            .lineLimit(2...5)
+                            .onChange(of: instruction) { _, _ in
+                                cancelGeneration()
+                                clearCandidates()
+                                errorMessage = nil
+                            }
+                        }
                     }
 
-                    if isGenerating {
-                        HStack(spacing: 10) {
-                            ProgressView()
-                            Text("Generating with \(ai.model.title)…")
-                                .foregroundStyle(.secondary)
-                        }
-                        Button("Cancel Request") {
-                            cancelGeneration()
-                        }
-                    } else if let output {
-                        Text(output)
+                    Section("Original") {
+                        Text(request.selectedText)
                             .font(.system(size: 14, design: .monospaced))
                             .textSelection(.enabled)
-                    } else if let errorMessage {
-                        Text(errorMessage)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text(requiresInstruction ? "Enter an instruction, then generate a result." : "No result yet.")
-                            .foregroundStyle(.secondary)
                     }
 
-                    Button(output == nil ? "Generate" : "Retry") {
-                        startGeneration()
-                    }
-                    .disabled(!canGenerate)
-
-                    if let output {
-                        Button {
-                            apply(.replace, output: output)
-                        } label: {
-                            Label("Replace Original", systemImage: "checkmark.circle")
-                        }
-
-                        if canInsert {
-                            Button {
-                                apply(.insertBelow, output: output)
-                            } label: {
-                                Label("Insert Below", systemImage: "text.insert")
+                    Section("Result") {
+                        if candidates.count > 1 {
+                            Picker("Candidate", selection: $selectedCandidateIndex) {
+                                ForEach(candidates.indices, id: \.self) { index in
+                                    Text("Candidate \(index + 1)").tag(index)
+                                }
                             }
+                            .pickerStyle(.segmented)
+                            .accessibilityLabel("Choose generated candidate")
                         }
 
-                        Button {
-                            UIPasteboard.general.string = output
-                        } label: {
-                            Label("Copy Result", systemImage: "doc.on.doc")
+                        if isGenerating {
+                            HStack(spacing: 10) {
+                                ProgressView()
+                                Text("Generating with \(ai.model.title)…")
+                                    .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                            }
+                            Button("Cancel Request") {
+                                cancelGeneration()
+                            }
+                        } else if let output {
+                            Text(output)
+                                .font(.system(size: 14, design: .monospaced))
+                                .textSelection(.enabled)
+                        } else if let errorMessage {
+                            Text(errorMessage)
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        } else {
+                            Text(requiresInstruction ? "Enter an instruction, then generate a result." : "No result yet.")
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        }
+
+                        Button(output == nil ? "Generate" : "Retry") {
+                            startGeneration()
+                        }
+                        .disabled(!canGenerate)
+
+                        if let output {
+                            Button {
+                                apply(.replace, output: output)
+                            } label: {
+                                Label("Replace Original", systemImage: "checkmark.circle")
+                            }
+
+                            if canInsert {
+                                Button {
+                                    apply(.insertBelow, output: output)
+                                } label: {
+                                    Label("Insert Below", systemImage: "text.insert")
+                                }
+                            }
+
+                            Button {
+                                UIPasteboard.general.string = output
+                            } label: {
+                                Label("Copy Result", systemImage: "doc.on.doc")
+                            }
                         }
                     }
                 }
+                .listRowBackground(MyAppsGlassSurface())
+                .listRowSeparatorTint(foundationTheme.borderColor)
             }
+            .scrollContentBackground(.hidden)
+            .myAppsPage()
             .navigationTitle("AI Result")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

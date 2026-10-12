@@ -1,8 +1,11 @@
+import AppFoundation
 import SwiftUI
 
 /// Manual build launcher. Uses only Apple-provided workflow and Git-reference
 /// IDs, obtained from the workflow's own connected repository.
 struct StartXcodeCloudBuildView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     @Environment(\.dismiss) private var dismiss
 
     let appName: String
@@ -67,70 +70,76 @@ struct StartXcodeCloudBuildView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("App") {
-                    LabeledContent("App", value: appName)
-                }
-
-                Section("Workflow") {
-                    if enabledWorkflows.isEmpty {
-                        Text("No enabled Xcode Cloud workflows are available.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Picker("Workflow", selection: $selectedWorkflowID) {
-                            ForEach(enabledWorkflows) { workflow in
-                                Text(workflow.attributes.name).tag(workflow.id)
-                            }
-                        }
+                Group {
+                    Section("App") {
+                        LabeledContent("App", value: appName)
                     }
-                }
 
-                Section {
-                    if enabledWorkflows.isEmpty {
-                        Text("Select an enabled workflow to choose a branch or tag.")
-                            .foregroundStyle(.secondary)
-                    } else if isLoadingReferences {
-                        HStack(spacing: 10) {
-                            ProgressView()
-                            Text("Loading branches and tags…")
-                                .foregroundStyle(.secondary)
-                        }
-                    } else if !hasLoadedReferences {
-                        Button("Retry Loading Git References") {
-                            Task { await loadReferences() }
-                        }
-                    } else if references.isEmpty {
-                        Text("No available branches or tags found for this workflow.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        if !repositoryName.isEmpty {
-                            LabeledContent("Repository", value: repositoryName)
-                        }
-
-                        Picker("Branch or Tag", selection: $selectedReferenceID) {
-                            if !branches.isEmpty {
-                                Section("Branches") {
-                                    ForEach(branches) { reference in
-                                        Text(reference.attributes.displayName)
-                                            .tag(reference.id)
-                                    }
-                                }
-                            }
-                            if !tags.isEmpty {
-                                Section("Tags") {
-                                    ForEach(tags) { reference in
-                                        Text(reference.attributes.displayName)
-                                            .tag(reference.id)
-                                    }
+                    Section("Workflow") {
+                        if enabledWorkflows.isEmpty {
+                            Text("No enabled Xcode Cloud workflows are available.")
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        } else {
+                            Picker("Workflow", selection: $selectedWorkflowID) {
+                                ForEach(enabledWorkflows) { workflow in
+                                    Text(workflow.attributes.name).tag(workflow.id)
                                 }
                             }
                         }
                     }
-                } header: {
-                    Text("Source")
-                } footer: {
-                    Text("The build uses the latest commit at the selected branch or the commit referenced by the selected tag. Starting a build uses Xcode Cloud resources.")
+
+                    Section {
+                        if enabledWorkflows.isEmpty {
+                            Text("Select an enabled workflow to choose a branch or tag.")
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        } else if isLoadingReferences {
+                            HStack(spacing: 10) {
+                                ProgressView()
+                                Text("Loading branches and tags…")
+                                    .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                            }
+                        } else if !hasLoadedReferences {
+                            Button("Retry Loading Git References") {
+                                Task { await loadReferences() }
+                            }
+                        } else if references.isEmpty {
+                            Text("No available branches or tags found for this workflow.")
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        } else {
+                            if !repositoryName.isEmpty {
+                                LabeledContent("Repository", value: repositoryName)
+                            }
+
+                            Picker("Branch or Tag", selection: $selectedReferenceID) {
+                                if !branches.isEmpty {
+                                    Section("Branches") {
+                                        ForEach(branches) { reference in
+                                            Text(reference.attributes.displayName)
+                                                .tag(reference.id)
+                                        }
+                                    }
+                                }
+                                if !tags.isEmpty {
+                                    Section("Tags") {
+                                        ForEach(tags) { reference in
+                                            Text(reference.attributes.displayName)
+                                                .tag(reference.id)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Source")
+                    } footer: {
+                        Text("The build uses the latest commit at the selected branch or the commit referenced by the selected tag. Starting a build uses Xcode Cloud resources.")
+                    }
                 }
+                .listRowBackground(MyAppsGlassSurface())
+                .listRowSeparatorTint(foundationTheme.borderColor)
             }
+            .scrollContentBackground(.hidden)
+            .myAppsPage()
             .navigationTitle("Start Build")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -1,7 +1,10 @@
+import AppFoundation
 import SwiftUI
 import UIKit
 
 struct GitCommitDetailView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let repository: GitHubRepository
     let commit: GitHubCommit
     @ObservedObject var model: GitLogViewModel
@@ -15,88 +18,94 @@ struct GitCommitDetailView: View {
 
     var body: some View {
         List {
-            Section {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(commit.subject)
-                        .font(.system(size: 21, weight: .bold, design: .rounded))
+            Group {
+                Section {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(commit.subject)
+                            .font(.system(size: 21, weight: .bold, design: .rounded))
 
-                    Text(commit.authorName)
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        Text(commit.authorName)
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
 
-                    if let authoredAt = commit.authoredAt {
-                        Text(authoredAt, format: .dateTime.year().month().day().hour().minute())
-                            .font(.system(size: 14, weight: .regular, design: .rounded))
-                            .foregroundStyle(.secondary)
+                        if let authoredAt = commit.authoredAt {
+                            Text(authoredAt, format: .dateTime.year().month().day().hour().minute())
+                                .font(.system(size: 14, weight: .regular, design: .rounded))
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                if !references.isEmpty {
+                    Section("Refs") {
+                        ForEach(references.branches, id: \.self) { branch in
+                            Label(branch, systemImage: "arrow.triangle.branch")
+                        }
+
+                        ForEach(references.tags, id: \.self) { tag in
+                            Label(tag, systemImage: "tag")
+                        }
                     }
                 }
-                .padding(.vertical, 4)
-            }
 
-            if !references.isEmpty {
-                Section("Refs") {
-                    ForEach(references.branches, id: \.self) { branch in
-                        Label(branch, systemImage: "arrow.triangle.branch")
+                Section("Commit") {
+                    LabeledContent("SHA", value: commit.sha)
+
+                    if commit.parents.isEmpty {
+                        LabeledContent("Parents", value: "None")
+                    } else {
+                        ForEach(Array(commit.parents.enumerated()), id: \.element.sha) { index, parent in
+                            LabeledContent(
+                                commit.parents.count == 1 ? "Parent" : "Parent \(index + 1)",
+                                value: String(parent.sha.prefix(12))
+                            )
+                        }
                     }
 
-                    ForEach(references.tags, id: \.self) { tag in
-                        Label(tag, systemImage: "tag")
+                    if commit.isMerge {
+                        Label("Merge commit", systemImage: "arrow.triangle.merge")
                     }
                 }
-            }
 
-            Section("Commit") {
-                LabeledContent("SHA", value: commit.sha)
+                if commit.commit.message != commit.subject {
+                    Section("Message") {
+                        Text(commit.commit.message)
+                            .textSelection(.enabled)
+                    }
+                }
 
-                if commit.parents.isEmpty {
-                    LabeledContent("Parents", value: "None")
-                } else {
-                    ForEach(Array(commit.parents.enumerated()), id: \.element.sha) { index, parent in
-                        LabeledContent(
-                            commit.parents.count == 1 ? "Parent" : "Parent \(index + 1)",
-                            value: String(parent.sha.prefix(12))
+                Section("Actions") {
+                    NavigationLink {
+                        CreateTagView(
+                            repository: repository,
+                            targetSHA: commit.sha,
+                            targetDescription: commit.subject,
+                            existingTags: existingTags,
+                            client: client,
+                            onCreated: onTagCreated
                         )
+                    } label: {
+                        Label("Create Tag Here", systemImage: "tag")
+                    }
+                    .disabled(!repository.canAttemptWrite)
+
+                    Button {
+                        UIPasteboard.general.string = commit.sha
+                        didCopySHA = true
+                    } label: {
+                        Label(didCopySHA ? "SHA Copied" : "Copy SHA", systemImage: "doc.on.doc")
+                    }
+
+                    Link(destination: commit.htmlURL) {
+                        Label("Open on GitHub", systemImage: "safari")
                     }
                 }
-
-                if commit.isMerge {
-                    Label("Merge commit", systemImage: "arrow.triangle.merge")
-                }
             }
-
-            if commit.commit.message != commit.subject {
-                Section("Message") {
-                    Text(commit.commit.message)
-                        .textSelection(.enabled)
-                }
-            }
-
-            Section("Actions") {
-                NavigationLink {
-                    CreateTagView(
-                        repository: repository,
-                        targetSHA: commit.sha,
-                        targetDescription: commit.subject,
-                        existingTags: existingTags,
-                        client: client,
-                        onCreated: onTagCreated
-                    )
-                } label: {
-                    Label("Create Tag Here", systemImage: "tag")
-                }
-                .disabled(!repository.canAttemptWrite)
-
-                Button {
-                    UIPasteboard.general.string = commit.sha
-                    didCopySHA = true
-                } label: {
-                    Label(didCopySHA ? "SHA Copied" : "Copy SHA", systemImage: "doc.on.doc")
-                }
-
-                Link(destination: commit.htmlURL) {
-                    Label("Open on GitHub", systemImage: "safari")
-                }
-            }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
         .navigationTitle(commit.shortSHA)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {

@@ -1,6 +1,9 @@
+import AppFoundation
 import SwiftUI
 
 struct AppRowView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let name: String
     let iconData: Data?
     let defaultIconStyle: DefaultAppIconStyle
@@ -48,7 +51,7 @@ struct AppRowView: View {
                 HStack(spacing: 7) {
                     Text(name)
                         .font(.system(size: 20, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(foundationTheme.primaryForegroundColor)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -63,7 +66,7 @@ struct AppRowView: View {
                 if let shortDescription {
                     Text(shortDescription)
                         .font(.system(size: 15, weight: .regular, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                         .lineSpacing(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -78,7 +81,7 @@ struct AppRowView: View {
             if showsChevron {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(foundationTheme.secondaryForegroundColor.opacity(0.75))
                     .padding(.top, 24)
             }
         }

@@ -54,7 +54,7 @@ struct NotesInboxView: View {
                 notesGrid
             }
         }
-        .background(foundationTheme.backgroundColor)
+        .myAppsPage()
         .navigationTitle("Notes")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {

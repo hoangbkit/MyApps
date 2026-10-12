@@ -7,7 +7,6 @@ struct SettingsView: View {
     @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.modelContext) private var modelContext
     @Environment(ThemeManager.self) private var themes
-    @Environment(\.appFoundationTheme) private var currentTheme
     @EnvironmentObject private var gitHubSession: GitHubSession
     @EnvironmentObject private var aiWriting: AIWritingSession
     @Query private var apps: [ManagedApp]
@@ -30,61 +29,65 @@ struct SettingsView: View {
 
     var body: some View {
         List {
-            Section {
-                ThemePickerView(manager: themes, title: nil, showsCountdown: false)
-                    .padding(.vertical, 3)
-            } header: {
-                Text("Appearance")
-            } footer: {
-                Text("All six AppFoundation themes are free.")
-            }
-            .listRowBackground(currentTheme.elevatedSurfaceColor)
+            Group {
+                Section {
+                    ThemePickerView(manager: themes, title: nil, showsCountdown: false)
+                        .padding(.vertical, 3)
+                } header: {
+                    Text("Appearance")
+                } footer: {
+                    Text("All six AppFoundation themes are free.")
+                }
+                .listRowBackground(MyAppsGlassSurface())
 
-            gitHubSection
+                gitHubSection
 
-            AppStoreConnectSettingsSection()
+                AppStoreConnectSettingsSection()
 
-            DeepSeekSettingsSection()
-            AIProfilesSettingsSection()
+                DeepSeekSettingsSection()
+                AIProfilesSettingsSection()
 
-            Section("Storage") {
-                LabeledContent("Mode", value: "Offline")
-                Text("MyApps stores its library locally on this device with SwiftData.")
-                    .font(.system(size: 15, weight: .regular, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                Button {
-                    exportBackup()
-                } label: {
-                    Label("Export Full Backup", systemImage: "square.and.arrow.up")
+                Section("Storage") {
+                    LabeledContent("Mode", value: "Offline")
+                    Text("MyApps stores its library locally on this device with SwiftData.")
+                        .font(.system(size: 15, weight: .regular, design: .rounded))
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                 }
 
-                Button {
-                    isImportingBackup = true
-                } label: {
-                    Label("Restore from Backup", systemImage: "square.and.arrow.down")
+                Section {
+                    Button {
+                        exportBackup()
+                    } label: {
+                        Label("Export Full Backup", systemImage: "square.and.arrow.up")
+                    }
+
+                    Button {
+                        isImportingBackup = true
+                    } label: {
+                        Label("Restore from Backup", systemImage: "square.and.arrow.down")
+                    }
+                } header: {
+                    Text("Backup & Restore")
+                } footer: {
+                    Text("A .myappsbackup package includes all apps and notes as JSON metadata, with custom icons and attached images stored as separate files. Restoring replaces the current library after confirmation.")
                 }
-            } header: {
-                Text("Backup & Restore")
-            } footer: {
-                Text("A .myappsbackup package includes all apps and notes as JSON metadata, with custom icons and attached images stored as separate files. Restoring replaces the current library after confirmation.")
-            }
 
-            Section("Library") {
-                LabeledContent("Apps", value: apps.count.formatted())
-                LabeledContent("All Notes", value: notes.count.formatted())
-                LabeledContent("Unassigned Notes", value: unassignedNoteCount.formatted())
-            }
+                Section("Library") {
+                    LabeledContent("Apps", value: apps.count.formatted())
+                    LabeledContent("All Notes", value: notes.count.formatted())
+                    LabeledContent("Unassigned Notes", value: unassignedNoteCount.formatted())
+                }
 
-            Section("About") {
-                LabeledContent("Version", value: "1.0 P3.4.1")
-                LabeledContent("Bundle ID", value: "com.hoangbkit.myapps")
+                Section("About") {
+                    LabeledContent("Version", value: "1.0 P3.4.1")
+                    LabeledContent("Bundle ID", value: "com.hoangbkit.myapps")
+                }
             }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
         .scrollContentBackground(.hidden)
-        .background(currentTheme.backgroundColor)
+        .myAppsPage()
         .font(.system(size: 17, weight: .regular, design: .rounded))
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
@@ -181,7 +184,7 @@ struct SettingsView: View {
                 HStack {
                     ProgressView()
                     Text("Checking GitHub connection…")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                 }
 
             case .disconnected:

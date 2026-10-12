@@ -1,7 +1,10 @@
+import AppFoundation
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct AppStoreConnectSettingsSection: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     @EnvironmentObject private var session: AppStoreConnectSession
     @State private var issuerID = ""
     @State private var keyID = ""
@@ -23,7 +26,7 @@ struct AppStoreConnectSettingsSection: View {
                 HStack(spacing: 10) {
                     ProgressView()
                     Text("Checking App Store Connect…")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                 }
             case .disconnected:
                 keyForm
