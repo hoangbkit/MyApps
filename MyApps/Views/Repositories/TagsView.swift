@@ -10,6 +10,15 @@ struct TagsView: View {
     let onCreated: () -> Void
     let onRefresh: () async -> Void
 
+    private var sortedTags: [GitHubTag] {
+        tags.sorted { lhs, rhs in
+            let order = lhs.name.localizedStandardCompare(rhs.name)
+            return order == .orderedSame
+                ? lhs.commit.sha < rhs.commit.sha
+                : order == .orderedAscending
+        }
+    }
+
     private var selectedBranch: GitHubBranch? {
         branches.first { $0.name == selectedBranchName } ??
         branches.first { $0.name == repository.defaultBranch }
@@ -45,7 +54,7 @@ struct TagsView: View {
                     Text("No tags")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(tags) { tag in
+                    ForEach(sortedTags) { tag in
                         VStack(alignment: .leading, spacing: 5) {
                             Text(tag.name)
                                 .font(.system(size: 16, weight: .semibold, design: .rounded))
