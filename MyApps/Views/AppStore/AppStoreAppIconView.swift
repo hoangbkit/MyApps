@@ -33,21 +33,19 @@ struct AppStoreAppIconView: View {
     }
 
     var body: some View {
-        ZStack {
-            gradientPlaceholder
-
+        Group {
             if let artwork {
                 Image(uiImage: artwork)
+                    .renderingMode(.original)
                     .resizable()
                     .scaledToFill()
+                    .frame(width: size, height: size)
+            } else {
+                gradientPlaceholder
             }
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
-                .strokeBorder(.white.opacity(0.14), lineWidth: 0.5)
-        }
         .accessibilityHidden(true) // The adjacent app name is its accessible label.
         .task(id: sources.map(\.absoluteString).joined(separator: "|")) {
             await loadArtwork()
