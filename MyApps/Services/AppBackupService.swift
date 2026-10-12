@@ -57,6 +57,19 @@ struct BackupPreferencesRecord: Codable, Sendable {
     let appearanceRawValue: String
     let appSortRawValue: String
     let noteSortRawValue: String
+    let aiWritingPreferences: AIWritingPreferences?
+
+    init(
+        appearanceRawValue: String,
+        appSortRawValue: String,
+        noteSortRawValue: String,
+        aiWritingPreferences: AIWritingPreferences? = nil
+    ) {
+        self.appearanceRawValue = appearanceRawValue
+        self.appSortRawValue = appSortRawValue
+        self.noteSortRawValue = noteSortRawValue
+        self.aiWritingPreferences = aiWritingPreferences
+    }
 }
 
 struct BackupAppRecord: Codable, Sendable {
@@ -268,7 +281,10 @@ enum MyAppsBackupService {
         let preferences = BackupPreferencesRecord(
             appearanceRawValue: defaults.string(forKey: AppAppearance.storageKey) ?? AppAppearance.system.rawValue,
             appSortRawValue: defaults.string(forKey: AppSortOption.storageKey) ?? AppSortOption.created.rawValue,
-            noteSortRawValue: defaults.string(forKey: NoteSortOption.storageKey) ?? NoteSortOption.updated.rawValue
+            noteSortRawValue: defaults.string(forKey: NoteSortOption.storageKey) ?? NoteSortOption.updated.rawValue,
+            aiWritingPreferences: defaults.data(forKey: AIWritingSession.storageKey)
+                .flatMap { try? JSONDecoder().decode(AIWritingPreferences.self, from: $0) }
+                ?? .starter
         )
 
         let manifest = MyAppsBackupManifest(
@@ -481,6 +497,10 @@ enum MyAppsBackupService {
                 defaults.set(preferences.appearanceRawValue, forKey: AppAppearance.storageKey)
                 defaults.set(preferences.appSortRawValue, forKey: AppSortOption.storageKey)
                 defaults.set(preferences.noteSortRawValue, forKey: NoteSortOption.storageKey)
+                if let aiProfiles = preferences.aiWritingPreferences,
+                   let profilesData = try? JSONEncoder().encode(aiProfiles) {
+                    defaults.set(profilesData, forKey: AIWritingSession.storageKey)
+                }
             }
         } catch {
             modelContext.rollback()
