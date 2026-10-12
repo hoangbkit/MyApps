@@ -26,17 +26,9 @@ struct RootView: View {
             }
             .id(gitHubSession.connectionRevision)
             .tabItem {
-                Label("Repos", systemImage: "shippingbox")
+                Label("GitHub", systemImage: "shippingbox")
             }
             .tag(RootTab.repos)
-
-            NavigationStack {
-                ProjectsView()
-            }
-            .tabItem {
-                Label("Apps", systemImage: "square.grid.2x2")
-            }
-            .tag(RootTab.apps)
 
             NavigationStack {
                 AppStoreAppsView {
@@ -48,6 +40,14 @@ struct RootView: View {
                 Label("App Store", systemImage: "storefront")
             }
             .tag(RootTab.appStore)
+
+            NavigationStack {
+                ProjectsView()
+            }
+            .tabItem {
+                Label("Projects", systemImage: "square.grid.2x2")
+            }
+            .tag(RootTab.apps)
 
             NavigationStack {
                 NotesInboxView()
