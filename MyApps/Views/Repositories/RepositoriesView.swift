@@ -1,3 +1,4 @@
+import AppFoundation
 import SwiftUI
 
 private enum RepositorySortOption: String, CaseIterable, Identifiable {
@@ -27,6 +28,7 @@ private enum RepositorySortOption: String, CaseIterable, Identifiable {
 }
 
 struct RepositoriesView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var session: GitHubSession
     @StateObject private var repositoriesModel = RepositoriesViewModel()
@@ -137,7 +139,7 @@ struct RepositoriesView: View {
                 repositoriesView
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(foundationTheme.backgroundColor)
         .navigationTitle("Repos")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -254,6 +256,7 @@ struct RepositoriesView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .refreshable {
             await repositoriesModel.load(using: session.client(), force: true)
