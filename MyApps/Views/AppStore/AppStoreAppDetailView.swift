@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AppStoreAppDetailView: View {
+    @Environment(\.scenePhase) private var scenePhase
     private enum AppDetailMode: String, CaseIterable, Identifiable {
         case info = "Info"
         case xcodeCloud = "Xcode Cloud"
@@ -105,12 +106,29 @@ struct AppStoreAppDetailView: View {
                 Task { await loadCloud() }
             }
         }
-        .task(id: selectedSection) {
+        .task(id: "\(selectedSection.rawValue)-\(scenePhase)") {
+            guard scenePhase == .active else { return }
             switch selectedSection {
             case .info:
                 if !hasLoadedInfo { await loadInfo() }
             case .xcodeCloud:
                 if !hasLoadedCloud { await loadCloud() }
+                while !Task.isCancelled && scenePhase == .active && selectedSection == .xcodeCloud {
+                    do {
+                        try await Task.sleep(for: .seconds(30))
+                    } catch {
+                        break
+                    }
+                    guard !Task.isCancelled, scenePhase == .active,
+                          selectedSection == .xcodeCloud else { break }
+                    // Poll only while a build is queued/running. There is no
+                    // background network activity when the app is inactive.
+                    if hasLoadedCloud && runs.contains(where: {
+                        XcodeCloudDisplay.isInProgress($0.attributes)
+                    }) {
+                        await loadCloud()
+                    }
+                }
             }
         }
     }
@@ -275,28 +293,58 @@ struct AppStoreAppDetailView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(runs) { run in
-                            VStack(alignment: .leading, spacing: 5) {
-                                HStack {
-                                    Text(run.attributes.number.map { "Build #\($0)" } ?? "Build")
-                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                    Spacer()
-                                    Text(buildStatus(run))
-                                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                                        .foregroundStyle(.secondary)
+                            NavigationLink {
+                                XcodeCloudBuildDetailView(
+                                    initialRun: run,
+                                    workflowName: workflows.first(where: {
+                                        $0.id == run.relationships?.workflow?.data?.id
+                                    })?.attributes.name,
+                                    client: client
+                                )
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: XcodeCloudDisplay.symbol(
+                                        run.attributes.completionStatus,
+                                        progress: run.attributes.executionProgress
+                                    ))
+                                    .foregroundStyle(XcodeCloudDisplay.color(
+                                        run.attributes.completionStatus,
+                                        progress: run.attributes.executionProgress
+                                    ))
+                                    .frame(width: 20)
+
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        HStack {
+                                            Text(run.attributes.number.map { "Build #\($0)" } ?? "Build")
+                                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                            Spacer()
+                                            Text(buildStatus(run))
+                                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        if let workflowID = run.relationships?.workflow?.data?.id,
+                                           let workflow = workflows.first(where: { $0.id == workflowID }) {
+                                            Text(workflow.attributes.name)
+                                                .font(.system(size: 13, design: .rounded))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        if let message = run.attributes.sourceCommit?.message,
+                                           let firstLine = message.components(separatedBy: .newlines).first,
+                                           !firstLine.isEmpty {
+                                            Text(firstLine)
+                                                .font(.system(size: 13, design: .rounded))
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                        if let created = formattedDate(run.attributes.createdDate) {
+                                            Text(created)
+                                                .font(.system(size: 12, design: .rounded))
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                    }
                                 }
-                                if let workflowID = run.relationships?.workflow?.data?.id,
-                                   let workflow = workflows.first(where: { $0.id == workflowID }) {
-                                    Text(workflow.attributes.name)
-                                        .font(.system(size: 13, design: .rounded))
-                                        .foregroundStyle(.secondary)
-                                }
-                                if let created = formattedDate(run.attributes.createdDate) {
-                                    Text(created)
-                                        .font(.system(size: 12, design: .rounded))
-                                        .foregroundStyle(.tertiary)
-                                }
+                                .padding(.vertical, 3)
                             }
-                            .padding(.vertical, 3)
                         }
                     }
                 } header: {
@@ -340,7 +388,7 @@ struct AppStoreAppDetailView: View {
 
     @MainActor
     private func loadCloud() async {
-        guard let client else { return }
+        guard let client, !isLoadingCloud else { return }
         isLoadingCloud = true
         defer { isLoadingCloud = false }
         do {
@@ -395,13 +443,10 @@ struct AppStoreAppDetailView: View {
     }
 
     private func buildStatus(_ run: AppStoreConnectBuildRun) -> String {
-        if let completion = run.attributes.completionStatus {
-            return displayState(completion)
-        }
-        if let progress = run.attributes.executionProgress {
-            return displayState(progress)
-        }
-        return "Unknown"
+        XcodeCloudDisplay.status(
+            run.attributes.completionStatus,
+            progress: run.attributes.executionProgress
+        )
     }
 
     private func formattedDate(_ raw: String?) -> String? {
