@@ -1,7 +1,9 @@
+import AppFoundation
 import SwiftData
 import SwiftUI
 
 struct ProjectsView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.modelContext) private var modelContext
     @Query private var projects: [ManagedApp]
     @AppStorage(AppSortOption.storageKey) private var appSortRawValue = AppSortOption.created.rawValue
@@ -85,7 +87,7 @@ struct ProjectsView: View {
                 projectsList
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(foundationTheme.backgroundColor)
         .navigationTitle("Projects")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -235,7 +237,7 @@ struct ProjectsView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .contentMargins(.top, 0, for: .scrollContent)
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(foundationTheme.backgroundColor)
     }
 
     private var statusFilters: some View {
