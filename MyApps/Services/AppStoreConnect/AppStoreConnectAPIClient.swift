@@ -1,6 +1,45 @@
 import CryptoKit
 import Foundation
 
+/// The icon is an included \`buildIcons\` resource in the List Apps response.
+/// Apple supplies the image as a size-parameterized CDN URL, not as a raw PNG.
+struct AppStoreConnectImageAsset: Decodable, Sendable {
+    let templateUrl: String
+    let width: Int?
+    let height: Int?
+
+    func thumbnailURL(size: Int = 120) -> URL? {
+        let resolved = templateUrl
+            .replacingOccurrences(of: "{w}", with: String(size))
+            .replacingOccurrences(of: "{h}", with: String(size))
+            .replacingOccurrences(of: "{f}", with: "png")
+        guard let url = URL(string: resolved),
+              url.scheme == "https",
+              let host = url.host?.lowercased(),
+              host == "mzstatic.com" || host.hasSuffix(".mzstatic.com"),
+              url.user == nil, url.password == nil,
+              url.port == nil || url.port == 443 else {
+            return nil
+        }
+        return url
+    }
+}
+
+struct AppStoreConnectBuildIconAttributes: Decodable, Sendable {
+    let iconAsset: AppStoreConnectImageAsset?
+}
+
+struct AppStoreConnectIncludedBuildIcon: Decodable, Sendable {
+    let id: String
+    let type: String
+    let attributes: AppStoreConnectBuildIconAttributes?
+}
+
+struct AppStoreConnectAppCatalog: Sendable {
+    let apps: [AppStoreConnectApp]
+    let iconURLsByAppID: [String: URL]
+}
+
 struct AppStoreConnectAppAttributes: Decodable, Sendable {
     let name: String
     let bundleId: String?
@@ -77,6 +116,7 @@ struct AppStoreConnectResource<Attributes: Decodable & Sendable>: Decodable, Ide
 struct AppStoreConnectRelationships: Decodable, Sendable {
     let workflow: AppStoreConnectRelationship?
     let defaultBranch: AppStoreConnectRelationship?
+    let appStoreIcon: AppStoreConnectRelationship?
 }
 
 struct AppStoreConnectRelationship: Decodable, Sendable {
@@ -97,6 +137,7 @@ typealias AppStoreConnectGitReference = AppStoreConnectResource<AppStoreConnectG
 
 private struct AppStoreConnectPage<Item: Decodable & Sendable>: Decodable, Sendable {
     let data: [Item]
+    let included: [AppStoreConnectIncludedBuildIcon]?
     let links: PageLinks?
 
     struct PageLinks: Decodable, Sendable {
@@ -166,9 +207,52 @@ struct AppStoreConnectAPIClient: Sendable {
     }
 
     func apps() async throws -> [AppStoreConnectApp] {
-        try await allPages(path: "/v1/apps", query: [
-            URLQueryItem(name: "limit", value: "200")
+        try await appsWithIcons().apps
+    }
+
+    /// Retrieves app icons in the same paginated ASC request as the apps.
+    /// Avoids public store lookup (which cannot find unreleased apps) and
+    /// avoids N additional network requests for N apps.
+    func appsWithIcons() async throws -> AppStoreConnectAppCatalog {
+        var url = try apiURL(path: "/v1/apps", query: [
+            URLQueryItem(name: "limit", value: "200"),
+            URLQueryItem(name: "include", value: "appStoreIcon"),
+            URLQueryItem(name: "fields[buildIcons]", value: "iconAsset")
         ])
+
+        var apps: [AppStoreConnectApp] = []
+        var icons: [String: URL] = [:]
+        var visited = Set<URL>()
+
+        while visited.insert(url).inserted {
+            try Task.checkCancellation()
+            let page: AppStoreConnectPage<AppStoreConnectApp> = try await get(url: url)
+
+            let iconURLs = Dictionary(
+                uniqueKeysWithValues: (page.included ?? []).compactMap { icon -> (String, URL)? in
+                    guard icon.type == "buildIcons",
+                          let url = icon.attributes?.iconAsset?.thumbnailURL() else { return nil }
+                    return (icon.id, url)
+                }
+            )
+            for app in page.data {
+                if let iconID = app.relationships?.appStoreIcon?.data?.id,
+                   let iconURL = iconURLs[iconID] {
+                    icons[app.id] = iconURL
+                }
+            }
+            apps.append(contentsOf: page.data)
+
+            guard let next = page.links?.next else {
+                return AppStoreConnectAppCatalog(apps: apps, iconURLsByAppID: icons)
+            }
+            guard let nextURL = URL(string: next, relativeTo: url)?.absoluteURL,
+                  isTrusted(nextURL) else {
+                throw AppStoreConnectAPIError.invalidResponse
+            }
+            url = nextURL
+        }
+        throw AppStoreConnectAPIError.invalidResponse
     }
 
     func versions(for app: AppStoreConnectApp) async throws -> [AppStoreConnectVersion] {
