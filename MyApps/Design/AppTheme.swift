@@ -1,3 +1,4 @@
+import AppFoundation
 import SwiftUI
 import UIKit
 
@@ -27,24 +28,25 @@ enum AppTheme {
 
 private struct SurfaceCardModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.appFoundationTheme) private var foundationTheme
 
     let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
         content
             .background(
-                Color(uiColor: .secondarySystemGroupedBackground),
+                foundationTheme.elevatedSurfaceColor,
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.055),
+                        foundationTheme.borderColor,
                         lineWidth: 0.8
                     )
             }
             .shadow(
-                color: Color.black.opacity(colorScheme == .dark ? 0.20 : 0.065),
+                color: foundationTheme.appearance.shadow.color,
                 radius: colorScheme == .dark ? 10 : 8,
                 y: 3
             )
