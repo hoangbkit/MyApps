@@ -69,16 +69,18 @@ struct NoteAIReviewView: View {
                         errorMessage = nil
                     }
 
-                    Picker("Candidates", selection: $candidateCount) {
-                        ForEach(1...3, id: \.self) { count in
-                            Text("\(count)").tag(count)
+                    if request.action.supportsMultipleCandidates {
+                        Picker("Candidates", selection: $candidateCount) {
+                            ForEach(1...3, id: \.self) { count in
+                                Text("\(count)").tag(count)
+                            }
                         }
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: candidateCount) { _, _ in
-                        cancelGeneration()
-                        clearCandidates()
-                        errorMessage = nil
+                        .pickerStyle(.segmented)
+                        .onChange(of: candidateCount) { _, _ in
+                            cancelGeneration()
+                            clearCandidates()
+                            errorMessage = nil
+                        }
                     }
                     if requiresInstruction {
                         TextField(
