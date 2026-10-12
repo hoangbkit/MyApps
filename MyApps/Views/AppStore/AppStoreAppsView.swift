@@ -49,7 +49,7 @@ struct AppStoreAppsView: View {
             }
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("App Store")
+        .navigationTitle("Apps")
         .navigationBarTitleDisplayMode(.large)
         .task(id: "\(session.connectionRevision)-\(scenePhase)") {
             guard scenePhase == .active else { return }
