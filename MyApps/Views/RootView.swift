@@ -27,7 +27,7 @@ struct RootView: View {
             }
             .id(gitHubSession.connectionRevision)
             .tabItem {
-                Label("GitHub", systemImage: "shippingbox")
+                Label("Repos", systemImage: "shippingbox")
             }
             .tag(RootTab.repos)
 
@@ -38,7 +38,7 @@ struct RootView: View {
             }
             .id(appStoreSession.connectionRevision)
             .tabItem {
-                Label("App Store", systemImage: "storefront")
+                Label("Apps", systemImage: "storefront")
             }
             .tag(RootTab.appStore)
 
