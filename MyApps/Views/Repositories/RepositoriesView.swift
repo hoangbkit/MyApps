@@ -1,7 +1,7 @@
 import SwiftUI
 
 private enum RepositorySortOption: String, CaseIterable, Identifiable {
-    case updated, name
+    case updated, created, name
 
     static let storageKey = "myapps.repositories.sortOption"
 
@@ -9,7 +9,8 @@ private enum RepositorySortOption: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .updated: "Recently Updated"
+        case .updated: "Updated"
+        case .created: "Created"
         case .name: "Name"
         }
     }
@@ -17,33 +18,12 @@ private enum RepositorySortOption: String, CaseIterable, Identifiable {
     var symbolName: String {
         switch self {
         case .updated: "clock"
+        case .created: "calendar.badge.plus"
         case .name: "textformat.abc"
         }
     }
-}
 
-private enum RepositorySortDirection: String, CaseIterable, Identifiable {
-    case ascending, descending
-
-    static let storageKey = "myapps.repositories.sortDirection"
-
-    var id: Self { self }
-
-    func title(for option: RepositorySortOption) -> String {
-        switch (self, option) {
-        case (.ascending, .name): "Ascending (A–Z)"
-        case (.descending, .name): "Descending (Z–A)"
-        case (.ascending, .updated): "Ascending (Oldest First)"
-        case (.descending, .updated): "Descending (Newest First)"
-        }
-    }
-
-    var symbolName: String {
-        switch self {
-        case .ascending: "arrow.up"
-        case .descending: "arrow.down"
-        }
-    }
+    var isText: Bool { self == .name }
 }
 
 struct RepositoriesView: View {
@@ -55,15 +35,15 @@ struct RepositoriesView: View {
 
     @State private var searchText = ""
     @AppStorage(RepositorySortOption.storageKey) private var sortRawValue = RepositorySortOption.updated.rawValue
-    @AppStorage(RepositorySortDirection.storageKey) private var directionRawValue = RepositorySortDirection.descending.rawValue
+    @AppStorage("myapps.repositories.sortDirection") private var directionRawValue = SortDirection.descending.rawValue
     @AppStorage("myapps.repositories.pinnedIDs") private var pinnedIDsData = Data()
 
     private var sortOption: RepositorySortOption {
         RepositorySortOption(rawValue: sortRawValue) ?? .updated
     }
 
-    private var sortDirection: RepositorySortDirection {
-        RepositorySortDirection(rawValue: directionRawValue) ?? .descending
+    private var sortDirection: SortDirection {
+        SortDirection(rawValue: directionRawValue) ?? .descending
     }
 
     private var pinnedRepositoryIDs: Set<Int> {
@@ -87,10 +67,22 @@ struct RepositoriesView: View {
                 if lhsPinned != rhsPinned { return lhsPinned }
 
                 let ascending = sortDirection == .ascending
-                if sortOption == .updated {
-                    let lhsDate = lhs.updatedAt ?? lhs.pushedAt
-                    let rhsDate = rhs.updatedAt ?? rhs.pushedAt
-                    // Repositories without a known update time remain last in either order.
+                // GitHub can omit dates. Such repositories stay last in either
+                // direction, without forcing them above real dated entries.
+                let lhsDate: Date?
+                let rhsDate: Date?
+                switch sortOption {
+                case .created:
+                    lhsDate = lhs.createdAt
+                    rhsDate = rhs.createdAt
+                case .updated:
+                    lhsDate = lhs.updatedAt ?? lhs.pushedAt
+                    rhsDate = rhs.updatedAt ?? rhs.pushedAt
+                case .name:
+                    lhsDate = nil
+                    rhsDate = nil
+                }
+                if sortOption != .name {
                     if lhsDate == nil && rhsDate != nil { return false }
                     if lhsDate != nil && rhsDate == nil { return true }
                     if let lhsDate, let rhsDate, lhsDate != rhsDate {
@@ -160,10 +152,10 @@ struct RepositoriesView: View {
                         }
                     }
 
-                    Section("Direction") {
-                        Picker("Sort Direction", selection: $directionRawValue) {
-                            ForEach(RepositorySortDirection.allCases) { direction in
-                                Label(direction.title(for: sortOption), systemImage: direction.symbolName)
+                    Section("Order") {
+                        Picker("Sort Order", selection: $directionRawValue) {
+                            ForEach(SortDirection.allCases) { direction in
+                                Label(direction.title(isText: sortOption.isText), systemImage: direction.symbolName)
                                     .tag(direction.rawValue)
                             }
                         }
@@ -171,8 +163,12 @@ struct RepositoriesView: View {
                 } label: {
                     Image(systemName: "arrow.up.arrow.down")
                 }
-                .accessibilityLabel("Sort Repositories by \(sortOption.title), \(sortDirection.title(for: sortOption))")
+                .accessibilityLabel("Sort Repositories by \(sortOption.title), \(sortDirection.title(isText: sortOption.isText))")
             }
+        }
+        .onChange(of: sortRawValue) { _, newField in
+            let option = RepositorySortOption(rawValue: newField) ?? .updated
+            directionRawValue = SortDirection.defaultForText(option.isText).rawValue
         }
         .task(id: "\(session.connectionRevision)-\(scenePhase)") {
             guard scenePhase == .active else { return }
