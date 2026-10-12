@@ -58,6 +58,9 @@ struct AddNotesToAppView: View {
                     .listStyle(.plain)
                 }
             }
+            .onChange(of: noteSortRawValue) { _, _ in
+                directionRawValue = SortDirection.descending.rawValue
+            }
             .navigationTitle("Add Notes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
