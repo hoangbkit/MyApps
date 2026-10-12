@@ -19,6 +19,7 @@ struct AppStoreAppDetailView: View {
     let app: AppStoreConnectApp
     let client: AppStoreConnectAPIClient?
     let iconURL: URL?
+    let publicIconURL: URL?
 
     @State private var selectedSection: AppDetailMode = .info
     @State private var versions: [AppStoreConnectVersion] = []
@@ -140,7 +141,9 @@ struct AppStoreAppDetailView: View {
                     AppStoreAppIconView(
                         name: app.attributes.name,
                         url: iconURL,
-                        size: 64
+                        fallbackURL: publicIconURL,
+                        size: 64,
+                        appID: app.id
                     )
                     Text(app.attributes.name)
                         .font(.system(size: 18, weight: .semibold, design: .rounded))
