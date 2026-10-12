@@ -25,6 +25,9 @@ packages:
   MarkdownView:
     url: https://github.com/LiYanan2004/MarkdownView.git
     from: 3.0.0
+  AppFoundation:
+    url: https://github.com/hoangbkit/AppFoundation.git
+    from: 0.1.8
 
 targets:
   MyApps:
@@ -34,6 +37,7 @@ targets:
     dependencies:
       - package: Runestone
       - package: MarkdownView
+      - package: AppFoundation
     sources:
       - path: MyApps
         excludes:
