@@ -18,6 +18,14 @@ brew install xcodegen
 
 `generate.sh` removes any stale generated project before recreating `MyApps.xcodeproj`.
 
+## AppFoundation Themes (PR #5)
+
+- MyApps uses the **AppFoundation 0.1.8** package's `ThemeManager`, `ThemeCatalog`, `ThemePickerView`, and scene-wide `.appFoundationTheme(...)` integration.
+- **Only** the six built-in Foundation themes appear: **Rose, Sunset, Lavender, Midnight, Paper, Champagne**. MyApps converts each catalog entry to **Free**, including the themes normally tagged Pro in AppFoundation.
+- All themes are permanent selections; preview timers, Pro locks, upgrades, paywalls and purchase dependencies are **disabled / not used**. The default for fresh installs is **Rose**.
+- Appearance is saved locally with `UserDefaultsThemeStateStore`; explicit legacy `Light` migrates to **Paper**, explicit `Dark` to **Rose**. The previous `System` selector is removed (there is no built-in Foundation theme called System).
+- Selecting a theme changes tint, preferred light/dark scheme, screen backgrounds and main content-card surfaces. Notes and Projects keep their app-specific icon designs, which are not theme selections.
+
 ## App Store Connect integration (PR #5)
 
 The **App Store** tab lists apps available to a connected App Store Connect team API key, with each app's artwork shown beside its name and bundle ID. Artwork first comes from Apple's included `appStoreIcon` / `buildIcons` resources. When absent or its CDN download fails, MyApps uses a batched public App Store lookup by the exact Apple App ID (checking multiple storefronts), verifies matching IDs and bundle IDs, and tries the returned artwork. Successfully loaded images are cached in memory and via the shared URL cache. Apps with no usable artwork show a stable, colorful gradient tile with initials rather than a blank gray icon. Public lookup happens after the app list is displayed; unreleased apps still appear normally. Tap an app to see a workspace with a title dropdown:
