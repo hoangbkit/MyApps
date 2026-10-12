@@ -12,12 +12,6 @@ struct RootView: View {
     @StateObject private var appStoreSession = AppStoreConnectSession()
     @StateObject private var aiWritingSession = AIWritingSession()
     @State private var selectedTab: RootTab = .repos
-    @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
-
-    private var appearance: AppAppearance {
-        AppAppearance(rawValue: appearanceRawValue) ?? .system
-    }
-
     var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
@@ -69,7 +63,6 @@ struct RootView: View {
         .environmentObject(gitHubSession)
         .environmentObject(appStoreSession)
         .environmentObject(aiWritingSession)
-        .preferredColorScheme(appearance.colorScheme)
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             async let restoreGitHub: Void = gitHubSession.restore()
