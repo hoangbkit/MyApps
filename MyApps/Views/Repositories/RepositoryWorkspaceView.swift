@@ -1,6 +1,8 @@
+import AppFoundation
 import SwiftUI
 
 struct RepositoryWorkspaceView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     private enum Section: String, CaseIterable, Identifiable {
         case log = "Log"
         case branches = "Branches"
@@ -82,7 +84,7 @@ struct RepositoryWorkspaceView: View {
                 )
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(foundationTheme.backgroundColor)
         .navigationTitle(repository.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
