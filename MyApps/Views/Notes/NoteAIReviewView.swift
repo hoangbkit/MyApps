@@ -136,7 +136,6 @@ struct NoteAIReviewView: View {
                 }
             }
             .task {
-                if selectedProfileID == nil { selectedProfileID = ai.defaultProfileID }
                 if !requiresInstruction { startGeneration() }
             }
             .onDisappear { cancelGeneration() }
