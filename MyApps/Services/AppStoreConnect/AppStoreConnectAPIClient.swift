@@ -97,6 +97,83 @@ struct AppStoreConnectGitReferenceAttributes: Decodable, Sendable {
     var isBranch: Bool { kind?.uppercased() == "BRANCH" }
 }
 
+struct AppStoreConnectIssueCounts: Decodable, Sendable {
+    let errors: Int?
+    let warnings: Int?
+    let testFailures: Int?
+    let analyzerWarnings: Int?
+
+    var total: Int {
+        (errors ?? 0) + (warnings ?? 0) +
+        (testFailures ?? 0) + (analyzerWarnings ?? 0)
+    }
+}
+
+struct AppStoreConnectCommit: Decodable, Sendable {
+    let commitSha: String?
+    let message: String?
+    let webUrl: String?
+    let author: Author?
+
+    struct Author: Decodable, Sendable {
+        let displayName: String?
+    }
+}
+
+struct AppStoreConnectBuildActionAttributes: Decodable, Sendable {
+    let name: String?
+    let actionType: String?
+    let startedDate: String?
+    let finishedDate: String?
+    let issueCounts: AppStoreConnectIssueCounts?
+    let executionProgress: String?
+    let completionStatus: String?
+    let isRequiredToPass: Bool?
+}
+
+struct AppStoreConnectFileSource: Decodable, Sendable {
+    let path: String?
+    let lineNumber: Int?
+    let columnNumber: Int?
+}
+
+struct AppStoreConnectIssueAttributes: Decodable, Sendable {
+    let issueType: String?
+    let message: String?
+    let fileSource: AppStoreConnectFileSource?
+    let category: String?
+}
+
+struct AppStoreConnectTestResultAttributes: Decodable, Sendable {
+    let className: String?
+    let name: String?
+    let status: String?
+    let message: String?
+    let fileSource: AppStoreConnectFileSource?
+}
+
+struct AppStoreConnectBuildDetail: Sendable {
+    let run: AppStoreConnectBuildRun
+    let sourceReferenceName: String?
+}
+
+private struct AppStoreConnectBuildDetailResponse: Decodable {
+    let data: AppStoreConnectBuildRun
+    let included: [IncludedReference]?
+
+    struct IncludedReference: Decodable {
+        let id: String
+        let type: String
+        let attributes: AppStoreConnectGitReferenceAttributes?
+    }
+
+    var sourceReferenceName: String? {
+        guard let id = data.relationships?.sourceBranchOrTag?.data?.id else { return nil }
+        return included?.first(where: { $0.id == id && $0.type == "scmGitReferences" })?
+            .attributes?.displayName
+    }
+}
+
 struct AppStoreConnectBuildRunAttributes: Decodable, Sendable {
     let number: Int?
     let createdDate: String?
@@ -105,6 +182,8 @@ struct AppStoreConnectBuildRunAttributes: Decodable, Sendable {
     let executionProgress: String?
     let completionStatus: String?
     let startReason: String?
+    let sourceCommit: AppStoreConnectCommit?
+    let issueCounts: AppStoreConnectIssueCounts?
 }
 
 struct AppStoreConnectResource<Attributes: Decodable & Sendable>: Decodable, Identifiable, Sendable {
@@ -117,6 +196,7 @@ struct AppStoreConnectRelationships: Decodable, Sendable {
     let workflow: AppStoreConnectRelationship?
     let defaultBranch: AppStoreConnectRelationship?
     let appStoreIcon: AppStoreConnectRelationship?
+    let sourceBranchOrTag: AppStoreConnectRelationship?
 }
 
 struct AppStoreConnectRelationship: Decodable, Sendable {
@@ -132,6 +212,9 @@ typealias AppStoreConnectVersion = AppStoreConnectResource<AppStoreConnectVersio
 typealias AppStoreConnectProduct = AppStoreConnectResource<AppStoreConnectProductAttributes>
 typealias AppStoreConnectWorkflow = AppStoreConnectResource<AppStoreConnectWorkflowAttributes>
 typealias AppStoreConnectBuildRun = AppStoreConnectResource<AppStoreConnectBuildRunAttributes>
+typealias AppStoreConnectBuildAction = AppStoreConnectResource<AppStoreConnectBuildActionAttributes>
+typealias AppStoreConnectIssue = AppStoreConnectResource<AppStoreConnectIssueAttributes>
+typealias AppStoreConnectTestResult = AppStoreConnectResource<AppStoreConnectTestResultAttributes>
 typealias AppStoreConnectSCMRepository = AppStoreConnectResource<AppStoreConnectSCMRepositoryAttributes>
 typealias AppStoreConnectGitReference = AppStoreConnectResource<AppStoreConnectGitReferenceAttributes>
 
@@ -294,6 +377,38 @@ struct AppStoreConnectAPIClient: Sendable {
         return page.data.sorted {
             ($0.attributes.createdDate ?? "") > ($1.attributes.createdDate ?? "")
         }
+    }
+
+    func buildDetail(for runID: String) async throws -> AppStoreConnectBuildDetail {
+        let response: AppStoreConnectBuildDetailResponse = try await get(
+            path: "/v1/ciBuildRuns/\(runID)",
+            query: [URLQueryItem(name: "include", value: "sourceBranchOrTag")]
+        )
+        return AppStoreConnectBuildDetail(
+            run: response.data,
+            sourceReferenceName: response.sourceReferenceName
+        )
+    }
+
+    func buildActions(for runID: String) async throws -> [AppStoreConnectBuildAction] {
+        try await allPages(
+            path: "/v1/ciBuildRuns/\(runID)/actions",
+            query: [URLQueryItem(name: "limit", value: "200")]
+        )
+    }
+
+    func issues(for actionID: String) async throws -> [AppStoreConnectIssue] {
+        try await allPages(
+            path: "/v1/ciBuildActions/\(actionID)/issues",
+            query: [URLQueryItem(name: "limit", value: "200")]
+        )
+    }
+
+    func testResults(for actionID: String) async throws -> [AppStoreConnectTestResult] {
+        try await allPages(
+            path: "/v1/ciBuildActions/\(actionID)/testResults",
+            query: [URLQueryItem(name: "limit", value: "200")]
+        )
     }
 
     /// Git references come from the repository associated with this exact
