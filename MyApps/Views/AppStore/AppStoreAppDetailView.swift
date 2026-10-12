@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AppStoreAppDetailView: View {
-    private enum Section: String, CaseIterable, Identifiable {
+    private enum AppDetailMode: String, CaseIterable, Identifiable {
         case info = "Info"
         case xcodeCloud = "Xcode Cloud"
 
@@ -18,7 +18,7 @@ struct AppStoreAppDetailView: View {
     let app: AppStoreConnectApp
     let client: AppStoreConnectAPIClient?
 
-    @State private var selectedSection: Section = .info
+    @State private var selectedSection: AppDetailMode = .info
     @State private var versions: [AppStoreConnectVersion] = []
     @State private var hasLoadedInfo = false
     @State private var isLoadingInfo = false
@@ -61,7 +61,7 @@ struct AppStoreAppDetailView: View {
 
             ToolbarItem(placement: .principal) {
                 Menu {
-                    ForEach(Section.allCases) { section in
+                    ForEach(AppDetailMode.allCases) { section in
                         Button {
                             selectedSection = section
                         } label: {
