@@ -78,7 +78,7 @@ struct ProjectsView: View {
             }
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("MyApps")
+        .navigationTitle("Projects")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
