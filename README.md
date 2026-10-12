@@ -53,6 +53,21 @@ The Xcode project is generated from `project.yml`; run `./generate.sh` after pul
 
 The Notes editor remains fully usable without an AI key. XcodeGen includes new Swift files under `MyApps` automatically.
 
+## Consistent Sorting (PR #5)
+
+The four sortable root tabs now use the same toolbar menu sections **Sort By** and **Order** and remember their choices across launches:
+
+| Tab | Sort fields | Default |
+| --- | --- | --- |
+| Repos | Name, Created, Updated | Updated / Descending |
+| Apps (App Store Connect) | Name, Bundle ID | Name / Ascending |
+| Projects | Name, Created, Updated | Created / Descending |
+| Notes | Created, Updated | Updated / Descending |
+
+Every field offers Ascending/Descending, labeled A–Z/Z–A for text and Oldest/Newest for dates. Changing a field selects the sensible initial direction (text ascending, dates descending); users can override it. Each root tab persists its choice independently; existing saved sort-field keys are retained.
+
+Pinned repositories/projects/notes remain ahead of unpinned items in either direction. Project Notes and Add Notes share both sort preferences and comparator with Notes. Repos decodes GitHub's optional `created_at` for the new Created field; missing dates sort last. App Store Connect apps without bundle IDs likewise sort last. Releases sort by published/creation date descending, while tags sort alphabetically, independent of GitHub API response order. Nested workflow/test listings retain their specialized ordering.
+
 ## Notes Undo & Redo (PR #5)
 
 - **Undo** and **Redo** are available beside **Done** in the Notes editing keyboard toolbar and under the note's **…** menu (also available in Preview).
