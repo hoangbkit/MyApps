@@ -204,6 +204,13 @@ struct RepositoriesView: View {
     @ViewBuilder
     private var repositoriesView: some View {
         List {
+            // A regular list row, not a navigation-bar search drawer:
+            // search scrolls away with the repositories.
+            searchField
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+
             if repositoriesModel.isLoading && repositoriesModel.repositories.isEmpty {
                 ProgressView("Loading repositories…")
             } else if repositoriesModel.repositories.isEmpty {
@@ -251,14 +258,38 @@ struct RepositoriesView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .searchable(
-            text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "Search repositories"
-        )
+        .scrollDismissesKeyboard(.interactively)
         .refreshable {
             await repositoriesModel.load(using: session.client(), force: true)
         }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+
+            TextField("Search repositories", text: $searchText)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .accessibilityLabel("Search repositories")
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear repository search")
+            }
+        }
+        .font(.system(size: 16))
+        .padding(.horizontal, 12)
+        .frame(height: 40)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func repositoryLink(_ repository: GitHubRepository) -> some View {
