@@ -105,6 +105,8 @@ struct GitCommitRowView: View {
 }
 
 private struct GitReferencePill: ViewModifier {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     func body(content: Content) -> some View {
         content
             .font(.system(size: 10, weight: .semibold, design: .rounded))
