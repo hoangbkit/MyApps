@@ -16,7 +16,9 @@ struct NoteAIReviewView: View {
 
     @State private var selectedProfileID: UUID?
     @State private var instruction = ""
-    @State private var output: String?
+    @State private var candidates: [String] = []
+    @State private var candidateCount = 1
+    @State private var selectedCandidateIndex = 0
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var currentTask: Task<Void, Never>?
@@ -32,6 +34,15 @@ struct NoteAIReviewView: View {
 
     private var canGenerate: Bool {
         !isGenerating && (!requiresInstruction || !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    private var output: String? {
+        candidates.indices.contains(selectedCandidateIndex) ? candidates[selectedCandidateIndex] : nil
+    }
+
+    private func clearCandidates() {
+        candidates = []
+        selectedCandidateIndex = 0
     }
 
     private var canInsert: Bool {
@@ -54,7 +65,19 @@ struct NoteAIReviewView: View {
                     }
                     .onChange(of: selectedProfileID) { _, _ in
                         cancelGeneration()
-                        output = nil
+                        clearCandidates()
+                        errorMessage = nil
+                    }
+
+                    Picker("Candidates", selection: $candidateCount) {
+                        ForEach(1...3, id: \.self) { count in
+                            Text("\(count)").tag(count)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: candidateCount) { _, _ in
+                        cancelGeneration()
+                        clearCandidates()
                         errorMessage = nil
                     }
                     if requiresInstruction {
@@ -66,7 +89,7 @@ struct NoteAIReviewView: View {
                         .lineLimit(2...5)
                         .onChange(of: instruction) { _, _ in
                             cancelGeneration()
-                            output = nil
+                            clearCandidates()
                             errorMessage = nil
                         }
                     }
@@ -79,6 +102,16 @@ struct NoteAIReviewView: View {
                 }
 
                 Section("Result") {
+                    if candidates.count > 1 {
+                        Picker("Candidate", selection: $selectedCandidateIndex) {
+                            ForEach(candidates.indices, id: \.self) { index in
+                                Text("Candidate \(index + 1)").tag(index)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel("Choose generated candidate")
+                    }
+
                     if isGenerating {
                         HStack(spacing: 10) {
                             ProgressView()
@@ -178,7 +211,7 @@ struct NoteAIReviewView: View {
     private func generate(id: UUID) async {
         guard canGenerate else { return }
         isGenerating = true
-        output = nil
+        clearCandidates()
         errorMessage = nil
         defer {
             if activeGenerationID == id { isGenerating = false }
@@ -188,19 +221,23 @@ struct NoteAIReviewView: View {
             let client = try ai.client()
             let profile = selectedProfile
             let direction = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-            let value = try await client.transform(
+            let values = try await client.transform(
                 request.selectedText,
                 action: request.action,
                 profile: profile,
-                extraInstruction: direction
+                extraInstruction: direction,
+                candidateCount: candidateCount
             )
             try Task.checkCancellation()
             guard activeGenerationID == id else { return }
-            guard NoteAIProtectedText.attachmentReferences(in: request.selectedText) ==
-                    NoteAIProtectedText.attachmentReferences(in: value) else {
+            let originalReferences = NoteAIProtectedText.attachmentReferences(in: request.selectedText)
+            guard values.allSatisfy({
+                NoteAIProtectedText.attachmentReferences(in: $0) == originalReferences
+            }) else {
                 throw NoteAITextError.protectedContentChanged
             }
-            output = value
+            candidates = values
+            selectedCandidateIndex = 0
         } catch {
             guard !Task.isCancelled, activeGenerationID == id else { return }
             errorMessage = error.localizedDescription
