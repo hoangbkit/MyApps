@@ -1,10 +1,95 @@
+import Combine
 import Runestone
 import SwiftUI
 import UIKit
 
+/// Keeps one native Runestone undo stack for typing, Markdown commands,
+/// preview checkbox changes, image insertion, and accepted AI rewrites.
+/// The editor stays mounted behind Preview so history is not discarded.
+@MainActor
+final class MarkdownEditorController: ObservableObject {
+    @Published private(set) var canUndo = false
+    @Published private(set) var canRedo = false
+
+    private weak var textView: Runestone.TextView?
+
+    func attach(_ view: Runestone.TextView) {
+        textView = view
+        refresh()
+    }
+
+    func refresh() {
+        let undoManager = textView?.undoManager
+        canUndo = undoManager?.canUndo == true
+        canRedo = undoManager?.canRedo == true
+    }
+
+    func undo() {
+        guard let undoManager = textView?.undoManager, undoManager.canUndo else { return }
+        undoManager.undo()
+        refresh()
+    }
+
+    func redo() {
+        guard let undoManager = textView?.undoManager, undoManager.canRedo else { return }
+        undoManager.redo()
+        refresh()
+    }
+
+    /// Calculate a single grapheme-safe contiguous edit, then let Runestone
+    /// register its native undo operation instead of assigning .text directly
+    /// (which resets its undo manager).
+    @discardableResult
+    func applyChange(before: String, after: String, selectionAfter: NSRange) -> Bool {
+        guard let view = textView, view.text == before else { return false }
+        guard before != after else {
+            view.selectedRange = clamp(selectionAfter, length: (after as NSString).length)
+            return true
+        }
+
+        let old = Array(before)
+        let new = Array(after)
+        var prefix = 0
+        while prefix < min(old.count, new.count), old[prefix] == new[prefix] {
+            prefix += 1
+        }
+        var suffix = 0
+        while suffix < old.count - prefix, suffix < new.count - prefix,
+              old[old.count - 1 - suffix] == new[new.count - 1 - suffix] {
+            suffix += 1
+        }
+
+        let location = String(old[..<prefix]).utf16.count
+        let oldLength = String(old[prefix..<(old.count - suffix)]).utf16.count
+        let replacement = String(new[prefix..<(new.count - suffix)])
+        let range = NSRange(location: location, length: oldLength)
+
+        // Separate this command from nearby typed characters, so a single
+        // Undo reliably reverts one toolbar command or accepted AI result.
+        view.undoManager?.endUndoGrouping()
+        view.replace(range, withText: replacement)
+        view.undoManager?.endUndoGrouping()
+
+        guard view.text == after else {
+            refresh()
+            return false
+        }
+        view.selectedRange = clamp(selectionAfter, length: (after as NSString).length)
+        refresh()
+        return true
+    }
+
+    private func clamp(_ range: NSRange, length: Int) -> NSRange {
+        let location = range.location == NSNotFound ? length : min(max(0, range.location), length)
+        return NSRange(location: location, length: min(max(0, range.length), length - location))
+    }
+}
+
+
 struct MarkdownTextEditor: UIViewRepresentable {
     @Binding var text: String
     @Binding var selectedRange: NSRange
+    @ObservedObject var editorController: MarkdownEditorController
     var focusOnAppear = false
 
     func makeCoordinator() -> Coordinator {
@@ -36,11 +121,13 @@ struct MarkdownTextEditor: UIViewRepresentable {
         textView.isFindInteractionEnabled = true
         textView.text = text
         textView.selectedRange = clampedSelection(for: text)
+        editorController.attach(textView)
         return textView
     }
 
     func updateUIView(_ textView: Runestone.TextView, context: Context) {
         context.coordinator.parent = self
+        editorController.attach(textView)
 
         if textView.text != text {
             let offset = textView.contentOffset
@@ -80,6 +167,7 @@ struct MarkdownTextEditor: UIViewRepresentable {
         func textViewDidChange(_ textView: Runestone.TextView) {
             parent.text = textView.text
             parent.selectedRange = textView.selectedRange
+            parent.editorController.refresh()
         }
 
         func textViewDidChangeSelection(_ textView: Runestone.TextView) {
