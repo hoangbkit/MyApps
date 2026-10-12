@@ -155,6 +155,7 @@ struct AppStoreConnectTestResultAttributes: Decodable, Sendable {
 struct AppStoreConnectBuildDetail: Sendable {
     let run: AppStoreConnectBuildRun
     let sourceReferenceName: String?
+    let workflowName: String?
 }
 
 private struct AppStoreConnectBuildDetailResponse: Decodable {
@@ -171,6 +172,12 @@ private struct AppStoreConnectBuildDetailResponse: Decodable {
         guard let id = data.relationships?.sourceBranchOrTag?.data?.id else { return nil }
         return included?.first(where: { $0.id == id && $0.type == "scmGitReferences" })?
             .attributes?.displayName
+    }
+
+    var workflowName: String? {
+        guard let id = data.relationships?.workflow?.data?.id else { return nil }
+        return included?.first(where: { $0.id == id && $0.type == "ciWorkflows" })?
+            .attributes?.name
     }
 }
 
@@ -382,11 +389,12 @@ struct AppStoreConnectAPIClient: Sendable {
     func buildDetail(for runID: String) async throws -> AppStoreConnectBuildDetail {
         let response: AppStoreConnectBuildDetailResponse = try await get(
             path: "/v1/ciBuildRuns/\(runID)",
-            query: [URLQueryItem(name: "include", value: "sourceBranchOrTag")]
+            query: [URLQueryItem(name: "include", value: "sourceBranchOrTag,workflow")]
         )
         return AppStoreConnectBuildDetail(
             run: response.data,
-            sourceReferenceName: response.sourceReferenceName
+            sourceReferenceName: response.sourceReferenceName,
+            workflowName: response.workflowName
         )
     }
 
