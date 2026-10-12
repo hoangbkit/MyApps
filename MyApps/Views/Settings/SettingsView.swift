@@ -1,14 +1,16 @@
+import AppFoundation
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(ThemeManager.self) private var themes
+    @Environment(\.appFoundationTheme) private var currentTheme
     @EnvironmentObject private var gitHubSession: GitHubSession
     @EnvironmentObject private var aiWriting: AIWritingSession
     @Query private var apps: [ManagedApp]
     @Query private var notes: [QuickNote]
-    @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
 
     @State private var exportDocument: MyAppsBackupDocument?
     @State private var isExportingBackup = false
@@ -27,15 +29,15 @@ struct SettingsView: View {
 
     var body: some View {
         List {
-            Section("Appearance") {
-                Picker("Theme", selection: $appearanceRawValue) {
-                    ForEach(AppAppearance.allCases) { appearance in
-                        Label(appearance.rawValue, systemImage: appearance.symbolName)
-                            .tag(appearance.rawValue)
-                    }
-                }
-                .pickerStyle(.inline)
+            Section {
+                ThemePickerView(manager: themes, title: nil, showsCountdown: false)
+                    .padding(.vertical, 3)
+            } header: {
+                Text("Appearance")
+            } footer: {
+                Text("All six AppFoundation themes are free.")
             }
+            .listRowBackground(currentTheme.elevatedSurfaceColor)
 
             gitHubSection
 
