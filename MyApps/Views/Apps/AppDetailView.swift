@@ -131,6 +131,9 @@ struct AppDetailView: View {
                 .accessibilityLabel("App Actions")
             }
         }
+        .onChange(of: noteSortRawValue) { _, _ in
+            directionRawValue = SortDirection.descending.rawValue
+        }
         .navigationDestination(isPresented: activeNoteBinding) {
             if let activeNote {
                 NoteEditorView(note: activeNote, startsInEditMode: activeNoteStartsEditing)
