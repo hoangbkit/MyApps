@@ -364,6 +364,7 @@ struct NoteEditorView: View {
         var selectionAfter = selectedRange
         command(&after, &selectionAfter)
         if editorController.applyChange(before: before, after: after, selectionAfter: selectionAfter) {
+            selectedRange = selectionAfter
             touchNote()
         }
     }
@@ -418,6 +419,7 @@ struct NoteEditorView: View {
         guard editorController.applyChange(before: before, after: after, selectionAfter: selectionAfter) else {
             return
         }
+        selectedRange = selectionAfter
         modelContext.insert(attachment)
         attachment.note = note
         mode = .edit
@@ -500,6 +502,7 @@ struct NoteEditorView: View {
             after: updated,
             selectionAfter: selectionAfter
         ) else { return false }
+        selectedRange = selectionAfter
         mode = .edit
         touchNote()
         return true
