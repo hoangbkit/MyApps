@@ -222,7 +222,7 @@ struct AppStoreAppsView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .searchable(text: $searchText, prompt: "Search apps")
         .refreshable {
