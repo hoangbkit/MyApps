@@ -23,7 +23,7 @@ brew install xcodegen
 - MyApps uses the **AppFoundation 0.1.8** package's `ThemeManager`, `ThemeCatalog`, `ThemePickerView`, and scene-wide `.appFoundationTheme(...)` integration.
 - **Only** the six built-in Foundation themes appear: **Rose, Sunset, Lavender, Midnight, Paper, Champagne**. MyApps converts each catalog entry to **Free**, including the themes normally tagged Pro in AppFoundation.
 - All themes are permanent selections; preview timers, Pro locks, upgrades, paywalls and purchase dependencies are **disabled / not used**. The default for fresh installs is **Rose**.
-- Appearance is saved locally with `UserDefaultsThemeStateStore`; explicit legacy `Light` migrates to **Paper**, explicit `Dark` to **Rose**. The previous `System` selector is removed (there is no built-in Foundation theme called System).
+- Appearance is saved locally with `UserDefaultsThemeStateStore`; explicit legacy `Light` migrates to **Paper**, explicit `Dark` to **Rose**. The previous `System` selector is removed (there is no built-in Foundation theme called System). Backup exports now include the selected free theme ID; older backup manifests with only legacy appearance preferences are still accepted and mapped on restore. Restoring a backup updates the active theme immediately.
 - Selecting a theme changes tint, preferred light/dark scheme, screen backgrounds and main content-card surfaces. Notes and Projects keep their app-specific icon designs, which are not theme selections.
 
 ## App Store Connect integration (PR #5)
