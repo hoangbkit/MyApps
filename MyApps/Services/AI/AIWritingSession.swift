@@ -35,7 +35,7 @@ struct AIWritingProfile: Codable, Identifiable, Equatable, Sendable {
     }
 }
 
-enum DeepSeekModel: String, CaseIterable, Identifiable {
+enum DeepSeekModel: String, CaseIterable, Identifiable, Sendable {
     case flash = "deepseek-flash"
     case pro = "deepseek-v4-pro"
 
