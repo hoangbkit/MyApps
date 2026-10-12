@@ -119,7 +119,7 @@ struct AIWritingPreferences: Codable, Sendable {
     var modelRawValue: String
 
     static var starter: Self {
-        Self(profiles: [.indieBuilder], defaultProfileID: .indieBuilder.id, modelRawValue: DeepSeekModel.flash.rawValue)
+        Self(profiles: [AIWritingProfile.indieBuilder], defaultProfileID: AIWritingProfile.indieBuilder.id, modelRawValue: DeepSeekModel.flash.rawValue)
     }
 }
 
