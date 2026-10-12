@@ -1,5 +1,28 @@
 import SwiftUI
 
+private enum StoreAppSortOption: String, CaseIterable, Identifiable {
+    case name, bundleID
+
+    static let storageKey = "myapps.appstore.sortOption"
+    static let directionStorageKey = "myapps.appstore.sortDirection"
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .name: "Name"
+        case .bundleID: "Bundle ID"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .name: "textformat.abc"
+        case .bundleID: "number"
+        }
+    }
+}
+
 struct AppStoreAppsView: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var session: AppStoreConnectSession
@@ -10,6 +33,16 @@ struct AppStoreAppsView: View {
     @State private var iconURLsByAppID: [String: URL] = [:]
     @State private var publicIconURLsByAppID: [String: URL] = [:]
     @State private var searchText = ""
+    @AppStorage(StoreAppSortOption.storageKey) private var sortRawValue = StoreAppSortOption.name.rawValue
+    @AppStorage(StoreAppSortOption.directionStorageKey) private var directionRawValue = SortDirection.ascending.rawValue
+
+    private var sortOption: StoreAppSortOption {
+        StoreAppSortOption(rawValue: sortRawValue) ?? .name
+    }
+
+    private var sortDirection: SortDirection {
+        SortDirection(rawValue: directionRawValue) ?? .ascending
+    }
     @State private var isLoading = false
     @State private var hasLoaded = false
     @State private var loadFailed = false
@@ -23,9 +56,29 @@ struct AppStoreAppsView: View {
             ($0.attributes.bundleId?.localizedCaseInsensitiveContains(query) ?? false) ||
             ($0.attributes.sku?.localizedCaseInsensitiveContains(query) ?? false)
         }
-        .sorted {
-            let result = $0.attributes.name.localizedStandardCompare($1.attributes.name)
-            return result == .orderedSame ? $0.id < $1.id : result == .orderedAscending
+        .sorted { lhs, rhs in
+            let ascending = sortDirection == .ascending
+            if sortOption == .bundleID {
+                // Apps without a bundle ID stay at the end in both directions.
+                let left = lhs.attributes.bundleId?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let right = rhs.attributes.bundleId?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let leftMissing = left?.isEmpty != false
+                let rightMissing = right?.isEmpty != false
+                if leftMissing != rightMissing { return !leftMissing }
+                if let left, let right {
+                    let comparison = left.localizedStandardCompare(right)
+                    if comparison != .orderedSame {
+                        return ascending ? comparison == .orderedAscending : comparison == .orderedDescending
+                    }
+                }
+            }
+            let comparison = lhs.attributes.name.localizedStandardCompare(rhs.attributes.name)
+            if comparison != .orderedSame {
+                return sortOption == .name && !ascending
+                    ? comparison == .orderedDescending
+                    : comparison == .orderedAscending
+            }
+            return lhs.id < rhs.id
         }
     }
 
@@ -51,6 +104,34 @@ struct AppStoreAppsView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Apps")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Section("Sort By") {
+                        Picker("Sort Field", selection: $sortRawValue) {
+                            ForEach(StoreAppSortOption.allCases) { option in
+                                Label(option.title, systemImage: option.symbolName)
+                                    .tag(option.rawValue)
+                            }
+                        }
+                    }
+                    Section("Order") {
+                        Picker("Sort Order", selection: $directionRawValue) {
+                            ForEach(SortDirection.allCases) { direction in
+                                Label(direction.title(isText: true), systemImage: direction.symbolName)
+                                    .tag(direction.rawValue)
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .accessibilityLabel("Sort Apps by \(sortOption.title), \(sortDirection.title(isText: true))")
+            }
+        }
+        .onChange(of: sortRawValue) { _, _ in
+            directionRawValue = SortDirection.ascending.rawValue
+        }
         .task(id: "\(session.connectionRevision)-\(scenePhase)") {
             guard scenePhase == .active else { return }
             switch session.connectionState {
