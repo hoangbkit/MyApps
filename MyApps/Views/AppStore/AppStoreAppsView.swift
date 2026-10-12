@@ -8,6 +8,7 @@ struct AppStoreAppsView: View {
 
     @State private var apps: [AppStoreConnectApp] = []
     @State private var iconURLsByAppID: [String: URL] = [:]
+    @State private var publicIconURLsByAppID: [String: URL] = [:]
     @State private var searchText = ""
     @State private var isLoading = false
     @State private var hasLoaded = false
@@ -58,6 +59,7 @@ struct AppStoreAppsView: View {
             case .disconnected:
                 apps = []
                 iconURLsByAppID = [:]
+                publicIconURLsByAppID = [:]
                 hasLoaded = false
                 searchText = ""
             case .connected:
@@ -105,13 +107,16 @@ struct AppStoreAppsView: View {
                             AppStoreAppDetailView(
                                 app: app,
                                 client: session.client(),
-                                iconURL: iconURLsByAppID[app.id]
+                                iconURL: iconURLsByAppID[app.id],
+                                publicIconURL: publicIconURLsByAppID[app.id]
                             )
                         } label: {
                             HStack(spacing: 12) {
                                 AppStoreAppIconView(
                                     name: app.attributes.name,
-                                    url: iconURLsByAppID[app.id]
+                                    url: iconURLsByAppID[app.id],
+                                    fallbackURL: publicIconURLsByAppID[app.id],
+                                    appID: app.id
                                 )
 
                                 VStack(alignment: .leading, spacing: 5) {
@@ -153,6 +158,17 @@ struct AppStoreAppsView: View {
             hasLoaded = true
             loadFailed = false
             errorMessage = nil
+
+            // Resolve the published artwork in batched requests using exact
+            // Apple app IDs. Do this AFTER showing the ASC app list so public
+            // lookup never blocks a successfully loaded catalog.
+            // Fetch even when ASC has an icon: its CDN download might fail.
+            let unresolved = catalog.apps.filter { publicIconURLsByAppID[$0.id] == nil }
+            if !unresolved.isEmpty {
+                let publicArtwork = await AppStorePublicArtworkLookup.lookup(apps: unresolved)
+                guard !Task.isCancelled else { return }
+                publicIconURLsByAppID.merge(publicArtwork) { _, newURL in newURL }
+            }
         } catch {
             guard !Task.isCancelled else { return }
             loadFailed = true
