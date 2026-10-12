@@ -14,14 +14,19 @@ final class MarkdownEditorController: ObservableObject {
     private weak var textView: Runestone.TextView?
 
     func attach(_ view: Runestone.TextView) {
+        guard textView !== view else { return }
         textView = view
         refresh()
     }
 
     func refresh() {
         let undoManager = textView?.undoManager
-        canUndo = undoManager?.canUndo == true
-        canRedo = undoManager?.canRedo == true
+        let newCanUndo = undoManager?.canUndo == true
+        let newCanRedo = undoManager?.canRedo == true
+        // Do not publish unchanged values from updateUIView: this would
+        // recursively trigger another SwiftUI representable update.
+        if canUndo != newCanUndo { canUndo = newCanUndo }
+        if canRedo != newCanRedo { canRedo = newCanRedo }
     }
 
     func undo() {
