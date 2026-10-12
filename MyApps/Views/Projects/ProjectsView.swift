@@ -5,6 +5,7 @@ struct ProjectsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var projects: [ManagedApp]
     @AppStorage(AppSortOption.storageKey) private var appSortRawValue = AppSortOption.created.rawValue
+    @AppStorage(AppSortOption.directionStorageKey) private var directionRawValue = SortDirection.descending.rawValue
 
     @State private var selectedStatus: ProjectStatus? = nil
     @State private var isPresentingNewApp = false
@@ -16,32 +17,39 @@ struct ProjectsView: View {
         AppSortOption(rawValue: appSortRawValue) ?? .created
     }
 
+    private var sortDirection: SortDirection {
+        SortDirection(rawValue: directionRawValue) ?? .descending
+    }
+
     private var sortedProjects: [ManagedApp] {
         projects.sorted { lhs, rhs in
             if lhs.isPinned != rhs.isPinned {
                 return lhs.isPinned && !rhs.isPinned
             }
 
+            let ascending = sortDirection == .ascending
             switch appSortOption {
             case .name:
                 let comparison = lhs.name.localizedStandardCompare(rhs.name)
                 if comparison != .orderedSame {
-                    return comparison == .orderedAscending
+                    return ascending ? comparison == .orderedAscending : comparison == .orderedDescending
                 }
-                return lhs.createdAt < rhs.createdAt
-
             case .created:
                 if lhs.createdAt != rhs.createdAt {
-                    return lhs.createdAt > rhs.createdAt
+                    return ascending ? lhs.createdAt < rhs.createdAt : lhs.createdAt > rhs.createdAt
                 }
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-
             case .updated:
                 if lhs.updatedAt != rhs.updatedAt {
-                    return lhs.updatedAt > rhs.updatedAt
+                    return ascending ? lhs.updatedAt < rhs.updatedAt : lhs.updatedAt > rhs.updatedAt
                 }
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
             }
+
+            // Consistent tie-breaking for equally dated entries.
+            let byName = lhs.name.localizedStandardCompare(rhs.name)
+            if byName != .orderedSame {
+                return byName == .orderedAscending
+            }
+            return lhs.id.uuidString < rhs.id.uuidString
         }
     }
 
@@ -83,16 +91,26 @@ struct ProjectsView: View {
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Menu {
-                    Picker("Sort Apps", selection: $appSortRawValue) {
-                        ForEach(AppSortOption.allCases) { option in
-                            Label(option.title, systemImage: option.symbolName)
-                                .tag(option.rawValue)
+                    Section("Sort By") {
+                        Picker("Sort Field", selection: $appSortRawValue) {
+                            ForEach(AppSortOption.allCases) { option in
+                                Label(option.title, systemImage: option.symbolName)
+                                    .tag(option.rawValue)
+                            }
+                        }
+                    }
+                    Section("Order") {
+                        Picker("Sort Order", selection: $directionRawValue) {
+                            ForEach(SortDirection.allCases) { direction in
+                                Label(direction.title(isText: appSortOption.isText), systemImage: direction.symbolName)
+                                    .tag(direction.rawValue)
+                            }
                         }
                     }
                 } label: {
                     Image(systemName: "arrow.up.arrow.down")
                 }
-                .accessibilityLabel("Sort Apps by \(appSortOption.title)")
+                .accessibilityLabel("Sort Projects by \(appSortOption.title), \(sortDirection.title(isText: appSortOption.isText))")
 
                 Button {
                     isPresentingNewApp = true
@@ -101,6 +119,10 @@ struct ProjectsView: View {
                 }
                 .accessibilityLabel("Add App")
             }
+        }
+        .onChange(of: appSortRawValue) { _, newField in
+            let option = AppSortOption(rawValue: newField) ?? .created
+            directionRawValue = SortDirection.defaultForText(option.isText).rawValue
         }
         .sheet(isPresented: $isPresentingNewApp) {
             AppEditorView()
