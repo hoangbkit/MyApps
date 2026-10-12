@@ -8,6 +8,7 @@ struct AppDetailView: View {
     let app: ManagedApp
 
     @AppStorage(NoteSortOption.storageKey) private var noteSortRawValue = NoteSortOption.updated.rawValue
+    @AppStorage(NoteSortOption.directionStorageKey) private var directionRawValue = SortDirection.descending.rawValue
     @State private var activeNote: QuickNote?
     @State private var activeNoteStartsEditing = false
     @State private var isPresentingEditor = false
@@ -24,21 +25,12 @@ struct AppDetailView: View {
         NoteSortOption(rawValue: noteSortRawValue) ?? .updated
     }
 
+    private var sortDirection: SortDirection {
+        SortDirection(rawValue: directionRawValue) ?? .descending
+    }
+
     private var sortedNotes: [QuickNote] {
-        app.notes.sorted { lhs, rhs in
-            if lhs.isPinned != rhs.isPinned {
-                return lhs.isPinned && !rhs.isPinned
-            }
-
-            switch noteSortOption {
-            case .created:
-                if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
-            case .updated:
-                if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
-            }
-
-            return lhs.id.uuidString < rhs.id.uuidString
-        }
+        noteSortOption.sorted(app.notes, direction: sortDirection)
     }
 
     var body: some View {
@@ -79,16 +71,26 @@ struct AppDetailView: View {
 
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Menu {
-                    Picker("Sort Notes", selection: $noteSortRawValue) {
-                        ForEach(NoteSortOption.allCases) { option in
-                            Label(option.title, systemImage: option.symbolName)
-                                .tag(option.rawValue)
+                    Section("Sort By") {
+                        Picker("Sort Field", selection: $noteSortRawValue) {
+                            ForEach(NoteSortOption.allCases) { option in
+                                Label(option.title, systemImage: option.symbolName)
+                                    .tag(option.rawValue)
+                            }
+                        }
+                    }
+                    Section("Order") {
+                        Picker("Sort Order", selection: $directionRawValue) {
+                            ForEach(SortDirection.allCases) { direction in
+                                Label(direction.title(isText: false), systemImage: direction.symbolName)
+                                    .tag(direction.rawValue)
+                            }
                         }
                     }
                 } label: {
                     Image(systemName: "arrow.up.arrow.down")
                 }
-                .accessibilityLabel("Sort Notes by \(noteSortOption.title)")
+                .accessibilityLabel("Sort Notes by \(noteSortOption.title), \(sortDirection.title(isText: false))")
 
                 Button {
                     createNote()
