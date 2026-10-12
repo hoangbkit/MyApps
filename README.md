@@ -35,6 +35,18 @@ App Store apps and version history use paginated requests. Xcode Cloud build his
 
 The Xcode project is generated from `project.yml`; run `./generate.sh` after pulling changes. The release workflow regenerates the project before building.
 
+## DeepSeek-powered Notes and AI Profiles (PR #5)
+
+- **Settings → DeepSeek:** store a personal API key securely in the device-only Keychain, validate using `GET /models`, and select either `deepseek-flash` (default, non-thinking for fast edits) or `deepseek-v4-pro`. A key is required for AI requests. Never store the key in notes, UserDefaults, backups, or logs.
+- **Settings → AI Profiles:** edit, add, duplicate, delete, or set the default writing profile. A preloaded, editable **Indie Builder** profile matches the author's software-development background, direct communication style, and protected terminology.
+- **Notes → sparkle menu:** Proofread, Improve Writing, Shorten, Expand, Summarize, Bullet Points, Professional/Casual Tone, Translate, Custom Rewrite, Lowercase All, Lowercase Except Special Words, Uppercase All, Title Case, and Sentence Case.
+- Selected text is transformed when the Runestone editor has a nonempty selection; otherwise the whole note is used. Plain case conversions are local and immediate, with an **Undo Last Transformation** action. AI-powered conversions open a **result review sheet** with original/result text, profile picker, Retry, Replace, Insert Below (when safe), Copy, and Done.
+- Notes do not change while waiting on DeepSeek. Applying results verifies that the note still matches the original snapshot and the `attachment://` references remain unmodified. Protected Markdown code, URLs and attachments are replaced by immutable placeholders for model requests, restored only when each placeholder survives intact. Unsafe results are rejected.
+- Profiles and selected model are stored locally and included in new full backups; older backup packages still restore. **API keys are intentionally excluded.**
+- Requests are sent **directly from the device to DeepSeek**. The requested note text and selected profile context leave the device; no request is sent until an AI action is selected. API usage may incur charges.
+
+The Notes editor remains fully usable without an AI key. XcodeGen includes new Swift files under `MyApps` automatically.
+
 ## P3.5 changes
 
 - Replaced the basic `UITextView` note editor with Runestone 0.5.2.
