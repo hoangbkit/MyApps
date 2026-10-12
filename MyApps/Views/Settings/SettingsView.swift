@@ -40,6 +40,9 @@ struct SettingsView: View {
 
             AppStoreConnectSettingsSection()
 
+            DeepSeekSettingsSection()
+            AIProfilesSettingsSection()
+
             Section("Storage") {
                 LabeledContent("Mode", value: "Offline")
                 Text("MyApps stores its library locally on this device with SwiftData.")
