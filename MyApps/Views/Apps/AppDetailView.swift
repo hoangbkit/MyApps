@@ -1,7 +1,9 @@
+import AppFoundation
 import SwiftData
 import SwiftUI
 
 struct AppDetailView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
@@ -61,7 +63,7 @@ struct AppDetailView: View {
             .padding(.bottom, 28)
         }
         .scrollIndicators(.hidden)
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(foundationTheme.backgroundColor)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
