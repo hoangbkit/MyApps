@@ -302,6 +302,7 @@ struct RepositoriesView: View {
         } label: {
             repositoryRow(repository)
         }
+        .listRowBackground(foundationTheme.elevatedSurfaceColor)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
                 togglePin(repository)
