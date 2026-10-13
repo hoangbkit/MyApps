@@ -7,92 +7,181 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0309A3CBA8E71FE15CA5AC98 /* GitHubBranchOperationsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8211FC9220DDF2A63E06228F /* GitHubBranchOperationsModels.swift */; };
 		0536C1F8A54066A07E2F96FD /* AppListField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64A40F7353C31320B5D7721B /* AppListField.swift */; };
 		094215092F1EBAF898038B35 /* AppIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86A5158BC102856C7EE9768C /* AppIconView.swift */; };
 		0954228412BCB803F4423E71 /* AppDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22802DA63A28E160DDEA0822 /* AppDetailView.swift */; };
 		0DF917CA9EF9925E322568C8 /* Runestone in Frameworks */ = {isa = PBXBuildFile; productRef = 8F0372EA46B84A6D4981D455 /* Runestone */; };
 		0E76A37904D2568B9C780B67 /* AppStatusLinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 381AE1F5E0D9748DFE0EFAEA /* AppStatusLinesView.swift */; };
 		104BD26C9B522A2D7DC1A004 /* AppValueFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78842556A068DDB426E88777 /* AppValueFormatter.swift */; };
+		11E03E6C87A2BEBBAF1AAF86 /* AppStoreConnectAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A849334D3FC80D7B1D7EF8 /* AppStoreConnectAPIClient.swift */; };
+		15A584618BCA72E9D75F2A02 /* ReleasesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBCEE4D545BE2C2D289D7DF2 /* ReleasesView.swift */; };
 		15ED0F46576B8A76DA04D01C /* NoteKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3075D0E17EE54236AA43EDEC /* NoteKind.swift */; };
+		1627D458684A95F002C57454 /* BranchMergeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3639C397F99186BD4C697C4 /* BranchMergeView.swift */; };
+		18D4A34E0DBBD4C4B05A9F81 /* GitHubSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4D7096E1A9CF2993DABF87 /* GitHubSession.swift */; };
+		19C82E4D96AEAF0EA0A43E84 /* AppStoreConnectSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB815DB94D64FD6735005417 /* AppStoreConnectSession.swift */; };
+		1A78F56E7813DA79A5EE5CE5 /* GitHubCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B42C329EE2026C410EEA94 /* GitHubCredentialStore.swift */; };
+		1D3ABAC7708A6E2642F07E47 /* AppStoreAppDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A7EBC214DA814B4D0D18D2E /* AppStoreAppDetailView.swift */; };
 		1DD510CAAC4F465F6B4B2353 /* GitHubMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE71E64EE59F80CCFBA45538 /* GitHubMarkdownView.swift */; };
+		1DEC9E8C3F4D26136FB23695 /* DeepSeekClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B14425B4E37D82BE72CBD017 /* DeepSeekClient.swift */; };
+		1EFA33093C84E8F309390E9E /* AIWritingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D002EC6A6BA8CC2CCB89F07 /* AIWritingSession.swift */; };
+		1F7F63F6817BEF95998B0522 /* GitHubRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D72BCE9083C56C5E479798EB /* GitHubRepository.swift */; };
+		2009D52DD9CE09DB34D228FC /* StartXcodeCloudBuildView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0B11078E6CF4EFB4B4EAE98 /* StartXcodeCloudBuildView.swift */; };
+		219B8CF2D8ECDC75AE91C95F /* GitLogViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF786711796F554D29B27CF0 /* GitLogViewModel.swift */; };
+		24EE7B2E7545E1ECF0DD2932 /* CreateTagViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB16B32A4F0AB7B1E474141A /* CreateTagViewModel.swift */; };
+		267662EA0E1CEDA1DAC1FCCB /* NoteAIReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26D6CA5FE622C677EC29F3AE /* NoteAIReviewView.swift */; };
 		2A592A75774A757316C63D43 /* MyAppsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED6D741B7364D33872B47BC4 /* MyAppsApp.swift */; };
 		2A88D1800CB42880053A3C9E /* AppEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D1C8AC07BCFBC6EF4C133C2 /* AppEditorView.swift */; };
 		2C9868DDCF59E8C264E2852E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DEBC773D8E7ACEA7F5F514FE /* Assets.xcassets */; };
+		2E6B72D688FA96A4372C5BC3 /* CreateReleaseViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAB903592E5D2E4279DB1625 /* CreateReleaseViewModel.swift */; };
 		308A05995D7317432ACB7431 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D609A298EAECFE2C6178BBB /* RootView.swift */; };
+		3109B885B449A2059C0557FA /* GitGraphMarkerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24E41B8327A0C82E511EC281 /* GitGraphMarkerView.swift */; };
+		32181F0EA86F184415E80AC2 /* BranchMergeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C73FA5A3D5CE4CF6295C3A /* BranchMergeViewModel.swift */; };
+		34C5CC7DCC2452B459539AED /* GitHubHistoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9270062400636E9CF99C37B8 /* GitHubHistoryModels.swift */; };
 		361779B39988A00E4EF59239 /* AppBackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ACA76CCC4557187332D92E2 /* AppBackupService.swift */; };
 		368E55ABF2DB08C1DB1F1A83 /* ImageDataProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 206E5B257354DA4BECA02629 /* ImageDataProcessor.swift */; };
 		442CB1CDA74EBF29EDDBC3D9 /* QuickNote.swift in Sources */ = {isa = PBXBuildFile; fileRef = D13F75E46BB881F47748136C /* QuickNote.swift */; };
+		47238DF80B72A0A2423D182C /* BranchRebaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DAF4B6FE851479A82C55E36 /* BranchRebaseView.swift */; };
 		5CDF435C3C0D1054580AE7D3 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9262B4EDC99788ADB19D9F0 /* AppTheme.swift */; };
 		5FC8A2C00FDD74A2305B47F4 /* MarkdownTextExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62438FEB9227AD4714C9EF7F /* MarkdownTextExtractor.swift */; };
+		66665746054C3328E1537355 /* BranchRebaseViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40C8909F2777B1B19A86752 /* BranchRebaseViewModel.swift */; };
+		676CBC9DA5CE3ABBE04CED95 /* GitCommitRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC625669A51C2D15AC392D38 /* GitCommitRowView.swift */; };
+		6E7B49AB4479CB86443CA2F4 /* RepositoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C816D242DEC8D01C37495E /* RepositoriesView.swift */; };
+		70CA75E7E2282FD59C41AC38 /* RepositoriesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA9BD5223E6D0EDC8933DB5 /* RepositoriesViewModel.swift */; };
+		72D1816CFE3431DE39234874 /* AppStorePlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE75EB3EB402E358F99A161 /* AppStorePlaceholderView.swift */; };
 		7981A3FA266A1F5A80A14B5C /* NoteImageProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16B1549F9C78FE9B8C6C09EB /* NoteImageProcessor.swift */; };
 		7E73A677FC3DB904FF4152C9 /* NoteAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 058869048884D480570177E9 /* NoteAttachment.swift */; };
 		8028C6E2C4974908386FAAB0 /* ManagedApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 713759EBE9FFCCF1233EB160 /* ManagedApp.swift */; };
+		80FE392A3E8E39F6EBF9017C /* CreateReleaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B9C1F4A06AA418EF83D0B7 /* CreateReleaseView.swift */; };
 		841E2B8F1F0682911913E8C6 /* MarkdownView in Frameworks */ = {isa = PBXBuildFile; productRef = CC7572A9D44EE2A53DC135D9 /* MarkdownView */; };
 		8525C5E1CB4DEFD46F83B1DB /* ProjectDeletionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8A8077BAC8896B56016F4AD /* ProjectDeletionService.swift */; };
 		87215B1D3C4A61EB92173871 /* MarkdownTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0557B051E3C9E9D1ED79C9E4 /* MarkdownTextEditor.swift */; };
 		8802341454B6BA34E508457D /* NoteCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67058351A7BF04AF57CB4252 /* NoteCardView.swift */; };
+		8886B7357A20F77207C2956B /* XcodeCloudBuildDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 274FE557356CA576D0325C38 /* XcodeCloudBuildDetailView.swift */; };
+		8CD2AF1D5112FF51621037B2 /* MyAppsThemeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2A1B62C8A8D72A1835D4D1 /* MyAppsThemeCatalog.swift */; };
+		954244422F78A4F8ECE30DEE /* CreateTagView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F216C5601D7E66E427A619C4 /* CreateTagView.swift */; };
+		97115345B68B87F7DE5B67F5 /* AIWritingSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 039E68AF0896800CED5A73B6 /* AIWritingSettingsSection.swift */; };
+		99BC9C423557976FD7616A63 /* AppStoreAppIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82583C4E597E9D73A18CA25 /* AppStoreAppIconView.swift */; };
 		9D98141A211C5346A83BBA51 /* ListSortOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51E8838DB9A581C6DCDC21BD /* ListSortOption.swift */; };
+		9F77F8C7B43F9343FC285262 /* AppStorePublicArtworkLookup.swift in Sources */ = {isa = PBXBuildFile; fileRef = C97B16868193DB28CD22C252 /* AppStorePublicArtworkLookup.swift */; };
 		A24AC56959C558DD05A9F437 /* NotesInboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9ABABA85D0281C48BAFA81 /* NotesInboxView.swift */; };
+		A25371930E393FEBE5DD3064 /* GitHubAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F7A9C1A7A22F77073F520F0 /* GitHubAPIClient.swift */; };
 		A77281463BF15AF7F603452C /* ProjectStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27CF9960BAFA6542B36F5B29 /* ProjectStatus.swift */; };
 		A850BE722DDBA9DB42AAB960 /* ChecklistItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB117ED9EA999EF29F925906 /* ChecklistItem.swift */; };
+		AD371378896ABB936F006031 /* AppStoreConnectSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B690F17264E2AE3F941E58 /* AppStoreConnectSettingsSection.swift */; };
 		AE8142CDAAD3E73C9054FDD1 /* AppPlatform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75CAB23AA32BC718598F3D06 /* AppPlatform.swift */; };
+		B477709BBF390F3DF16EE3C7 /* GitHubReleaseModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE564E87C22F505534DC70BA /* GitHubReleaseModels.swift */; };
 		BB6948DF271A8BE78EB0AF70 /* AppRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 444741C11BDFBEA85963C772 /* AppRowView.swift */; };
 		BDB17B1A33BDD37F6F90C948 /* MarkdownBlockParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B81C63129CC7A707224F2D5 /* MarkdownBlockParser.swift */; };
+		BE2B60402884F4C4B1F4542A /* NoteAIWritingPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDF1E3CCD8D05528E673E76A /* NoteAIWritingPrompt.swift */; };
 		C2132BC9ADD4757CCC08C569 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F0852BD25274E340827EB84 /* SettingsView.swift */; };
+		C2CFB80A8AB2BBC076513252 /* AppStoreConnectCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBAD8B2BE2A456F861C9ACC /* AppStoreConnectCredentialStore.swift */; };
 		C73E30633CFE18551EC0907F /* AddNotesToAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CF8E70FE46B1DF9A8480FA /* AddNotesToAppView.swift */; };
+		C7A934CDEB07217BFBB84A41 /* RepositoryWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05C4604F3D760104F8D53396 /* RepositoryWorkspaceView.swift */; };
 		CBB5AAE5028F8882C4ABFEFA /* ProjectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37DCD4DD71AC8080C57A2A0A /* ProjectsView.swift */; };
+		CBC358D09789AD618122C917 /* BranchDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38CA9FAD2E734F7ED7EAC56F /* BranchDetailView.swift */; };
+		CE40ABCFEEA6EA864293E0EB /* BranchesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07053B3788E554386AFE4E9 /* BranchesView.swift */; };
+		DE0A07815E4A9E13EF023ABC /* TagsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4CE6B450A7BF76BB21E897 /* TagsView.swift */; };
 		E066F35170794BB0077A86BA /* P3MigrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B51AF3D06B8D35C518F951 /* P3MigrationService.swift */; };
+		E580A271CDD6E3FF35EC030B /* AppFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 549117B3F47728F1A47EDB9F /* AppFoundation */; };
 		E615C0F8D9D5DEE748C8FAAD /* NoteEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B47889BD445E12DAE1E9EEF6 /* NoteEditorView.swift */; };
 		E85C050C2296610C655C05F4 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 854E4ABE77FFF5AAE43F32B8 /* EmptyStateView.swift */; };
 		E919838179C4F293C0C5731D /* ProjectStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 932F6C5C88328626598CD42D /* ProjectStage.swift */; };
 		E98DAB42C31213C4823B0EE9 /* MarkdownTaskParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91747B8B5254213369DEFC5A /* MarkdownTaskParser.swift */; };
-		F5A1518C2D55E0CE2A159683 /* AppAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BF1A8E8AF52A72868F87B94 /* AppAppearance.swift */; };
+		EBEC4C9E0CFF42B329D38D00 /* AppStoreAppsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD54E144443943A2F5EBBD93 /* AppStoreAppsView.swift */; };
+		EDA243AE7275F5479FEF5F74 /* GitGraphLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 232BF54E34F532426FEFCE4F /* GitGraphLayout.swift */; };
+		F166E5985B309C4E19103A02 /* GitCommitDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64F844F2BFBCD0F1380DD104 /* GitCommitDetailView.swift */; };
+		F9C4C45387638099BA48375C /* ReleasesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B35DA3B00AAE09879408C04F /* ReleasesViewModel.swift */; };
 		FB8D75760BE7552458836062 /* BusinessModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6006C8DB45F445CC3318817 /* BusinessModel.swift */; };
 		FD0F8838FA2EA9DFED8FC521 /* DefaultAppIconStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5123DB5C57B80F5D298A347A /* DefaultAppIconStyle.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		039E68AF0896800CED5A73B6 /* AIWritingSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIWritingSettingsSection.swift; sourceTree = "<group>"; };
 		0557B051E3C9E9D1ED79C9E4 /* MarkdownTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTextEditor.swift; sourceTree = "<group>"; };
 		058869048884D480570177E9 /* NoteAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteAttachment.swift; sourceTree = "<group>"; };
+		05C4604F3D760104F8D53396 /* RepositoryWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoryWorkspaceView.swift; sourceTree = "<group>"; };
 		0F0852BD25274E340827EB84 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		12C73FA5A3D5CE4CF6295C3A /* BranchMergeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchMergeViewModel.swift; sourceTree = "<group>"; };
 		16B1549F9C78FE9B8C6C09EB /* NoteImageProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteImageProcessor.swift; sourceTree = "<group>"; };
+		1A7EBC214DA814B4D0D18D2E /* AppStoreAppDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreAppDetailView.swift; sourceTree = "<group>"; };
 		1D1C8AC07BCFBC6EF4C133C2 /* AppEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEditorView.swift; sourceTree = "<group>"; };
 		206E5B257354DA4BECA02629 /* ImageDataProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageDataProcessor.swift; sourceTree = "<group>"; };
 		22802DA63A28E160DDEA0822 /* AppDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDetailView.swift; sourceTree = "<group>"; };
+		232BF54E34F532426FEFCE4F /* GitGraphLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitGraphLayout.swift; sourceTree = "<group>"; };
+		24E41B8327A0C82E511EC281 /* GitGraphMarkerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitGraphMarkerView.swift; sourceTree = "<group>"; };
+		26D6CA5FE622C677EC29F3AE /* NoteAIReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteAIReviewView.swift; sourceTree = "<group>"; };
+		274FE557356CA576D0325C38 /* XcodeCloudBuildDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XcodeCloudBuildDetailView.swift; sourceTree = "<group>"; };
 		27CF9960BAFA6542B36F5B29 /* ProjectStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectStatus.swift; sourceTree = "<group>"; };
+		2D002EC6A6BA8CC2CCB89F07 /* AIWritingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIWritingSession.swift; sourceTree = "<group>"; };
 		3075D0E17EE54236AA43EDEC /* NoteKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteKind.swift; sourceTree = "<group>"; };
 		37DCD4DD71AC8080C57A2A0A /* ProjectsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsView.swift; sourceTree = "<group>"; };
 		381AE1F5E0D9748DFE0EFAEA /* AppStatusLinesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStatusLinesView.swift; sourceTree = "<group>"; };
+		38CA9FAD2E734F7ED7EAC56F /* BranchDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchDetailView.swift; sourceTree = "<group>"; };
+		3C4CE6B450A7BF76BB21E897 /* TagsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagsView.swift; sourceTree = "<group>"; };
 		444741C11BDFBEA85963C772 /* AppRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRowView.swift; sourceTree = "<group>"; };
 		5123DB5C57B80F5D298A347A /* DefaultAppIconStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultAppIconStyle.swift; sourceTree = "<group>"; };
 		51E8838DB9A581C6DCDC21BD /* ListSortOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSortOption.swift; sourceTree = "<group>"; };
+		52B9C1F4A06AA418EF83D0B7 /* CreateReleaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateReleaseView.swift; sourceTree = "<group>"; };
+		5B2A1B62C8A8D72A1835D4D1 /* MyAppsThemeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyAppsThemeCatalog.swift; sourceTree = "<group>"; };
 		5B81C63129CC7A707224F2D5 /* MarkdownBlockParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownBlockParser.swift; sourceTree = "<group>"; };
 		62438FEB9227AD4714C9EF7F /* MarkdownTextExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTextExtractor.swift; sourceTree = "<group>"; };
 		64A40F7353C31320B5D7721B /* AppListField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppListField.swift; sourceTree = "<group>"; };
+		64F844F2BFBCD0F1380DD104 /* GitCommitDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitCommitDetailView.swift; sourceTree = "<group>"; };
 		67058351A7BF04AF57CB4252 /* NoteCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteCardView.swift; sourceTree = "<group>"; };
 		713759EBE9FFCCF1233EB160 /* ManagedApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagedApp.swift; sourceTree = "<group>"; };
 		75CAB23AA32BC718598F3D06 /* AppPlatform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPlatform.swift; sourceTree = "<group>"; };
 		78842556A068DDB426E88777 /* AppValueFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppValueFormatter.swift; sourceTree = "<group>"; };
-		7BF1A8E8AF52A72868F87B94 /* AppAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAppearance.swift; sourceTree = "<group>"; };
 		7D609A298EAECFE2C6178BBB /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		7F7A9C1A7A22F77073F520F0 /* GitHubAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubAPIClient.swift; sourceTree = "<group>"; };
+		8211FC9220DDF2A63E06228F /* GitHubBranchOperationsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubBranchOperationsModels.swift; sourceTree = "<group>"; };
 		82CF8E70FE46B1DF9A8480FA /* AddNotesToAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddNotesToAppView.swift; sourceTree = "<group>"; };
 		84B51AF3D06B8D35C518F951 /* P3MigrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P3MigrationService.swift; sourceTree = "<group>"; };
+		84B690F17264E2AE3F941E58 /* AppStoreConnectSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreConnectSettingsSection.swift; sourceTree = "<group>"; };
 		854E4ABE77FFF5AAE43F32B8 /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		86A5158BC102856C7EE9768C /* AppIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconView.swift; sourceTree = "<group>"; };
+		88B42C329EE2026C410EEA94 /* GitHubCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubCredentialStore.swift; sourceTree = "<group>"; };
+		8BA9BD5223E6D0EDC8933DB5 /* RepositoriesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoriesViewModel.swift; sourceTree = "<group>"; };
+		8DAF4B6FE851479A82C55E36 /* BranchRebaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchRebaseView.swift; sourceTree = "<group>"; };
 		91747B8B5254213369DEFC5A /* MarkdownTaskParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTaskParser.swift; sourceTree = "<group>"; };
+		9270062400636E9CF99C37B8 /* GitHubHistoryModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubHistoryModels.swift; sourceTree = "<group>"; };
 		932F6C5C88328626598CD42D /* ProjectStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectStage.swift; sourceTree = "<group>"; };
 		9ACA76CCC4557187332D92E2 /* AppBackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBackupService.swift; sourceTree = "<group>"; };
 		A8A8077BAC8896B56016F4AD /* ProjectDeletionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDeletionService.swift; sourceTree = "<group>"; };
+		ABBAD8B2BE2A456F861C9ACC /* AppStoreConnectCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreConnectCredentialStore.swift; sourceTree = "<group>"; };
+		ABE75EB3EB402E358F99A161 /* AppStorePlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStorePlaceholderView.swift; sourceTree = "<group>"; };
+		B07053B3788E554386AFE4E9 /* BranchesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchesView.swift; sourceTree = "<group>"; };
+		B0B11078E6CF4EFB4B4EAE98 /* StartXcodeCloudBuildView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartXcodeCloudBuildView.swift; sourceTree = "<group>"; };
+		B14425B4E37D82BE72CBD017 /* DeepSeekClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekClient.swift; sourceTree = "<group>"; };
+		B35DA3B00AAE09879408C04F /* ReleasesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleasesViewModel.swift; sourceTree = "<group>"; };
+		B3639C397F99186BD4C697C4 /* BranchMergeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchMergeView.swift; sourceTree = "<group>"; };
+		B40C8909F2777B1B19A86752 /* BranchRebaseViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchRebaseViewModel.swift; sourceTree = "<group>"; };
 		B47889BD445E12DAE1E9EEF6 /* NoteEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteEditorView.swift; sourceTree = "<group>"; };
+		C5C816D242DEC8D01C37495E /* RepositoriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoriesView.swift; sourceTree = "<group>"; };
+		C97B16868193DB28CD22C252 /* AppStorePublicArtworkLookup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStorePublicArtworkLookup.swift; sourceTree = "<group>"; };
+		CD54E144443943A2F5EBBD93 /* AppStoreAppsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreAppsView.swift; sourceTree = "<group>"; };
 		CE71E64EE59F80CCFBA45538 /* GitHubMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubMarkdownView.swift; sourceTree = "<group>"; };
 		D13F75E46BB881F47748136C /* QuickNote.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNote.swift; sourceTree = "<group>"; };
+		D72BCE9083C56C5E479798EB /* GitHubRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubRepository.swift; sourceTree = "<group>"; };
+		DAB903592E5D2E4279DB1625 /* CreateReleaseViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateReleaseViewModel.swift; sourceTree = "<group>"; };
 		DB117ED9EA999EF29F925906 /* ChecklistItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistItem.swift; sourceTree = "<group>"; };
+		DB16B32A4F0AB7B1E474141A /* CreateTagViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateTagViewModel.swift; sourceTree = "<group>"; };
+		DB4D7096E1A9CF2993DABF87 /* GitHubSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubSession.swift; sourceTree = "<group>"; };
+		DB815DB94D64FD6735005417 /* AppStoreConnectSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreConnectSession.swift; sourceTree = "<group>"; };
+		DDF1E3CCD8D05528E673E76A /* NoteAIWritingPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteAIWritingPrompt.swift; sourceTree = "<group>"; };
+		DE564E87C22F505534DC70BA /* GitHubReleaseModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubReleaseModels.swift; sourceTree = "<group>"; };
 		DEBC773D8E7ACEA7F5F514FE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E82583C4E597E9D73A18CA25 /* AppStoreAppIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreAppIconView.swift; sourceTree = "<group>"; };
+		E9A849334D3FC80D7B1D7EF8 /* AppStoreConnectAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreConnectAPIClient.swift; sourceTree = "<group>"; };
+		EC625669A51C2D15AC392D38 /* GitCommitRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitCommitRowView.swift; sourceTree = "<group>"; };
 		ED6D741B7364D33872B47BC4 /* MyAppsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyAppsApp.swift; sourceTree = "<group>"; };
+		F216C5601D7E66E427A619C4 /* CreateTagView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateTagView.swift; sourceTree = "<group>"; };
 		F3FE3B8E150CAEF99F0F9595 /* MyApps.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MyApps.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F6006C8DB45F445CC3318817 /* BusinessModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BusinessModel.swift; sourceTree = "<group>"; };
 		F9262B4EDC99788ADB19D9F0 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
+		FBCEE4D545BE2C2D289D7DF2 /* ReleasesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleasesView.swift; sourceTree = "<group>"; };
 		FD9ABABA85D0281C48BAFA81 /* NotesInboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesInboxView.swift; sourceTree = "<group>"; };
+		FF786711796F554D29B27CF0 /* GitLogViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitLogViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -102,18 +191,66 @@
 			files = (
 				0DF917CA9EF9925E322568C8 /* Runestone in Frameworks */,
 				841E2B8F1F0682911913E8C6 /* MarkdownView in Frameworks */,
+				E580A271CDD6E3FF35EC030B /* AppFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0985B771B280F37EB8BC7AD9 /* AppStore */ = {
+			isa = PBXGroup;
+			children = (
+				1A7EBC214DA814B4D0D18D2E /* AppStoreAppDetailView.swift */,
+				E82583C4E597E9D73A18CA25 /* AppStoreAppIconView.swift */,
+				CD54E144443943A2F5EBBD93 /* AppStoreAppsView.swift */,
+				ABE75EB3EB402E358F99A161 /* AppStorePlaceholderView.swift */,
+				B0B11078E6CF4EFB4B4EAE98 /* StartXcodeCloudBuildView.swift */,
+				274FE557356CA576D0325C38 /* XcodeCloudBuildDetailView.swift */,
+			);
+			path = AppStore;
+			sourceTree = "<group>";
+		};
+		144EDCF00E190118C3B82E2D /* AI */ = {
+			isa = PBXGroup;
+			children = (
+				2D002EC6A6BA8CC2CCB89F07 /* AIWritingSession.swift */,
+				B14425B4E37D82BE72CBD017 /* DeepSeekClient.swift */,
+				DDF1E3CCD8D05528E673E76A /* NoteAIWritingPrompt.swift */,
+			);
+			path = AI;
+			sourceTree = "<group>";
+		};
+		270F9F8A18440F4C2B2E5F00 /* GitHub */ = {
+			isa = PBXGroup;
+			children = (
+				12C73FA5A3D5CE4CF6295C3A /* BranchMergeViewModel.swift */,
+				B40C8909F2777B1B19A86752 /* BranchRebaseViewModel.swift */,
+				DAB903592E5D2E4279DB1625 /* CreateReleaseViewModel.swift */,
+				DB16B32A4F0AB7B1E474141A /* CreateTagViewModel.swift */,
+				232BF54E34F532426FEFCE4F /* GitGraphLayout.swift */,
+				7F7A9C1A7A22F77073F520F0 /* GitHubAPIClient.swift */,
+				8211FC9220DDF2A63E06228F /* GitHubBranchOperationsModels.swift */,
+				88B42C329EE2026C410EEA94 /* GitHubCredentialStore.swift */,
+				9270062400636E9CF99C37B8 /* GitHubHistoryModels.swift */,
+				DE564E87C22F505534DC70BA /* GitHubReleaseModels.swift */,
+				D72BCE9083C56C5E479798EB /* GitHubRepository.swift */,
+				DB4D7096E1A9CF2993DABF87 /* GitHubSession.swift */,
+				FF786711796F554D29B27CF0 /* GitLogViewModel.swift */,
+				B35DA3B00AAE09879408C04F /* ReleasesViewModel.swift */,
+				8BA9BD5223E6D0EDC8933DB5 /* RepositoriesViewModel.swift */,
+			);
+			path = GitHub;
+			sourceTree = "<group>";
+		};
 		3CCA25845A96DC24606E02F8 /* Views */ = {
 			isa = PBXGroup;
 			children = (
 				D98B96A3BB0DCEE1DB720469 /* Apps */,
+				0985B771B280F37EB8BC7AD9 /* AppStore */,
 				B9F5302AF9733037006D5ED8 /* Notes */,
 				7E1FA1551ADBB8C5339F432B /* Projects */,
+				444747A224E8E822BA9821CB /* Repositories */,
 				A98C923999E5C9075F0A167F /* Settings */,
 				C9B46B358DF83EA4F0BDFFCF /* Shared */,
 				7D609A298EAECFE2C6178BBB /* RootView.swift */,
@@ -127,6 +264,26 @@
 				ED6D741B7364D33872B47BC4 /* MyAppsApp.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		444747A224E8E822BA9821CB /* Repositories */ = {
+			isa = PBXGroup;
+			children = (
+				38CA9FAD2E734F7ED7EAC56F /* BranchDetailView.swift */,
+				B07053B3788E554386AFE4E9 /* BranchesView.swift */,
+				B3639C397F99186BD4C697C4 /* BranchMergeView.swift */,
+				8DAF4B6FE851479A82C55E36 /* BranchRebaseView.swift */,
+				52B9C1F4A06AA418EF83D0B7 /* CreateReleaseView.swift */,
+				F216C5601D7E66E427A619C4 /* CreateTagView.swift */,
+				64F844F2BFBCD0F1380DD104 /* GitCommitDetailView.swift */,
+				EC625669A51C2D15AC392D38 /* GitCommitRowView.swift */,
+				24E41B8327A0C82E511EC281 /* GitGraphMarkerView.swift */,
+				FBCEE4D545BE2C2D289D7DF2 /* ReleasesView.swift */,
+				C5C816D242DEC8D01C37495E /* RepositoriesView.swift */,
+				05C4604F3D760104F8D53396 /* RepositoryWorkspaceView.swift */,
+				3C4CE6B450A7BF76BB21E897 /* TagsView.swift */,
+			);
+			path = Repositories;
 			sourceTree = "<group>";
 		};
 		6010A6DE4722C3CBB2145547 = {
@@ -148,6 +305,8 @@
 		A98C923999E5C9075F0A167F /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				039E68AF0896800CED5A73B6 /* AIWritingSettingsSection.swift */,
+				84B690F17264E2AE3F941E58 /* AppStoreConnectSettingsSection.swift */,
 				0F0852BD25274E340827EB84 /* SettingsView.swift */,
 			);
 			path = Settings;
@@ -184,12 +343,24 @@
 			path = MyApps;
 			sourceTree = "<group>";
 		};
+		B5B62813CB1C422D71839550 /* AppStoreConnect */ = {
+			isa = PBXGroup;
+			children = (
+				E9A849334D3FC80D7B1D7EF8 /* AppStoreConnectAPIClient.swift */,
+				ABBAD8B2BE2A456F861C9ACC /* AppStoreConnectCredentialStore.swift */,
+				DB815DB94D64FD6735005417 /* AppStoreConnectSession.swift */,
+				C97B16868193DB28CD22C252 /* AppStorePublicArtworkLookup.swift */,
+			);
+			path = AppStoreConnect;
+			sourceTree = "<group>";
+		};
 		B9F5302AF9733037006D5ED8 /* Notes */ = {
 			isa = PBXGroup;
 			children = (
 				82CF8E70FE46B1DF9A8480FA /* AddNotesToAppView.swift */,
 				CE71E64EE59F80CCFBA45538 /* GitHubMarkdownView.swift */,
 				0557B051E3C9E9D1ED79C9E4 /* MarkdownTextEditor.swift */,
+				26D6CA5FE622C677EC29F3AE /* NoteAIReviewView.swift */,
 				67058351A7BF04AF57CB4252 /* NoteCardView.swift */,
 				B47889BD445E12DAE1E9EEF6 /* NoteEditorView.swift */,
 				FD9ABABA85D0281C48BAFA81 /* NotesInboxView.swift */,
@@ -200,6 +371,9 @@
 		BF1261954E467A820D5CF9A1 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				144EDCF00E190118C3B82E2D /* AI */,
+				B5B62813CB1C422D71839550 /* AppStoreConnect */,
+				270F9F8A18440F4C2B2E5F00 /* GitHub */,
 				9ACA76CCC4557187332D92E2 /* AppBackupService.swift */,
 				78842556A068DDB426E88777 /* AppValueFormatter.swift */,
 				206E5B257354DA4BECA02629 /* ImageDataProcessor.swift */,
@@ -236,9 +410,9 @@
 		DEEA486893AC33FABFAC6069 /* Design */ = {
 			isa = PBXGroup;
 			children = (
-				7BF1A8E8AF52A72868F87B94 /* AppAppearance.swift */,
 				F9262B4EDC99788ADB19D9F0 /* AppTheme.swift */,
 				5123DB5C57B80F5D298A347A /* DefaultAppIconStyle.swift */,
+				5B2A1B62C8A8D72A1835D4D1 /* MyAppsThemeCatalog.swift */,
 			);
 			path = Design;
 			sourceTree = "<group>";
@@ -278,6 +452,7 @@
 			packageProductDependencies = (
 				8F0372EA46B84A6D4981D455 /* Runestone */,
 				CC7572A9D44EE2A53DC135D9 /* MarkdownView */,
+				549117B3F47728F1A47EDB9F /* AppFoundation */,
 			);
 			productName = MyApps;
 			productReference = F3FE3B8E150CAEF99F0F9595 /* MyApps.app */;
@@ -308,6 +483,7 @@
 			mainGroup = 6010A6DE4722C3CBB2145547;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				747547D69DA29960B6BD56F4 /* XCRemoteSwiftPackageReference "AppFoundation" */,
 				473D226E85CF282A02E20219 /* XCRemoteSwiftPackageReference "MarkdownView" */,
 				BF9CD49200773D86FC7EE13F /* XCRemoteSwiftPackageReference "Runestone" */,
 			);
@@ -337,8 +513,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1EFA33093C84E8F309390E9E /* AIWritingSession.swift in Sources */,
+				97115345B68B87F7DE5B67F5 /* AIWritingSettingsSection.swift in Sources */,
 				C73E30633CFE18551EC0907F /* AddNotesToAppView.swift in Sources */,
-				F5A1518C2D55E0CE2A159683 /* AppAppearance.swift in Sources */,
 				361779B39988A00E4EF59239 /* AppBackupService.swift in Sources */,
 				0954228412BCB803F4423E71 /* AppDetailView.swift in Sources */,
 				2A88D1800CB42880053A3C9E /* AppEditorView.swift in Sources */,
@@ -347,13 +524,45 @@
 				AE8142CDAAD3E73C9054FDD1 /* AppPlatform.swift in Sources */,
 				BB6948DF271A8BE78EB0AF70 /* AppRowView.swift in Sources */,
 				0E76A37904D2568B9C780B67 /* AppStatusLinesView.swift in Sources */,
+				1D3ABAC7708A6E2642F07E47 /* AppStoreAppDetailView.swift in Sources */,
+				99BC9C423557976FD7616A63 /* AppStoreAppIconView.swift in Sources */,
+				EBEC4C9E0CFF42B329D38D00 /* AppStoreAppsView.swift in Sources */,
+				11E03E6C87A2BEBBAF1AAF86 /* AppStoreConnectAPIClient.swift in Sources */,
+				C2CFB80A8AB2BBC076513252 /* AppStoreConnectCredentialStore.swift in Sources */,
+				19C82E4D96AEAF0EA0A43E84 /* AppStoreConnectSession.swift in Sources */,
+				AD371378896ABB936F006031 /* AppStoreConnectSettingsSection.swift in Sources */,
+				72D1816CFE3431DE39234874 /* AppStorePlaceholderView.swift in Sources */,
+				9F77F8C7B43F9343FC285262 /* AppStorePublicArtworkLookup.swift in Sources */,
 				5CDF435C3C0D1054580AE7D3 /* AppTheme.swift in Sources */,
 				104BD26C9B522A2D7DC1A004 /* AppValueFormatter.swift in Sources */,
+				CBC358D09789AD618122C917 /* BranchDetailView.swift in Sources */,
+				1627D458684A95F002C57454 /* BranchMergeView.swift in Sources */,
+				32181F0EA86F184415E80AC2 /* BranchMergeViewModel.swift in Sources */,
+				47238DF80B72A0A2423D182C /* BranchRebaseView.swift in Sources */,
+				66665746054C3328E1537355 /* BranchRebaseViewModel.swift in Sources */,
+				CE40ABCFEEA6EA864293E0EB /* BranchesView.swift in Sources */,
 				FB8D75760BE7552458836062 /* BusinessModel.swift in Sources */,
 				A850BE722DDBA9DB42AAB960 /* ChecklistItem.swift in Sources */,
+				80FE392A3E8E39F6EBF9017C /* CreateReleaseView.swift in Sources */,
+				2E6B72D688FA96A4372C5BC3 /* CreateReleaseViewModel.swift in Sources */,
+				954244422F78A4F8ECE30DEE /* CreateTagView.swift in Sources */,
+				24EE7B2E7545E1ECF0DD2932 /* CreateTagViewModel.swift in Sources */,
+				1DEC9E8C3F4D26136FB23695 /* DeepSeekClient.swift in Sources */,
 				FD0F8838FA2EA9DFED8FC521 /* DefaultAppIconStyle.swift in Sources */,
 				E85C050C2296610C655C05F4 /* EmptyStateView.swift in Sources */,
+				F166E5985B309C4E19103A02 /* GitCommitDetailView.swift in Sources */,
+				676CBC9DA5CE3ABBE04CED95 /* GitCommitRowView.swift in Sources */,
+				EDA243AE7275F5479FEF5F74 /* GitGraphLayout.swift in Sources */,
+				3109B885B449A2059C0557FA /* GitGraphMarkerView.swift in Sources */,
+				A25371930E393FEBE5DD3064 /* GitHubAPIClient.swift in Sources */,
+				0309A3CBA8E71FE15CA5AC98 /* GitHubBranchOperationsModels.swift in Sources */,
+				1A78F56E7813DA79A5EE5CE5 /* GitHubCredentialStore.swift in Sources */,
+				34C5CC7DCC2452B459539AED /* GitHubHistoryModels.swift in Sources */,
 				1DD510CAAC4F465F6B4B2353 /* GitHubMarkdownView.swift in Sources */,
+				B477709BBF390F3DF16EE3C7 /* GitHubReleaseModels.swift in Sources */,
+				1F7F63F6817BEF95998B0522 /* GitHubRepository.swift in Sources */,
+				18D4A34E0DBBD4C4B05A9F81 /* GitHubSession.swift in Sources */,
+				219B8CF2D8ECDC75AE91C95F /* GitLogViewModel.swift in Sources */,
 				368E55ABF2DB08C1DB1F1A83 /* ImageDataProcessor.swift in Sources */,
 				9D98141A211C5346A83BBA51 /* ListSortOption.swift in Sources */,
 				8028C6E2C4974908386FAAB0 /* ManagedApp.swift in Sources */,
@@ -362,6 +571,9 @@
 				87215B1D3C4A61EB92173871 /* MarkdownTextEditor.swift in Sources */,
 				5FC8A2C00FDD74A2305B47F4 /* MarkdownTextExtractor.swift in Sources */,
 				2A592A75774A757316C63D43 /* MyAppsApp.swift in Sources */,
+				8CD2AF1D5112FF51621037B2 /* MyAppsThemeCatalog.swift in Sources */,
+				267662EA0E1CEDA1DAC1FCCB /* NoteAIReviewView.swift in Sources */,
+				BE2B60402884F4C4B1F4542A /* NoteAIWritingPrompt.swift in Sources */,
 				7E73A677FC3DB904FF4152C9 /* NoteAttachment.swift in Sources */,
 				8802341454B6BA34E508457D /* NoteCardView.swift in Sources */,
 				E615C0F8D9D5DEE748C8FAAD /* NoteEditorView.swift in Sources */,
@@ -374,8 +586,16 @@
 				A77281463BF15AF7F603452C /* ProjectStatus.swift in Sources */,
 				CBB5AAE5028F8882C4ABFEFA /* ProjectsView.swift in Sources */,
 				442CB1CDA74EBF29EDDBC3D9 /* QuickNote.swift in Sources */,
+				15A584618BCA72E9D75F2A02 /* ReleasesView.swift in Sources */,
+				F9C4C45387638099BA48375C /* ReleasesViewModel.swift in Sources */,
+				6E7B49AB4479CB86443CA2F4 /* RepositoriesView.swift in Sources */,
+				70CA75E7E2282FD59C41AC38 /* RepositoriesViewModel.swift in Sources */,
+				C7A934CDEB07217BFBB84A41 /* RepositoryWorkspaceView.swift in Sources */,
 				308A05995D7317432ACB7431 /* RootView.swift in Sources */,
 				C2132BC9ADD4757CCC08C569 /* SettingsView.swift in Sources */,
+				2009D52DD9CE09DB34D228FC /* StartXcodeCloudBuildView.swift in Sources */,
+				DE0A07815E4A9E13EF023ABC /* TagsView.swift in Sources */,
+				8886B7357A20F77207C2956B /* XcodeCloudBuildDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -597,6 +817,14 @@
 				minimumVersion = 3.0.0;
 			};
 		};
+		747547D69DA29960B6BD56F4 /* XCRemoteSwiftPackageReference "AppFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/hoangbkit/AppFoundation.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.8;
+			};
+		};
 		BF9CD49200773D86FC7EE13F /* XCRemoteSwiftPackageReference "Runestone" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/simonbs/Runestone.git";
@@ -608,6 +836,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		549117B3F47728F1A47EDB9F /* AppFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 747547D69DA29960B6BD56F4 /* XCRemoteSwiftPackageReference "AppFoundation" */;
+			productName = AppFoundation;
+		};
 		8F0372EA46B84A6D4981D455 /* Runestone */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BF9CD49200773D86FC7EE13F /* XCRemoteSwiftPackageReference "Runestone" */;

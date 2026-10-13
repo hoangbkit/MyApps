@@ -20,7 +20,7 @@ struct AppStoreConnectSettingsSection: View {
     }
 
     var body: some View {
-        Section {
+        Section("App Store Connect") {
             switch session.connectionState {
             case .loading:
                 HStack(spacing: 10) {
@@ -55,10 +55,6 @@ struct AppStoreConnectSettingsSection: View {
                 }
                 .disabled(session.isWorking)
             }
-        } header: {
-            Text("App Store Connect")
-        } footer: {
-            Text("Create a team API key in App Store Connect → Users and Access → Integrations. Enter its Issuer ID, Key ID, and .p8 private key. Credentials stay in this device's Keychain and are not included in backups. The key needs access to Apps and Xcode Cloud.")
         }
         .fileImporter(
             isPresented: $isImportingKey,

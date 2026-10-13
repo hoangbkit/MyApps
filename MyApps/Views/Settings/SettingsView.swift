@@ -30,13 +30,9 @@ struct SettingsView: View {
     var body: some View {
         List {
             Group {
-                Section {
+                Section("Appearance") {
                     ThemePickerView(manager: themes, title: nil, showsCountdown: false)
                         .padding(.vertical, 3)
-                } header: {
-                    Text("Appearance")
-                } footer: {
-                    Text("All seven themes are free, including ZukaMe.")
                 }
                 .listRowBackground(MyAppsGlassSurface())
 
@@ -54,7 +50,7 @@ struct SettingsView: View {
                         .foregroundStyle(foundationTheme.secondaryForegroundColor)
                 }
 
-                Section {
+                Section("Backup & Restore") {
                     Button {
                         exportBackup()
                     } label: {
@@ -66,10 +62,6 @@ struct SettingsView: View {
                     } label: {
                         Label("Restore from Backup", systemImage: "square.and.arrow.down")
                     }
-                } header: {
-                    Text("Backup & Restore")
-                } footer: {
-                    Text("A .myappsbackup package includes all apps and notes as JSON metadata, with custom icons and attached images stored as separate files. Restoring replaces the current library after confirmation.")
                 }
 
                 Section("Library") {
@@ -178,7 +170,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var gitHubSection: some View {
-        Section {
+        Section("GitHub") {
             switch gitHubSession.connectionState {
             case .loading:
                 HStack {
@@ -215,10 +207,6 @@ struct SettingsView: View {
                 }
                 .disabled(gitHubSession.isWorking)
             }
-        } header: {
-            Text("GitHub")
-        } footer: {
-            Text("GitHub access uses a personal access token stored only in this device's Keychain. Use repository Contents read/write permission for private repositories and Git operations.")
         }
     }
 

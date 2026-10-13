@@ -8,7 +8,7 @@ struct DeepSeekSettingsSection: View {
     @State private var confirmDisconnect = false
 
     var body: some View {
-        Section {
+        Section("DeepSeek") {
             LabeledContent("Status", value: ai.isConnected ? "Connected" : "Not Connected")
             Picker("Model", selection: Binding(
                 get: { ai.model },
@@ -57,10 +57,6 @@ struct DeepSeekSettingsSection: View {
                     confirmDisconnect = true
                 }
             }
-        } header: {
-            Text("DeepSeek")
-        } footer: {
-            Text("Your key is saved only in this device's Keychain and never exported. AI transforms send the selected note text and profile instructions directly to DeepSeek. Model usage may incur charges.")
         }
         .confirmationDialog("Disconnect DeepSeek?", isPresented: $confirmDisconnect) {
             Button("Disconnect", role: .destructive) {
@@ -82,7 +78,7 @@ struct AIProfilesSettingsSection: View {
     @State private var editingProfile: AIWritingProfile?
 
     var body: some View {
-        Section {
+        Section("AI Profiles") {
             Picker("Default Profile", selection: Binding(
                 get: { ai.defaultProfileID },
                 set: { ai.setDefault($0) }
@@ -131,10 +127,6 @@ struct AIProfilesSettingsSection: View {
             } label: {
                 Label("Add Profile", systemImage: "plus")
             }
-        } header: {
-            Text("AI Profiles")
-        } footer: {
-            Text("Profiles define your writing voice and protected terminology. Long-press a profile to duplicate or delete it. Profiles are saved locally and included in full backups.")
         }
         .sheet(item: $editingProfile) { profile in
             AIProfileEditorView(profile: profile) { edited in
@@ -176,13 +168,9 @@ private struct AIProfileEditorView: View {
                         TextField("Custom Instructions", text: $draft.instructions, axis: .vertical)
                             .lineLimit(3...8)
                     }
-                    Section {
+                    Section("Protected Terminology") {
                         TextField("Protected Terms", text: $draft.protectedTerms, axis: .vertical)
                             .lineLimit(3...8)
-                    } header: {
-                        Text("Protected Terminology")
-                    } footer: {
-                        Text("Separate terms with commas. Case-preserving rewrites keep these names, brands and technical terms unchanged.")
                     }
                 }
                 .listRowBackground(MyAppsGlassSurface())

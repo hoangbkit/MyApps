@@ -29,15 +29,38 @@ struct AppStoreConnectBuildIconAttributes: Decodable, Sendable {
     let iconAsset: AppStoreConnectImageAsset?
 }
 
-struct AppStoreConnectIncludedBuildIcon: Decodable, Sendable {
-    let id: String
-    let type: String
-    let attributes: AppStoreConnectBuildIconAttributes?
+private enum AppStoreConnectIncludedResource: Decodable, Sendable {
+    case buildIcon(id: String, attributes: AppStoreConnectBuildIconAttributes?)
+    case version(AppStoreConnectVersion)
+    case unsupported
+
+    private enum CodingKeys: String, CodingKey {
+        case id, type, attributes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(String.self, forKey: .type) {
+        case "buildIcons":
+            self = .buildIcon(
+                id: try container.decode(String.self, forKey: .id),
+                attributes: try container.decodeIfPresent(
+                    AppStoreConnectBuildIconAttributes.self,
+                    forKey: .attributes
+                )
+            )
+        case "appStoreVersions":
+            self = .version(try AppStoreConnectVersion(from: decoder))
+        default:
+            self = .unsupported
+        }
+    }
 }
 
 struct AppStoreConnectAppCatalog: Sendable {
     let apps: [AppStoreConnectApp]
     let iconURLsByAppID: [String: URL]
+    let versionsByAppID: [String: [AppStoreConnectVersion]]
 }
 
 struct AppStoreConnectAppAttributes: Decodable, Sendable {
@@ -203,11 +226,16 @@ struct AppStoreConnectRelationships: Decodable, Sendable {
     let workflow: AppStoreConnectRelationship?
     let defaultBranch: AppStoreConnectRelationship?
     let appStoreIcon: AppStoreConnectRelationship?
+    let appStoreVersions: AppStoreConnectToManyRelationship?
     let sourceBranchOrTag: AppStoreConnectRelationship?
 }
 
 struct AppStoreConnectRelationship: Decodable, Sendable {
     let data: AppStoreConnectResourceIdentifier?
+}
+
+struct AppStoreConnectToManyRelationship: Decodable, Sendable {
+    let data: [AppStoreConnectResourceIdentifier]
 }
 
 struct AppStoreConnectResourceIdentifier: Decodable, Sendable {
@@ -227,7 +255,7 @@ typealias AppStoreConnectGitReference = AppStoreConnectResource<AppStoreConnectG
 
 private struct AppStoreConnectPage<Item: Decodable & Sendable>: Decodable, Sendable {
     let data: [Item]
-    let included: [AppStoreConnectIncludedBuildIcon]?
+    let included: [AppStoreConnectIncludedResource]?
     let links: PageLinks?
 
     struct PageLinks: Decodable, Sendable {
@@ -296,45 +324,72 @@ struct AppStoreConnectAPIClient: Sendable {
         )
     }
 
-    func apps() async throws -> [AppStoreConnectApp] {
-        try await appsWithIcons().apps
+    func apps(bypassCache: Bool = false) async throws -> [AppStoreConnectApp] {
+        try await appsWithIcons(bypassCache: bypassCache).apps
     }
 
-    /// Retrieves app icons in the same paginated ASC request as the apps.
+    /// Retrieves app icons and version statuses in the same paginated ASC request as the apps.
     /// Avoids public store lookup (which cannot find unreleased apps) and
     /// avoids N additional network requests for N apps.
-    func appsWithIcons() async throws -> AppStoreConnectAppCatalog {
+    func appsWithIcons(bypassCache: Bool = false) async throws -> AppStoreConnectAppCatalog {
         var url = try apiURL(path: "/v1/apps", query: [
             URLQueryItem(name: "limit", value: "200"),
-            URLQueryItem(name: "include", value: "appStoreIcon"),
-            URLQueryItem(name: "fields[buildIcons]", value: "iconAsset")
+            URLQueryItem(name: "include", value: "appStoreIcon,appStoreVersions"),
+            URLQueryItem(name: "fields[buildIcons]", value: "iconAsset"),
+            URLQueryItem(
+                name: "fields[appStoreVersions]",
+                value: "platform,versionString,appVersionState,appStoreState,createdDate"
+            ),
+            URLQueryItem(name: "limit[appStoreVersions]", value: "50")
         ])
+        let cachePolicy: URLRequest.CachePolicy = bypassCache
+            ? .reloadIgnoringLocalCacheData
+            : .returnCacheDataElseLoad
 
         var apps: [AppStoreConnectApp] = []
         var icons: [String: URL] = [:]
+        var versionsByAppID: [String: [AppStoreConnectVersion]] = [:]
         var visited = Set<URL>()
 
         while visited.insert(url).inserted {
             try Task.checkCancellation()
-            let page: AppStoreConnectPage<AppStoreConnectApp> = try await get(url: url)
-
-            let iconURLs = Dictionary(
-                uniqueKeysWithValues: (page.included ?? []).compactMap { icon -> (String, URL)? in
-                    guard icon.type == "buildIcons",
-                          let url = icon.attributes?.iconAsset?.thumbnailURL() else { return nil }
-                    return (icon.id, url)
-                }
+            let page: AppStoreConnectPage<AppStoreConnectApp> = try await get(
+                url: url,
+                cachePolicy: cachePolicy
             )
+
+            var includedIcons: [String: URL] = [:]
+            var includedVersions: [String: AppStoreConnectVersion] = [:]
+            for resource in page.included ?? [] {
+                switch resource {
+                case let .buildIcon(id, attributes):
+                    if let url = attributes?.iconAsset?.thumbnailURL() {
+                        includedIcons[id] = url
+                    }
+                case let .version(version):
+                    includedVersions[version.id] = version
+                case .unsupported:
+                    break
+                }
+            }
             for app in page.data {
                 if let iconID = app.relationships?.appStoreIcon?.data?.id,
-                   let iconURL = iconURLs[iconID] {
+                   let iconURL = includedIcons[iconID] {
                     icons[app.id] = iconURL
+                }
+                let versionIDs = app.relationships?.appStoreVersions?.data ?? []
+                versionsByAppID[app.id] = versionIDs.compactMap {
+                    includedVersions[$0.id]
                 }
             }
             apps.append(contentsOf: page.data)
 
             guard let next = page.links?.next else {
-                return AppStoreConnectAppCatalog(apps: apps, iconURLsByAppID: icons)
+                return AppStoreConnectAppCatalog(
+                    apps: apps,
+                    iconURLsByAppID: icons,
+                    versionsByAppID: versionsByAppID
+                )
             }
             guard let nextURL = URL(string: next, relativeTo: url)?.absoluteURL,
                   isTrusted(nextURL) else {
@@ -514,12 +569,18 @@ struct AppStoreConnectAPIClient: Sendable {
         try await get(url: apiURL(path: path, query: query))
     }
 
-    private func get<Response: Decodable & Sendable>(url: URL) async throws -> Response {
+    private func get<Response: Decodable & Sendable>(
+        url: URL,
+        cachePolicy: URLRequest.CachePolicy = .reloadIgnoringLocalCacheData
+    ) async throws -> Response {
         guard isTrusted(url) else { throw AppStoreConnectAPIError.invalidResponse }
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        var request = URLRequest(url: url, cachePolicy: cachePolicy)
         request.httpMethod = "GET"
         request.setValue("Bearer \(try authorizationToken())", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if cachePolicy == .reloadIgnoringLocalCacheData {
+            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        }
         request.timeoutInterval = 30
 
         let (data, response) = try await URLSession.shared.data(for: request)

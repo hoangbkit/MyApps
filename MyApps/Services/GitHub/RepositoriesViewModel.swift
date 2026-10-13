@@ -16,7 +16,18 @@ final class RepositoriesViewModel: ObservableObject {
             return
         }
         guard force || !hasLoaded else { return }
+        await fetch(using: client, bypassCache: false)
+    }
 
+    func refresh(using client: GitHubAPIClient?) async {
+        guard let client else {
+            reset()
+            return
+        }
+        await fetch(using: client, bypassCache: true)
+    }
+
+    private func fetch(using client: GitHubAPIClient, bypassCache: Bool) async {
         loadGeneration += 1
         let generation = loadGeneration
         isLoading = true
@@ -26,7 +37,7 @@ final class RepositoriesViewModel: ObservableObject {
         }
 
         do {
-            let fetched = try await client.repositories()
+            let fetched = try await client.repositories(bypassCache: bypassCache)
             guard generation == loadGeneration, !Task.isCancelled else { return }
             repositories = fetched
             hasLoaded = true

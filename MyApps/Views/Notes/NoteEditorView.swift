@@ -5,11 +5,9 @@ import SwiftData
 import SwiftUI
 import UIKit
 
-private enum NoteDisplayMode: String, CaseIterable, Identifiable {
-    case edit = "Edit"
-    case preview = "Preview"
-
-    var id: String { rawValue }
+private enum NoteDisplayMode: Equatable {
+    case edit
+    case preview
 }
 
 struct NoteEditorView: View {
@@ -21,7 +19,7 @@ struct NoteEditorView: View {
 
     @Bindable var note: QuickNote
 
-    @State private var mode: NoteDisplayMode
+    @State private var mode = NoteDisplayMode.edit
     @State private var selectedRange = NSRange(location: 0, length: 0)
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isConfirmingDelete = false
@@ -30,9 +28,8 @@ struct NoteEditorView: View {
     @State private var aiRequest: NoteAIRequest?
     @StateObject private var editorController = MarkdownEditorController()
 
-    init(note: QuickNote, startsInEditMode: Bool = false) {
+    init(note: QuickNote) {
         self.note = note
-        _mode = State(initialValue: startsInEditMode ? .edit : .preview)
         _selectedRange = State(initialValue: NSRange(location: (note.body as NSString).length, length: 0))
     }
 
@@ -58,16 +55,6 @@ struct NoteEditorView: View {
         .navigationTitle("Note")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("Mode", selection: $mode) {
-                    ForEach(NoteDisplayMode.allCases) { value in
-                        Text(value.rawValue).tag(value)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 178)
-            }
-
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Section("Rewrite") {
@@ -114,6 +101,17 @@ struct NoteEditorView: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Button {
+                        mode = mode == .edit ? .preview : .edit
+                    } label: {
+                        Label(
+                            mode == .edit ? "Preview" : "Edit",
+                            systemImage: mode == .edit ? "doc.richtext" : "pencil"
+                        )
+                    }
+
+                    Divider()
+
                     Button {
                         editorController.undo()
                     } label: {

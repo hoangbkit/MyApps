@@ -18,7 +18,6 @@ struct NotesInboxView: View {
 
     @State private var scope: NotesScope = .unassigned
     @State private var activeNote: QuickNote?
-    @State private var activeNoteStartsEditing = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 12, alignment: .top),
@@ -105,7 +104,7 @@ struct NotesInboxView: View {
         }
         .navigationDestination(isPresented: activeNoteBinding) {
             if let activeNote {
-                NoteEditorView(note: activeNote, startsInEditMode: activeNoteStartsEditing)
+                NoteEditorView(note: activeNote)
             }
         }
     }
@@ -115,7 +114,6 @@ struct NotesInboxView: View {
             LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                 ForEach(displayedNotes) { note in
                     NoteCardView(note: note, showsApp: true) {
-                        activeNoteStartsEditing = false
                         activeNote = note
                     } onTogglePin: {
                         note.isPinned.toggle()
@@ -145,7 +143,6 @@ struct NotesInboxView: View {
     private func createNote() {
         let note = QuickNote()
         modelContext.insert(note)
-        activeNoteStartsEditing = true
         activeNote = note
     }
 }

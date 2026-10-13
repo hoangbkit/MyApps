@@ -24,6 +24,55 @@ private enum StoreAppSortOption: String, CaseIterable, Identifiable {
     }
 }
 
+private enum StoreVersionStatus: Hashable {
+    case live
+    case pending
+    case problem
+    case inactive
+
+    init(_ rawValue: String?) {
+        switch rawValue?.uppercased() {
+        case "READY_FOR_DISTRIBUTION", "READY_FOR_SALE", "PREORDER_READY_FOR_SALE":
+            self = .live
+        case "DEVELOPER_REJECTED", "INVALID_BINARY", "METADATA_REJECTED", "REJECTED":
+            self = .problem
+        case "ACCEPTED", "IN_REVIEW", "PENDING_APPLE_RELEASE", "PENDING_CONTRACT",
+             "PENDING_DEVELOPER_RELEASE", "PREPARE_FOR_SUBMISSION", "PROCESSING_FOR_APP_STORE",
+             "PROCESSING_FOR_DISTRIBUTION", "READY_FOR_REVIEW", "WAITING_FOR_EXPORT_COMPLIANCE",
+             "WAITING_FOR_REVIEW":
+            self = .pending
+        default:
+            self = .inactive
+        }
+    }
+
+    func color(fallback: Color) -> Color {
+        switch self {
+        case .live: .green
+        case .pending: .yellow
+        case .problem: .red
+        case .inactive: fallback
+        }
+    }
+}
+
+private struct StoreVersionSummary {
+    let platform: String
+    let version: String
+    let state: String?
+    let status: StoreVersionStatus
+
+    var label: String { "\(platform) \(version)" }
+}
+
+private struct StoreVersionGroup: Identifiable {
+    let status: StoreVersionStatus
+    var versions: [StoreVersionSummary]
+
+    var id: StoreVersionStatus { status }
+    var label: String { versions.map(\.label).joined(separator: ", ") }
+}
+
 struct AppStoreAppsView: View {
     @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.scenePhase) private var scenePhase
@@ -33,6 +82,7 @@ struct AppStoreAppsView: View {
 
     @State private var apps: [AppStoreConnectApp] = []
     @State private var iconURLsByAppID: [String: URL] = [:]
+    @State private var versionsByAppID: [String: [AppStoreConnectVersion]] = [:]
     @State private var publicIconURLsByAppID: [String: URL] = [:]
     @State private var searchText = ""
     @AppStorage(StoreAppSortOption.storageKey) private var sortRawValue = StoreAppSortOption.name.rawValue
@@ -105,6 +155,7 @@ struct AppStoreAppsView: View {
         }
         .myAppsPage()
         .navigationTitle("Apps")
+        .navigationSubtitle("\(filteredApps.count) Apps")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -142,6 +193,7 @@ struct AppStoreAppsView: View {
             case .disconnected:
                 apps = []
                 iconURLsByAppID = [:]
+                versionsByAppID = [:]
                 publicIconURLsByAppID = [:]
                 hasLoaded = false
                 searchText = ""
@@ -185,41 +237,32 @@ struct AppStoreAppsView: View {
                     ContentUnavailableView.search(text: searchText)
                         .listRowBackground(Color.clear)
                 } else {
-                    Section {
-                        ForEach(filteredApps) { app in
-                            NavigationLink {
-                                AppStoreAppDetailView(
-                                    app: app,
-                                    client: session.client(),
-                                    iconURL: iconURLsByAppID[app.id],
-                                    publicIconURL: publicIconURLsByAppID[app.id]
+                    ForEach(filteredApps) { app in
+                        NavigationLink {
+                            AppStoreAppDetailView(
+                                app: app,
+                                client: session.client(),
+                                iconURL: iconURLsByAppID[app.id],
+                                publicIconURL: publicIconURLsByAppID[app.id]
+                            )
+                        } label: {
+                            HStack(spacing: 12) {
+                                AppStoreAppIconView(
+                                    name: app.attributes.name,
+                                    url: iconURLsByAppID[app.id],
+                                    fallbackURL: publicIconURLsByAppID[app.id],
+                                    appID: app.id
                                 )
-                            } label: {
-                                HStack(spacing: 12) {
-                                    AppStoreAppIconView(
-                                        name: app.attributes.name,
-                                        url: iconURLsByAppID[app.id],
-                                        fallbackURL: publicIconURLsByAppID[app.id],
-                                        appID: app.id
-                                    )
 
-                                    VStack(alignment: .leading, spacing: 5) {
-                                        Text(app.attributes.name)
-                                            .font(.system(size: 17, weight: .semibold, design: .rounded))
-                                        if let bundleID = app.attributes.bundleId {
-                                            Text(bundleID)
-                                                .font(.system(size: 13, design: .rounded))
-                                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
-                                                .lineLimit(1)
-                                        }
-                                    }
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(app.attributes.name)
+                                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                    versionSummary(for: app)
                                 }
-                                .padding(.vertical, 5)
                             }
-                            .listRowBackground(Color.clear)
+                            .padding(.vertical, 5)
                         }
-                    } header: {
-                        Text("\(filteredApps.count) Apps")
+                        .listRowBackground(Color.clear)
                     }
                 }
             }
@@ -232,20 +275,21 @@ struct AppStoreAppsView: View {
 
         .searchable(text: $searchText, prompt: "Search apps")
         .refreshable {
-            await loadApps()
+            await loadApps(bypassCache: true)
         }
     }
 
     @MainActor
-    private func loadApps() async {
+    private func loadApps(bypassCache: Bool = false) async {
         guard let client = session.client() else { return }
         isLoading = true
         defer { isLoading = false }
         do {
-            let catalog = try await client.appsWithIcons()
+            let catalog = try await client.appsWithIcons(bypassCache: bypassCache)
             guard !Task.isCancelled else { return }
             apps = catalog.apps
             iconURLsByAppID = catalog.iconURLsByAppID
+            versionsByAppID = catalog.versionsByAppID
             hasLoaded = true
             loadFailed = false
             errorMessage = nil
@@ -265,5 +309,109 @@ struct AppStoreAppsView: View {
             loadFailed = true
             errorMessage = error.localizedDescription
         }
+    }
+
+    @ViewBuilder
+    private func versionSummary(for app: AppStoreConnectApp) -> some View {
+        let groups = versionGroups(for: app)
+        if groups.isEmpty {
+            Text("No App Store Versions")
+                .font(.system(size: 13, design: .rounded))
+                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+        } else {
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(groups) { group in
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(group.status.color(fallback: foundationTheme.secondaryForegroundColor))
+                            .frame(width: 7, height: 7)
+                        Text(group.label)
+                            .lineLimit(1)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(accessibilityLabel(for: group))
+                }
+            }
+            .font(.system(size: 13, design: .rounded))
+            .foregroundStyle(foundationTheme.secondaryForegroundColor)
+        }
+    }
+
+    private func versionGroups(for app: AppStoreConnectApp) -> [StoreVersionGroup] {
+        let versions = versionsByAppID[app.id] ?? []
+        let byPlatform = Dictionary(grouping: versions) {
+            $0.attributes.platform ?? ""
+        }
+        let latestByPlatform = byPlatform.compactMap { platform, versions -> StoreVersionSummary? in
+            guard !platform.isEmpty,
+                  let latest = versions.max(by: versionIsOlder),
+                  let version = latest.attributes.versionString,
+                  !version.isEmpty else { return nil }
+            return StoreVersionSummary(
+                platform: displayPlatform(platform),
+                version: version,
+                state: latest.attributes.state,
+                status: StoreVersionStatus(latest.attributes.state)
+            )
+        }
+        .sorted { lhs, rhs in
+            let leftRank = platformRank(lhs.platform)
+            let rightRank = platformRank(rhs.platform)
+            return leftRank == rightRank
+                ? lhs.platform.localizedStandardCompare(rhs.platform) == .orderedAscending
+                : leftRank < rightRank
+        }
+
+        var groups: [StoreVersionGroup] = []
+        for version in latestByPlatform {
+            if let index = groups.firstIndex(where: { $0.status == version.status }) {
+                groups[index].versions.append(version)
+            } else {
+                groups.append(StoreVersionGroup(status: version.status, versions: [version]))
+            }
+        }
+        return groups
+    }
+
+    private func versionIsOlder(_ lhs: AppStoreConnectVersion, _ rhs: AppStoreConnectVersion) -> Bool {
+        let leftDate = lhs.attributes.createdDate ?? ""
+        let rightDate = rhs.attributes.createdDate ?? ""
+        if leftDate != rightDate { return leftDate < rightDate }
+
+        let leftVersion = lhs.attributes.versionString ?? ""
+        let rightVersion = rhs.attributes.versionString ?? ""
+        let comparison = leftVersion.localizedStandardCompare(rightVersion)
+        if comparison != .orderedSame { return comparison == .orderedAscending }
+        return lhs.id < rhs.id
+    }
+
+    private func displayPlatform(_ platform: String) -> String {
+        switch platform.uppercased() {
+        case "IOS": "iOS"
+        case "MAC_OS": "macOS"
+        case "TV_OS": "tvOS"
+        case "VISION_OS": "visionOS"
+        default: platform
+        }
+    }
+
+    private func platformRank(_ platform: String) -> Int {
+        switch platform {
+        case "iOS": 0
+        case "macOS": 1
+        case "tvOS": 2
+        case "visionOS": 3
+        default: 4
+        }
+    }
+
+    private func accessibilityLabel(for group: StoreVersionGroup) -> String {
+        let states = Set(group.versions.compactMap(\.state)).sorted()
+        let status = states.isEmpty
+            ? "Unknown status"
+            : states.map {
+                $0.replacingOccurrences(of: "_", with: " ").localizedCapitalized
+            }.joined(separator: ", ")
+        return "\(group.label), \(status)"
     }
 }

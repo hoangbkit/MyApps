@@ -108,16 +108,6 @@ struct RepositoriesView: View {
             }
     }
 
-    private var pinnedRepositories: [GitHubRepository] {
-        let pinned = pinnedRepositoryIDs
-        return filteredRepositories.filter { pinned.contains($0.id) }
-    }
-
-    private var unpinnedRepositories: [GitHubRepository] {
-        let pinned = pinnedRepositoryIDs
-        return filteredRepositories.filter { !pinned.contains($0.id) }
-    }
-
     var body: some View {
         Group {
             switch session.connectionState {
@@ -141,6 +131,7 @@ struct RepositoriesView: View {
         }
         .myAppsPage()
         .navigationTitle("Repos")
+        .navigationSubtitle("\(filteredRepositories.count) Repositories")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -227,24 +218,8 @@ struct RepositoriesView: View {
                         )
                         .listRowBackground(Color.clear)
                     } else {
-                        if !pinnedRepositories.isEmpty {
-                            Section {
-                                ForEach(pinnedRepositories) { repository in
-                                    repositoryLink(repository)
-                                }
-                            } header: {
-                                Text("Pinned (\(pinnedRepositories.count))")
-                            }
-                        }
-
-                        if !unpinnedRepositories.isEmpty {
-                            Section {
-                                ForEach(unpinnedRepositories) { repository in
-                                    repositoryLink(repository)
-                                }
-                            } header: {
-                                Text("\(unpinnedRepositories.count) Repositories")
-                            }
+                        ForEach(filteredRepositories) { repository in
+                            repositoryLink(repository)
                         }
                     }
                 }
@@ -265,7 +240,7 @@ struct RepositoriesView: View {
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
         .refreshable {
-            await repositoriesModel.load(using: session.client(), force: true)
+            await repositoriesModel.refresh(using: session.client())
         }
     }
 

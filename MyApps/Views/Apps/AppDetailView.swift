@@ -12,7 +12,6 @@ struct AppDetailView: View {
     @AppStorage(NoteSortOption.storageKey) private var noteSortRawValue = NoteSortOption.updated.rawValue
     @AppStorage(NoteSortOption.directionStorageKey) private var directionRawValue = SortDirection.descending.rawValue
     @State private var activeNote: QuickNote?
-    @State private var activeNoteStartsEditing = false
     @State private var isPresentingEditor = false
     @State private var isPresentingAddNotes = false
     @State private var isConfirmingDelete = false
@@ -44,7 +43,6 @@ struct AppDetailView: View {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                         ForEach(sortedNotes) { note in
                             NoteCardView(note: note) {
-                                activeNoteStartsEditing = false
                                 activeNote = note
                             } onTogglePin: {
                                 note.isPinned.toggle()
@@ -138,7 +136,7 @@ struct AppDetailView: View {
         }
         .navigationDestination(isPresented: activeNoteBinding) {
             if let activeNote {
-                NoteEditorView(note: activeNote, startsInEditMode: activeNoteStartsEditing)
+                NoteEditorView(note: activeNote)
             }
         }
         .sheet(isPresented: $isPresentingEditor) {
@@ -234,7 +232,6 @@ struct AppDetailView: View {
         modelContext.insert(note)
         note.app = app
         app.updatedAt = Date()
-        activeNoteStartsEditing = true
         activeNote = note
     }
 }
