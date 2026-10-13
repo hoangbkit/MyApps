@@ -36,7 +36,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Appearance")
                 } footer: {
-                    Text("All six AppFoundation themes are free.")
+                    Text("All seven themes are free, including ZukaMe.")
                 }
                 .listRowBackground(MyAppsGlassSurface())
 

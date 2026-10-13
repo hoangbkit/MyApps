@@ -1,14 +1,36 @@
 import AppFoundation
 import Foundation
 
-/// MyApps exposes only the six built-in AppFoundation themes. They are all
-/// permanently free: no subscription entitlement, trial, or timed preview.
+/// Six built-in AppFoundation themes plus ZukaMe's signature aqua palette.
+/// All themes remain permanently free, without trial or timed preview.
 enum MyAppsThemeCatalog {
     static let storageKey = "myapps.appfoundation.theme-state"
     static let legacyAppearanceStorageKey = "myapps.appearance"
 
+    /// Branded dark-aqua theme drawn from the app icon's cyan gradients.
+    /// Deep teal keeps text readable; translucent cards echo the glass artwork.
+    static let zukaMe = AppFoundation.AppTheme(
+        id: "zukame",
+        title: "ZukaMe",
+        symbolName: "drop.fill",
+        access: .free,
+        appearance: ThemeAppearance(
+            background: ThemeColor(hex: 0x07353E),
+            gradientStart: ThemeColor(hex: 0x60DFE9),
+            gradientEnd: ThemeColor(hex: 0x0EBACC),
+            accent: ThemeColor(hex: 0x26C0D0),
+            primaryForeground: .white,
+            secondaryForeground: .white.withAlpha(0.76),
+            surface: .white.withAlpha(0.08),
+            elevatedSurface: .white.withAlpha(0.13),
+            border: ThemeColor(hex: 0x60DFE9, alpha: 0.22),
+            shadow: .black.withAlpha(0.32),
+            preferredColorScheme: .dark
+        )
+    )
+
     static let catalog = ThemeCatalog(
-        themes: FoundationThemes.all.map { $0.withAccess(.free) },
+        themes: [zukaMe] + FoundationThemes.all.map { $0.withAccess(.free) },
         fallbackThemeID: FoundationThemes.rose.id
     )
 
