@@ -9,7 +9,15 @@ final class AppStoreConnectSession: ObservableObject {
         case connected(keyID: String)
     }
 
+    enum ValidationState {
+        case unchecked
+        case checking
+        case valid
+        case failed
+    }
+
     @Published private(set) var connectionState: ConnectionState = .loading
+    @Published private(set) var validationState: ValidationState = .unchecked
     @Published private(set) var isWorking = false
     @Published private(set) var connectionRevision = 0
     @Published var errorMessage: String?
@@ -18,32 +26,59 @@ final class AppStoreConnectSession: ObservableObject {
     private var hasRestored = false
 
     func restore() async {
-        guard !hasRestored else { return }
+        guard !hasRestored, !isWorking else { return }
         hasRestored = true
         do {
             guard let stored = try AppStoreConnectCredentialStore.load() else {
                 connectionState = .disconnected
                 return
             }
-            let client = try AppStoreConnectAPIClient(credentials: stored)
-            try await client.validate()
-            try Task.checkCancellation()
+            // Restore the saved configuration before validating it. Network,
+            // authentication, and decoding failures must not hide stored keys.
             credentials = stored
             connectionState = .connected(keyID: stored.keyID)
             connectionRevision += 1
             errorMessage = nil
+            await validateSavedCredentials()
         } catch {
             if Task.isCancelled || (error as? URLError)?.code == .cancelled {
                 hasRestored = false
                 return
             }
             connectionState = .disconnected
+            hasRestored = false
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func validateSavedCredentials() async {
+        guard let credentials, !isWorking else { return }
+        let revision = connectionRevision
+        isWorking = true
+        validationState = .checking
+        errorMessage = nil
+        defer { isWorking = false }
+
+        do {
+            let client = try AppStoreConnectAPIClient(credentials: credentials)
+            try await client.validate()
+            try Task.checkCancellation()
+            guard revision == connectionRevision else { return }
+            validationState = .valid
+        } catch {
+            guard revision == connectionRevision else { return }
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
+                validationState = .unchecked
+                return
+            }
+            validationState = .failed
             errorMessage = error.localizedDescription
         }
     }
 
     @discardableResult
     func connect(issuerID: String, keyID: String, privateKeyPEM: String) async -> Bool {
+        guard !isWorking else { return false }
         let proposed = AppStoreConnectCredentials(
             issuerID: issuerID.trimmingCharacters(in: .whitespacesAndNewlines),
             keyID: keyID.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -60,6 +95,7 @@ final class AppStoreConnectSession: ObservableObject {
             credentials = proposed
             hasRestored = true
             connectionState = .connected(keyID: proposed.keyID)
+            validationState = .valid
             connectionRevision += 1
             errorMessage = nil
             return true
@@ -101,6 +137,7 @@ final class AppStoreConnectSession: ObservableObject {
             credentials = nil
             hasRestored = true
             connectionState = .disconnected
+            validationState = .unchecked
             connectionRevision += 1
             errorMessage = nil
         } catch {

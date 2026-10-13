@@ -235,7 +235,9 @@ struct AppStoreConnectRelationship: Decodable, Sendable {
 }
 
 struct AppStoreConnectToManyRelationship: Decodable, Sendable {
-    let data: [AppStoreConnectResourceIdentifier]
+    // Apple can return relationship links without including resource IDs.
+    // This also occurs in the app response used to validate saved credentials.
+    let data: [AppStoreConnectResourceIdentifier]?
 }
 
 struct AppStoreConnectResourceIdentifier: Decodable, Sendable {

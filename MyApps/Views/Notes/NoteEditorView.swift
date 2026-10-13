@@ -40,8 +40,7 @@ struct NoteEditorView: View {
             MarkdownTextEditor(
                 text: $note.body,
                 selectedRange: $selectedRange,
-                editorController: editorController,
-                focusOnAppear: mode == .edit
+                editorController: editorController
             )
             .opacity(mode == .edit ? 1 : 0)
             .allowsHitTesting(mode == .edit)
@@ -158,6 +157,14 @@ struct NoteEditorView: View {
             }
 
             if mode == .edit {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismissKeyboard()
+                    }
+                    .fontWeight(.semibold)
+                    .accessibilityHint("Dismisses the keyboard")
+                }
+
                 ToolbarItem(placement: .keyboard) {
                     markdownKeyboardToolbar
                 }
@@ -331,11 +338,6 @@ struct NoteEditorView: View {
                 editorController.redo()
             }
             .disabled(!editorController.canRedo)
-
-            Button("Done") {
-                dismissKeyboard()
-            }
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
         }
         .frame(maxWidth: .infinity)
     }

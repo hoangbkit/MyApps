@@ -97,7 +97,6 @@ struct MarkdownTextEditor: UIViewRepresentable {
     @Binding var text: String
     @Binding var selectedRange: NSRange
     @ObservedObject var editorController: MarkdownEditorController
-    var focusOnAppear = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -144,13 +143,6 @@ struct MarkdownTextEditor: UIViewRepresentable {
         if textView.selectedRange != validRange {
             textView.selectedRange = validRange
         }
-
-        if focusOnAppear, !context.coordinator.didRequestFocus {
-            context.coordinator.didRequestFocus = true
-            DispatchQueue.main.async {
-                textView.becomeFirstResponder()
-            }
-        }
     }
 
     private func applyTheme(to textView: Runestone.TextView, coordinator: Coordinator) {
@@ -175,7 +167,6 @@ struct MarkdownTextEditor: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, @preconcurrency TextViewDelegate {
         var parent: MarkdownTextEditor
-        var didRequestFocus = false
         var appliedAppearance: ThemeAppearance?
 
         init(_ parent: MarkdownTextEditor) {

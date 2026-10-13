@@ -31,8 +31,24 @@ struct AppStoreConnectSettingsSection: View {
             case .disconnected:
                 keyForm
             case let .connected(connectedKeyID):
-                LabeledContent("Status", value: "Connected")
+                LabeledContent("Status", value: validationStatus)
                 LabeledContent("Key ID", value: connectedKeyID)
+
+                switch session.validationState {
+                case .checking:
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text("Validating Saved Key…")
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                    }
+                case .unchecked, .failed:
+                    Button("Retry Validation") {
+                        Task { await session.validateSavedCredentials() }
+                    }
+                    .disabled(session.isWorking)
+                case .valid:
+                    EmptyView()
+                }
 
                 if isReplacingKey {
                     keyForm
@@ -97,6 +113,15 @@ struct AppStoreConnectSettingsSection: View {
         .onDisappear {
             // Never leave the imported private key in an inactive settings form.
             clearForm()
+        }
+    }
+
+    private var validationStatus: String {
+        switch session.validationState {
+        case .unchecked: "Key Saved"
+        case .checking: "Validating"
+        case .valid: "Connected"
+        case .failed: "Validation Failed"
         }
     }
 
