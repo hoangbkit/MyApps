@@ -1,15 +1,17 @@
+import AppFoundation
 import SwiftData
 import SwiftUI
 
 struct AppDetailView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
     let app: ManagedApp
 
     @AppStorage(NoteSortOption.storageKey) private var noteSortRawValue = NoteSortOption.updated.rawValue
+    @AppStorage(NoteSortOption.directionStorageKey) private var directionRawValue = SortDirection.descending.rawValue
     @State private var activeNote: QuickNote?
-    @State private var activeNoteStartsEditing = false
     @State private var isPresentingEditor = false
     @State private var isPresentingAddNotes = false
     @State private var isConfirmingDelete = false
@@ -24,21 +26,12 @@ struct AppDetailView: View {
         NoteSortOption(rawValue: noteSortRawValue) ?? .updated
     }
 
+    private var sortDirection: SortDirection {
+        SortDirection(rawValue: directionRawValue) ?? .descending
+    }
+
     private var sortedNotes: [QuickNote] {
-        app.notes.sorted { lhs, rhs in
-            if lhs.isPinned != rhs.isPinned {
-                return lhs.isPinned && !rhs.isPinned
-            }
-
-            switch noteSortOption {
-            case .created:
-                if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
-            case .updated:
-                if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
-            }
-
-            return lhs.id.uuidString < rhs.id.uuidString
-        }
+        noteSortOption.sorted(app.notes, direction: sortDirection)
     }
 
     var body: some View {
@@ -50,7 +43,6 @@ struct AppDetailView: View {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                         ForEach(sortedNotes) { note in
                             NoteCardView(note: note) {
-                                activeNoteStartsEditing = false
                                 activeNote = note
                             } onTogglePin: {
                                 note.isPinned.toggle()
@@ -69,7 +61,7 @@ struct AppDetailView: View {
             .padding(.bottom, 28)
         }
         .scrollIndicators(.hidden)
-        .background(Color(uiColor: .systemGroupedBackground))
+        .myAppsPage()
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -79,16 +71,26 @@ struct AppDetailView: View {
 
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Menu {
-                    Picker("Sort Notes", selection: $noteSortRawValue) {
-                        ForEach(NoteSortOption.allCases) { option in
-                            Label(option.title, systemImage: option.symbolName)
-                                .tag(option.rawValue)
+                    Section("Sort By") {
+                        Picker("Sort Field", selection: $noteSortRawValue) {
+                            ForEach(NoteSortOption.allCases) { option in
+                                Label(option.title, systemImage: option.symbolName)
+                                    .tag(option.rawValue)
+                            }
+                        }
+                    }
+                    Section("Order") {
+                        Picker("Sort Order", selection: $directionRawValue) {
+                            ForEach(SortDirection.allCases) { direction in
+                                Label(direction.title(isText: false), systemImage: direction.symbolName)
+                                    .tag(direction.rawValue)
+                            }
                         }
                     }
                 } label: {
                     Image(systemName: "arrow.up.arrow.down")
                 }
-                .accessibilityLabel("Sort Notes by \(noteSortOption.title)")
+                .accessibilityLabel("Sort Notes by \(noteSortOption.title), \(sortDirection.title(isText: false))")
 
                 Button {
                     createNote()
@@ -129,9 +131,12 @@ struct AppDetailView: View {
                 .accessibilityLabel("App Actions")
             }
         }
+        .onChange(of: noteSortRawValue) { _, _ in
+            directionRawValue = SortDirection.descending.rawValue
+        }
         .navigationDestination(isPresented: activeNoteBinding) {
             if let activeNote {
-                NoteEditorView(note: activeNote, startsInEditMode: activeNoteStartsEditing)
+                NoteEditorView(note: activeNote)
             }
         }
         .sheet(isPresented: $isPresentingEditor) {
@@ -196,14 +201,14 @@ struct AppDetailView: View {
         VStack(spacing: 12) {
             Image(systemName: "note.text")
                 .font(.system(size: 34, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(foundationTheme.secondaryForegroundColor)
 
             Text("No notes yet")
                 .font(.system(size: 19, weight: .semibold, design: .rounded))
 
             Text("Use the plus button to create a Markdown note.")
                 .font(.system(size: 15, design: .rounded))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(foundationTheme.secondaryForegroundColor)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -227,7 +232,6 @@ struct AppDetailView: View {
         modelContext.insert(note)
         note.app = app
         app.updatedAt = Date()
-        activeNoteStartsEditing = true
         activeNote = note
     }
 }

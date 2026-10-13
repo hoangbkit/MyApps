@@ -1,3 +1,4 @@
+import AppFoundation
 import Foundation
 import MarkdownView
 import SwiftUI
@@ -6,6 +7,8 @@ import UIKit
 /// The app-facing Markdown preview. MarkdownView owns standards-compliant rendering,
 /// while this wrapper retains MyApps-specific task toggles and sandboxed attachments.
 struct GitHubMarkdownView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let markdown: String
     let attachments: [NoteAttachment]
     var compact = false
@@ -21,7 +24,7 @@ struct GitHubMarkdownView: View {
             if markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text("Empty note")
                     .font(.system(size: compact ? 16 : 17, design: .rounded))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(foundationTheme.secondaryForegroundColor.opacity(0.75))
             } else {
                 ForEach(segments.indices, id: \.self) { index in
                     segmentView(segments[index])
@@ -29,6 +32,7 @@ struct GitHubMarkdownView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .foregroundStyle(foundationTheme.primaryForegroundColor)
         .clipped()
         .allowsHitTesting(!compact)
         .environment(\.openURL, OpenURLAction { url in
@@ -51,7 +55,9 @@ struct GitHubMarkdownView: View {
     private func renderedMarkdown(_ source: String) -> some View {
         MarkdownView(source)
             .markdownTableStyle(ScrollableGitHubMarkdownTableStyle())
-            .markdownBlockQuoteStyle(.github)
+            .markdownBlockQuoteStyle(MyAppsMarkdownQuoteStyle(theme: foundationTheme))
+            .backgroundStyle(foundationTheme.surfaceColor)
+            .tint(foundationTheme.accentColor)
             .markdownCodeBlockStyle(
                 .default(lightTheme: "xcode", darkTheme: "dark")
             )
@@ -60,7 +66,8 @@ struct GitHubMarkdownView: View {
                 .image(
                     AttachmentImageRenderer(
                         attachments: attachments,
-                        compact: compact
+                        compact: compact,
+                        foundationTheme: foundationTheme
                     ),
                     urlScheme: "attachment"
                 )
@@ -76,8 +83,8 @@ struct GitHubMarkdownView: View {
                 .padding(.top, compact ? 1 : 2)
 
             renderedMarkdown(task.content)
-                .foregroundStyle(task.isCompleted ? .secondary : .primary)
-                .strikethrough(task.isCompleted, color: .secondary)
+                .foregroundStyle(task.isCompleted ? foundationTheme.secondaryForegroundColor : foundationTheme.primaryForegroundColor)
+                .strikethrough(task.isCompleted, color: foundationTheme.secondaryForegroundColor)
         }
         .padding(.leading, CGFloat(task.depth) * (compact ? 13 : 18))
         .contentShape(Rectangle())
@@ -100,6 +107,22 @@ struct GitHubMarkdownView: View {
     }
 }
 
+private struct MyAppsMarkdownQuoteStyle: MarkdownBlockQuoteStyle {
+    let theme: AppFoundation.AppTheme
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.content
+            .foregroundStyle(theme.secondaryForegroundColor)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 14)
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(theme.accentColor.opacity(0.6))
+                    .frame(width: 3)
+            }
+    }
+}
+
 private struct ScrollableGitHubMarkdownTableStyle: MarkdownTableStyle {
     func makeBody(configuration: Configuration) -> some View {
         ScrollableGitHubMarkdownTable(configuration: configuration)
@@ -109,25 +132,11 @@ private struct ScrollableGitHubMarkdownTableStyle: MarkdownTableStyle {
 private struct ScrollableGitHubMarkdownTable: View {
     let configuration: MarkdownTableStyleConfiguration
 
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.appFoundationTheme) private var foundationTheme
 
-    private var backgroundColor: Color {
-        colorScheme == .dark
-            ? Color(red: 14 / 255, green: 17 / 255, blue: 22 / 255)
-            : .white
-    }
-
-    private var alternateRowColor: Color {
-        colorScheme == .dark
-            ? Color(red: 21 / 255, green: 27 / 255, blue: 35 / 255)
-            : Color(red: 246 / 255, green: 248 / 255, blue: 250 / 255)
-    }
-
-    private var borderColor: Color {
-        colorScheme == .dark
-            ? Color(red: 61 / 255, green: 68 / 255, blue: 67 / 255)
-            : Color(red: 209 / 255, green: 217 / 255, blue: 224 / 255)
-    }
+    private var backgroundColor: Color { foundationTheme.surfaceColor }
+    private var alternateRowColor: Color { foundationTheme.elevatedSurfaceColor }
+    private var borderColor: Color { foundationTheme.borderColor }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: true) {
@@ -162,6 +171,7 @@ private struct ScrollableGitHubMarkdownTable: View {
 private struct AttachmentImageRenderer: MarkdownImageRenderer {
     let attachments: [NoteAttachment]
     let compact: Bool
+    let foundationTheme: AppFoundation.AppTheme
 
     @ViewBuilder
     func makeBody(configuration: Configuration) -> some View {
@@ -184,7 +194,7 @@ private struct AttachmentImageRenderer: MarkdownImageRenderer {
                         cornerRadius: compact ? 9 : 13,
                         style: .continuous
                     )
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 0.8)
+                    .stroke(foundationTheme.primaryForegroundColor.opacity(0.08), lineWidth: 0.8)
                 }
                 .accessibilityLabel(attachment.filename)
         } else {
@@ -193,10 +203,10 @@ private struct AttachmentImageRenderer: MarkdownImageRenderer {
                 Text("Image unavailable")
             }
             .font(.system(size: compact ? 13 : 15, weight: .medium, design: .rounded))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(foundationTheme.secondaryForegroundColor)
             .padding(compact ? 10 : 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(uiColor: .secondarySystemBackground))
+            .background(foundationTheme.surfaceColor)
             .clipShape(RoundedRectangle(cornerRadius: compact ? 9 : 12, style: .continuous))
         }
     }
@@ -317,6 +327,8 @@ private enum MarkdownPreviewSegmenter {
 }
 
 struct RoundedCheckbox: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let isChecked: Bool
     var size: CGFloat = 21
 
@@ -327,7 +339,7 @@ struct RoundedCheckbox: View {
                 .overlay {
                     RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
                         .stroke(
-                            isChecked ? Color.accentColor : Color.secondary.opacity(0.55),
+                            isChecked ? Color.accentColor : foundationTheme.secondaryForegroundColor.opacity(0.55),
                             lineWidth: 1.6
                         )
                 }

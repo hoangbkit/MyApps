@@ -1,6 +1,9 @@
+import AppFoundation
 import SwiftUI
 
 struct GitCommitRowView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let commit: GitHubCommit
     let references: GitHubCommitReferences
     let graph: GitGraphRowLayout
@@ -34,7 +37,7 @@ struct GitCommitRowView: View {
             .allowsHitTesting(false)
         }
         .overlay(alignment: .bottom) {
-            Color.primary.opacity(0.045)
+            foundationTheme.primaryForegroundColor.opacity(0.045)
                 .frame(height: 0.5)
                 .padding(.leading, graphWidth + 10)
         }
@@ -53,7 +56,7 @@ struct GitCommitRowView: View {
                         }
                         ForEach(references.tags, id: \.self) { tag in
                             Label(tag, systemImage: "tag")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
                                 .modifier(GitReferencePill())
                         }
                     }
@@ -65,7 +68,7 @@ struct GitCommitRowView: View {
 
             Text(commit.subject)
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
+                .foregroundStyle(foundationTheme.primaryForegroundColor)
                 .multilineTextAlignment(.leading)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -91,23 +94,25 @@ struct GitCommitRowView: View {
 
                 Text(commit.shortSHA)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(foundationTheme.secondaryForegroundColor.opacity(0.75))
                     .lineLimit(1)
             }
             .font(.system(size: 11, weight: .regular, design: .rounded))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(foundationTheme.secondaryForegroundColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 private struct GitReferencePill: ViewModifier {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     func body(content: Content) -> some View {
         content
             .font(.system(size: 10, weight: .semibold, design: .rounded))
             .lineLimit(1)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(Color.secondary.opacity(0.09), in: Capsule())
+            .background(foundationTheme.secondaryForegroundColor.opacity(0.09), in: Capsule())
     }
 }

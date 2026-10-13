@@ -483,10 +483,13 @@ struct GitHubAPIClient: Sendable {
         }
     }
 
-    func repositories() async throws -> [GitHubRepository] {
+    func repositories(bypassCache: Bool = false) async throws -> [GitHubRepository] {
         let pageSize = 100
         var page = 1
         var repositories: [GitHubRepository] = []
+        let cachePolicy: URLRequest.CachePolicy = bypassCache
+            ? .reloadIgnoringLocalCacheData
+            : .returnCacheDataElseLoad
 
         while true {
             try Task.checkCancellation()
@@ -500,7 +503,8 @@ struct GitHubAPIClient: Sendable {
                     URLQueryItem(name: "direction", value: "desc"),
                     URLQueryItem(name: "per_page", value: String(pageSize)),
                     URLQueryItem(name: "page", value: String(page))
-                ]
+                ],
+                cachePolicy: cachePolicy
             )
 
             repositories.append(contentsOf: batch)
@@ -597,12 +601,14 @@ struct GitHubAPIClient: Sendable {
 
     private func request<Response: Decodable & Sendable>(
         path: String,
-        queryItems: [URLQueryItem] = []
+        queryItems: [URLQueryItem] = [],
+        cachePolicy: URLRequest.CachePolicy = .reloadIgnoringLocalCacheData
     ) async throws -> Response {
         let (data, response) = try await perform(
             method: "GET",
             path: path,
-            queryItems: queryItems
+            queryItems: queryItems,
+            cachePolicy: cachePolicy
         )
 
         guard (200..<300).contains(response.statusCode) else {
@@ -616,7 +622,8 @@ struct GitHubAPIClient: Sendable {
         method: String,
         path: String,
         queryItems: [URLQueryItem] = [],
-        body: Data? = nil
+        body: Data? = nil,
+        cachePolicy: URLRequest.CachePolicy = .reloadIgnoringLocalCacheData
     ) async throws -> (Data, HTTPURLResponse) {
         var components = URLComponents()
         components.scheme = "https"
@@ -628,11 +635,9 @@ struct GitHubAPIClient: Sendable {
             throw GitHubAPIError.invalidURL
         }
 
-        // Every REST read participates in refresh or write validation. A
-        // transport cache must never turn those into reads of old refs,
-        // releases, permissions, or branch comparisons. Views retain their
-        // already-loaded data while a fresh network request is in flight.
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        // Repository catalog loads opt into a long-lived transport cache.
+        // Other REST reads and explicit refreshes continue to bypass it.
+        var request = URLRequest(url: url, cachePolicy: cachePolicy)
         request.httpMethod = method
         request.httpBody = body
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -640,7 +645,7 @@ struct GitHubAPIClient: Sendable {
         request.setValue("2026-03-10", forHTTPHeaderField: "X-GitHub-Api-Version")
         request.setValue("MyApps", forHTTPHeaderField: "User-Agent")
 
-        if method == "GET" {
+        if method == "GET", cachePolicy == .reloadIgnoringLocalCacheData {
             request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
         }
 

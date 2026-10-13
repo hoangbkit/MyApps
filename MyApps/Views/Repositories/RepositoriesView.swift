@@ -1,6 +1,34 @@
+import AppFoundation
 import SwiftUI
 
+private enum RepositorySortOption: String, CaseIterable, Identifiable {
+    case updated, created, name
+
+    static let storageKey = "myapps.repositories.sortOption"
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .updated: "Updated"
+        case .created: "Created"
+        case .name: "Name"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .updated: "clock"
+        case .created: "calendar.badge.plus"
+        case .name: "textformat.abc"
+        }
+    }
+
+    var isText: Bool { self == .name }
+}
+
 struct RepositoriesView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var session: GitHubSession
     @StateObject private var repositoriesModel = RepositoriesViewModel()
@@ -8,18 +36,76 @@ struct RepositoriesView: View {
     let onOpenSettings: () -> Void
 
     @State private var searchText = ""
+    @AppStorage(RepositorySortOption.storageKey) private var sortRawValue = RepositorySortOption.updated.rawValue
+    @AppStorage("myapps.repositories.sortDirection") private var directionRawValue = SortDirection.descending.rawValue
+    @AppStorage("myapps.repositories.pinnedIDs") private var pinnedIDsData = Data()
+
+    private var sortOption: RepositorySortOption {
+        RepositorySortOption(rawValue: sortRawValue) ?? .updated
+    }
+
+    private var sortDirection: SortDirection {
+        SortDirection(rawValue: directionRawValue) ?? .descending
+    }
+
+    private var pinnedRepositoryIDs: Set<Int> {
+        (try? JSONDecoder().decode(Set<Int>.self, from: pinnedIDsData)) ?? []
+    }
 
     private var filteredRepositories: [GitHubRepository] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
-            return repositoriesModel.repositories
-        }
+        let pinned = pinnedRepositoryIDs
 
-        return repositoriesModel.repositories.filter { repository in
-            repository.name.localizedCaseInsensitiveContains(query) ||
-            repository.fullName.localizedCaseInsensitiveContains(query) ||
-            (repository.language?.localizedCaseInsensitiveContains(query) ?? false)
-        }
+        return repositoriesModel.repositories
+            .filter { repository in
+                query.isEmpty ||
+                repository.name.localizedCaseInsensitiveContains(query) ||
+                repository.fullName.localizedCaseInsensitiveContains(query) ||
+                (repository.language?.localizedCaseInsensitiveContains(query) ?? false)
+            }
+            .sorted { lhs, rhs in
+                let lhsPinned = pinned.contains(lhs.id)
+                let rhsPinned = pinned.contains(rhs.id)
+                if lhsPinned != rhsPinned { return lhsPinned }
+
+                let ascending = sortDirection == .ascending
+                // GitHub can omit dates. Such repositories stay last in either
+                // direction, without forcing them above real dated entries.
+                let lhsDate: Date?
+                let rhsDate: Date?
+                switch sortOption {
+                case .created:
+                    lhsDate = lhs.createdAt
+                    rhsDate = rhs.createdAt
+                case .updated:
+                    lhsDate = lhs.updatedAt ?? lhs.pushedAt
+                    rhsDate = rhs.updatedAt ?? rhs.pushedAt
+                case .name:
+                    lhsDate = nil
+                    rhsDate = nil
+                }
+                if sortOption != .name {
+                    if lhsDate == nil && rhsDate != nil { return false }
+                    if lhsDate != nil && rhsDate == nil { return true }
+                    if let lhsDate, let rhsDate, lhsDate != rhsDate {
+                        return ascending ? lhsDate < rhsDate : lhsDate > rhsDate
+                    }
+                }
+
+                let nameComparison = lhs.name.localizedStandardCompare(rhs.name)
+                if nameComparison != .orderedSame {
+                    return sortOption == .name && !ascending
+                        ? nameComparison == .orderedDescending
+                        : nameComparison == .orderedAscending
+                }
+                let fullNameComparison = lhs.fullName.localizedStandardCompare(rhs.fullName)
+                if fullNameComparison != .orderedSame {
+                    return sortOption == .name && !ascending
+                        ? fullNameComparison == .orderedDescending
+                        : fullNameComparison == .orderedAscending
+                }
+                return lhs.id < rhs.id
+            }
     }
 
     var body: some View {
@@ -43,9 +129,40 @@ struct RepositoriesView: View {
                 repositoriesView
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .myAppsPage()
         .navigationTitle("Repos")
+        .navigationSubtitle("\(filteredRepositories.count) Repositories")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Section("Sort By") {
+                        Picker("Sort Field", selection: $sortRawValue) {
+                            ForEach(RepositorySortOption.allCases) { option in
+                                Label(option.title, systemImage: option.symbolName)
+                                    .tag(option.rawValue)
+                            }
+                        }
+                    }
+
+                    Section("Order") {
+                        Picker("Sort Order", selection: $directionRawValue) {
+                            ForEach(SortDirection.allCases) { direction in
+                                Label(direction.title(isText: sortOption.isText), systemImage: direction.symbolName)
+                                    .tag(direction.rawValue)
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .accessibilityLabel("Sort Repositories by \(sortOption.title), \(sortDirection.title(isText: sortOption.isText))")
+            }
+        }
+        .onChange(of: sortRawValue) { _, newField in
+            let option = RepositorySortOption(rawValue: newField) ?? .updated
+            directionRawValue = SortDirection.defaultForText(option.isText).rawValue
+        }
         .task(id: "\(session.connectionRevision)-\(scenePhase)") {
             guard scenePhase == .active else { return }
             switch session.connectionState {
@@ -76,61 +193,108 @@ struct RepositoriesView: View {
     @ViewBuilder
     private var repositoriesView: some View {
         List {
-            if repositoriesModel.isLoading && repositoriesModel.repositories.isEmpty {
-                ProgressView("Loading repositories…")
-            } else if repositoriesModel.repositories.isEmpty {
-                ContentUnavailableView {
-                    Label("No Repositories", systemImage: "shippingbox")
-                } description: {
-                    Text("No repositories are available to this GitHub connection.")
-                } actions: {
-                    Button("Try Again") {
-                        Task {
-                            await repositoriesModel.load(using: session.client(), force: true)
-                        }
-                    }
-                }
-                .listRowBackground(Color.clear)
-            } else {
-                if filteredRepositories.isEmpty {
-                    ContentUnavailableView(
-                        "No Matching Repositories",
-                        systemImage: "magnifyingglass",
-                        description: Text("No repositories match “\(searchText)”.")
-                    )
-                    .listRowBackground(Color.clear)
-                } else {
-                    Section {
-                        ForEach(filteredRepositories) { repository in
-                            NavigationLink {
-                                RepositoryWorkspaceView(
-                                    repository: repository,
-                                    client: session.client()
-                                )
-                            } label: {
-                                repositoryRow(repository)
+            Group {
+                if repositoriesModel.isLoading && repositoriesModel.repositories.isEmpty {
+                    ProgressView("Loading repositories…")
+                } else if repositoriesModel.repositories.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Repositories", systemImage: "shippingbox")
+                    } description: {
+                        Text("No repositories are available to this GitHub connection.")
+                    } actions: {
+                        Button("Try Again") {
+                            Task {
+                                await repositoriesModel.load(using: session.client(), force: true)
                             }
                         }
-                    } header: {
-                        Text("\(filteredRepositories.count) Repositories")
+                    }
+                    .listRowBackground(Color.clear)
+                } else {
+                    if filteredRepositories.isEmpty {
+                        ContentUnavailableView(
+                            "No Matching Repositories",
+                            systemImage: "magnifyingglass",
+                            description: Text("No repositories match “\(searchText)”.")
+                        )
+                        .listRowBackground(Color.clear)
+                    } else {
+                        ForEach(filteredRepositories) { repository in
+                            repositoryLink(repository)
+                        }
                     }
                 }
             }
+            .listRowBackground(Color.clear)
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
-        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
+        .listStyle(.plain)
+
+        .scrollDismissesKeyboard(.interactively)
         .searchable(
             text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
+            placement: .navigationBarDrawer(displayMode: .automatic),
             prompt: "Search repositories"
         )
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
         .refreshable {
-            await repositoriesModel.load(using: session.client(), force: true)
+            await repositoriesModel.refresh(using: session.client())
+        }
+    }
+
+    private func repositoryLink(_ repository: GitHubRepository) -> some View {
+        let isPinned = pinnedRepositoryIDs.contains(repository.id)
+
+        return NavigationLink {
+            RepositoryWorkspaceView(
+                repository: repository,
+                client: session.client()
+            )
+        } label: {
+            repositoryRow(repository)
+        }
+        .listRowBackground(Color.clear)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                togglePin(repository)
+            } label: {
+                Label(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin")
+            }
+            .tint(.orange)
+        }
+        .contextMenu {
+            Button {
+                togglePin(repository)
+            } label: {
+                Label(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin")
+            }
+        }
+    }
+
+    private func togglePin(_ repository: GitHubRepository) {
+        var ids = pinnedRepositoryIDs
+        if ids.contains(repository.id) {
+            ids.remove(repository.id)
+        } else {
+            ids.insert(repository.id)
+        }
+        if let data = try? JSONEncoder().encode(ids) {
+            pinnedIDsData = data
         }
     }
 
     private func repositoryRow(_ repository: GitHubRepository) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
+                if pinnedRepositoryIDs.contains(repository.id) {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        .accessibilityLabel("Pinned")
+                }
+
                 Text(repository.name)
                     .font(.system(size: 17, weight: .semibold, design: .rounded))
                     .lineLimit(1)
@@ -138,25 +302,25 @@ struct RepositoriesView: View {
                 if repository.isPrivate {
                     Text("Private")
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.12), in: Capsule())
+                        .background(foundationTheme.secondaryForegroundColor.opacity(0.12), in: Capsule())
                 }
 
                 if repository.isArchived {
                     Text("Archived")
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.12), in: Capsule())
+                        .background(foundationTheme.secondaryForegroundColor.opacity(0.12), in: Capsule())
                 }
             }
 
             Text(repository.fullName)
                 .font(.system(size: 13, weight: .regular, design: .rounded))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(foundationTheme.secondaryForegroundColor)
                 .lineLimit(1)
 
             HStack(spacing: 8) {
@@ -173,7 +337,7 @@ struct RepositoriesView: View {
                 }
             }
             .font(.system(size: 12, weight: .regular, design: .rounded))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(foundationTheme.secondaryForegroundColor)
         }
         .padding(.vertical, 3)
     }

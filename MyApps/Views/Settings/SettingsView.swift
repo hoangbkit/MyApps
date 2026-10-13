@@ -1,13 +1,16 @@
+import AppFoundation
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.modelContext) private var modelContext
+    @Environment(ThemeManager.self) private var themes
     @EnvironmentObject private var gitHubSession: GitHubSession
+    @EnvironmentObject private var aiWriting: AIWritingSession
     @Query private var apps: [ManagedApp]
     @Query private var notes: [QuickNote]
-    @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
 
     @State private var exportDocument: MyAppsBackupDocument?
     @State private var isExportingBackup = false
@@ -26,54 +29,57 @@ struct SettingsView: View {
 
     var body: some View {
         List {
-            Section("Appearance") {
-                Picker("Theme", selection: $appearanceRawValue) {
-                    ForEach(AppAppearance.allCases) { appearance in
-                        Label(appearance.rawValue, systemImage: appearance.symbolName)
-                            .tag(appearance.rawValue)
+            Group {
+                Section("Appearance") {
+                    ThemePickerView(manager: themes, title: nil, showsCountdown: false)
+                        .padding(.vertical, 3)
+                }
+                .listRowBackground(MyAppsGlassSurface())
+
+                gitHubSection
+
+                AppStoreConnectSettingsSection()
+
+                DeepSeekSettingsSection()
+                AIProfilesSettingsSection()
+
+                Section("Storage") {
+                    LabeledContent("Mode", value: "Offline")
+                    Text("MyApps stores its library locally on this device with SwiftData.")
+                        .font(.system(size: 15, weight: .regular, design: .rounded))
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                }
+
+                Section("Backup & Restore") {
+                    Button {
+                        exportBackup()
+                    } label: {
+                        Label("Export Full Backup", systemImage: "square.and.arrow.up")
+                    }
+
+                    Button {
+                        isImportingBackup = true
+                    } label: {
+                        Label("Restore from Backup", systemImage: "square.and.arrow.down")
                     }
                 }
-                .pickerStyle(.inline)
-            }
 
-            gitHubSection
-
-            Section("Storage") {
-                LabeledContent("Mode", value: "Offline")
-                Text("MyApps stores its library locally on this device with SwiftData.")
-                    .font(.system(size: 15, weight: .regular, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                Button {
-                    exportBackup()
-                } label: {
-                    Label("Export Full Backup", systemImage: "square.and.arrow.up")
+                Section("Library") {
+                    LabeledContent("Apps", value: apps.count.formatted())
+                    LabeledContent("All Notes", value: notes.count.formatted())
+                    LabeledContent("Unassigned Notes", value: unassignedNoteCount.formatted())
                 }
 
-                Button {
-                    isImportingBackup = true
-                } label: {
-                    Label("Restore from Backup", systemImage: "square.and.arrow.down")
+                Section("About") {
+                    LabeledContent("Version", value: "1.0 P3.4.1")
+                    LabeledContent("Bundle ID", value: "com.hoangbkit.myapps")
                 }
-            } header: {
-                Text("Backup & Restore")
-            } footer: {
-                Text("A .myappsbackup package includes all apps and notes as JSON metadata, with custom icons and attached images stored as separate files. Restoring replaces the current library after confirmation.")
             }
-
-            Section("Library") {
-                LabeledContent("Apps", value: apps.count.formatted())
-                LabeledContent("All Notes", value: notes.count.formatted())
-                LabeledContent("Unassigned Notes", value: unassignedNoteCount.formatted())
-            }
-
-            Section("About") {
-                LabeledContent("Version", value: "1.0 P3.4.1")
-                LabeledContent("Bundle ID", value: "com.hoangbkit.myapps")
-            }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
         .font(.system(size: 17, weight: .regular, design: .rounded))
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
@@ -135,6 +141,17 @@ struct SettingsView: View {
         } message: {
             Text(gitHubSession.errorMessage ?? "")
         }
+        .alert(
+            "DeepSeek",
+            isPresented: Binding(
+                get: { aiWriting.errorMessage != nil },
+                set: { if !$0 { aiWriting.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(aiWriting.errorMessage ?? "")
+        }
         .confirmationDialog(
             "Disconnect GitHub?",
             isPresented: $isConfirmingGitHubDisconnect,
@@ -153,13 +170,13 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var gitHubSection: some View {
-        Section {
+        Section("GitHub") {
             switch gitHubSession.connectionState {
             case .loading:
                 HStack {
                     ProgressView()
                     Text("Checking GitHub connection…")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                 }
 
             case .disconnected:
@@ -190,10 +207,6 @@ struct SettingsView: View {
                 }
                 .disabled(gitHubSession.isWorking)
             }
-        } header: {
-            Text("GitHub")
-        } footer: {
-            Text("GitHub access uses a personal access token stored only in this device's Keychain. Use repository Contents read/write permission for private repositories and Git operations.")
         }
     }
 
@@ -251,6 +264,18 @@ struct SettingsView: View {
 
         do {
             try MyAppsBackupService.restore(pendingRestore, in: modelContext)
+            if let preferences = pendingRestore.manifest.preferences {
+                // The backup service restores the persisted theme state; also
+                // update the scene's live manager so the new colors appear
+                // immediately without relaunching the app.
+                _ = themes.select(themeID: MyAppsThemeCatalog.restoredThemeID(
+                    themeID: preferences.themeID,
+                    legacyAppearance: preferences.appearanceRawValue
+                ))
+                if let restoredAI = preferences.aiWritingPreferences {
+                    aiWriting.restoreProfiles(restoredAI)
+                }
+            }
             self.pendingRestore = nil
             showResult("Backup restored successfully.")
         } catch {

@@ -1,6 +1,9 @@
+import AppFoundation
 import SwiftUI
 
 struct ReleasesView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let repository: GitHubRepository
     let client: GitHubAPIClient?
 
@@ -8,57 +11,71 @@ struct ReleasesView: View {
 
     private var tags: [GitHubTag] { model.tags }
 
+    private var sortedReleases: [GitHubRelease] {
+        model.releases.sorted { lhs, rhs in
+            if lhs.displayDate != rhs.displayDate { return lhs.displayDate > rhs.displayDate }
+            let order = lhs.tagName.localizedStandardCompare(rhs.tagName)
+            return order == .orderedSame ? lhs.id < rhs.id : order == .orderedAscending
+        }
+    }
+
     private var productReleases: [GitHubRelease] {
-        model.releases.filter { !$0.isMyCLIBuild }
+        sortedReleases.filter { !$0.isMyCLIBuild }
     }
 
     private var buildReleases: [GitHubRelease] {
-        model.releases.filter { $0.isMyCLIBuild }
+        sortedReleases.filter { $0.isMyCLIBuild }
     }
 
     var body: some View {
         List {
-            if model.isLoading && model.releases.isEmpty {
-                ProgressView("Loading releases…")
-            } else {
-                Section {
-                    NavigationLink {
-                        CreateReleaseView(
-                            repository: repository,
-                            tags: tags,
-                            existingReleases: model.releases,
-                            client: client
-                        ) {
-                            Task {
-                                await model.load(
-                                    repository: repository,
-                                    client: client,
-                                    force: true
-                                )
+            Group {
+                if model.isLoading && model.releases.isEmpty {
+                    ProgressView("Loading releases…")
+                } else {
+                    Section {
+                        NavigationLink {
+                            CreateReleaseView(
+                                repository: repository,
+                                tags: tags,
+                                existingReleases: model.releases,
+                                client: client
+                            ) {
+                                Task {
+                                    await model.load(
+                                        repository: repository,
+                                        client: client,
+                                        force: true
+                                    )
+                                }
                             }
+                        } label: {
+                            Label("Create Release", systemImage: "plus.circle")
                         }
-                    } label: {
-                        Label("Create Release", systemImage: "plus.circle")
+                        .disabled(
+                            tags.isEmpty ||
+                            !repository.canAttemptWrite
+                        )
                     }
-                    .disabled(
-                        tags.isEmpty ||
-                        !repository.canAttemptWrite
-                    )
-                }
 
-                releaseSection(
-                    title: "Product Releases",
-                    releases: productReleases
-                )
-
-                if !buildReleases.isEmpty {
                     releaseSection(
-                        title: "Build Prereleases",
-                        releases: buildReleases
+                        title: "Product Releases",
+                        releases: productReleases
                     )
+
+                    if !buildReleases.isEmpty {
+                        releaseSection(
+                            title: "Build Prereleases",
+                            releases: buildReleases
+                        )
+                    }
                 }
             }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
         .listStyle(.insetGrouped)
         .refreshable {
             await refresh()
@@ -93,7 +110,7 @@ struct ReleasesView: View {
         Section(title) {
             if releases.isEmpty {
                 Text("No releases")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(foundationTheme.secondaryForegroundColor)
             } else {
                 ForEach(releases) { release in
                     Link(destination: release.htmlURL) {
@@ -101,7 +118,7 @@ struct ReleasesView: View {
                             HStack(alignment: .firstTextBaseline, spacing: 7) {
                                 Text(release.displayName)
                                     .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(foundationTheme.primaryForegroundColor)
 
                                 if release.draft {
                                     badge("Draft")
@@ -119,7 +136,7 @@ struct ReleasesView: View {
                                 Text(release.displayDate, style: .date)
                             }
                             .font(.system(size: 12, weight: .regular, design: .rounded))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
                         }
                         .padding(.vertical, 3)
                     }
@@ -131,9 +148,9 @@ struct ReleasesView: View {
     private func badge(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 10, weight: .semibold, design: .rounded))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(foundationTheme.secondaryForegroundColor)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Color.secondary.opacity(0.12), in: Capsule())
+            .background(foundationTheme.secondaryForegroundColor.opacity(0.12), in: Capsule())
     }
 }

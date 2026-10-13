@@ -9,6 +9,6 @@ struct AppStorePlaceholderView: View {
         )
         .navigationTitle("App Store")
         .navigationBarTitleDisplayMode(.large)
-        .background(Color(uiColor: .systemGroupedBackground))
+        .myAppsPage()
     }
 }

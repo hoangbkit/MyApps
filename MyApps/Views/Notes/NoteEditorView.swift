@@ -1,65 +1,132 @@
+import AppFoundation
+import Combine
 import PhotosUI
 import SwiftData
 import SwiftUI
 import UIKit
 
-private enum NoteDisplayMode: String, CaseIterable, Identifiable {
-    case edit = "Edit"
-    case preview = "Preview"
-
-    var id: String { rawValue }
+private enum NoteDisplayMode: Equatable {
+    case edit
+    case preview
 }
 
 struct NoteEditorView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var aiWriting: AIWritingSession
     @Query(sort: \ManagedApp.name) private var apps: [ManagedApp]
 
     @Bindable var note: QuickNote
 
-    @State private var mode: NoteDisplayMode
+    @State private var mode = NoteDisplayMode.edit
     @State private var selectedRange = NSRange(location: 0, length: 0)
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isConfirmingDelete = false
     @State private var isDeleting = false
     @State private var copyFeedback = 0
+    @State private var aiRequest: NoteAIRequest?
+    @StateObject private var editorController = MarkdownEditorController()
 
-    init(note: QuickNote, startsInEditMode: Bool = false) {
+    init(note: QuickNote) {
         self.note = note
-        _mode = State(initialValue: startsInEditMode ? .edit : .preview)
         _selectedRange = State(initialValue: NSRange(location: (note.body as NSString).length, length: 0))
     }
 
     var body: some View {
-        Group {
-            switch mode {
-            case .edit:
-                MarkdownTextEditor(
-                    text: $note.body,
-                    selectedRange: $selectedRange,
-                    focusOnAppear: true
-                )
-                .background(Color(uiColor: .systemBackground))
+        ZStack {
+            // Retain the same Runestone instance through Edit/Preview changes.
+            // Recreating the UIView would discard its native undo history.
+            MarkdownTextEditor(
+                text: $note.body,
+                selectedRange: $selectedRange,
+                editorController: editorController
+            )
+            .opacity(mode == .edit ? 1 : 0)
+            .allowsHitTesting(mode == .edit)
+            .accessibilityHidden(mode != .edit)
 
-            case .preview:
+            if mode == .preview {
                 preview
             }
         }
+        .myAppsPage()
         .navigationTitle("Note")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("Mode", selection: $mode) {
-                    ForEach(NoteDisplayMode.allCases) { value in
-                        Text(value.rawValue).tag(value)
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Section("Rewrite") {
+                        ForEach([
+                            NoteAIAction.proofread, .improve, .shorten, .expand,
+                            .summarize, .bullets
+                        ]) { action in
+                            Button {
+                                transform(action)
+                            } label: {
+                                Label(action.title, systemImage: action.symbol)
+                            }
+                        }
                     }
+                    Menu("Tone") {
+                        ForEach([NoteAIAction.professional, .casual]) { action in
+                            Button(action.title) { transform(action) }
+                        }
+                    }
+                    Menu("Text Case") {
+                        ForEach([
+                            NoteAIAction.lowercaseAll, .lowercaseProtected,
+                            .uppercaseAll, .titleCase, .sentenceCase
+                        ]) { action in
+                            Button(action.title) { transform(action) }
+                        }
+                    }
+                    Button {
+                        transform(.translate)
+                    } label: {
+                        Label("Translate…", systemImage: "character.book.closed")
+                    }
+                    Button {
+                        transform(.custom)
+                    } label: {
+                        Label("Custom Rewrite…", systemImage: "pencil.line")
+                    }
+                } label: {
+                    Image(systemName: "sparkles")
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 178)
+                .disabled(note.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel("AI Writing Actions")
             }
 
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Button {
+                        mode = mode == .edit ? .preview : .edit
+                    } label: {
+                        Label(
+                            mode == .edit ? "Preview" : "Edit",
+                            systemImage: mode == .edit ? "doc.richtext" : "pencil"
+                        )
+                    }
+
+                    Divider()
+
+                    Button {
+                        editorController.undo()
+                    } label: {
+                        Label("Undo", systemImage: "arrow.uturn.backward")
+                    }
+                    .disabled(!editorController.canUndo)
+
+                    Button {
+                        editorController.redo()
+                    } label: {
+                        Label("Redo", systemImage: "arrow.uturn.forward")
+                    }
+                    .disabled(!editorController.canRedo)
+
+                    Divider()
+
                     Button {
                         copyWholeText()
                     } label: {
@@ -90,10 +157,32 @@ struct NoteEditorView: View {
             }
 
             if mode == .edit {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismissKeyboard()
+                    }
+                    .fontWeight(.semibold)
+                    .accessibilityHint("Dismisses the keyboard")
+                }
+
                 ToolbarItem(placement: .keyboard) {
                     markdownKeyboardToolbar
                 }
             }
+        }
+        .sheet(item: $aiRequest) { request in
+            NoteAIReviewView(request: request) { operation, proposedText in
+                applyAIResult(request: request, mode: operation, text: proposedText)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerCheckpoint)) { _ in
+            editorController.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in
+            editorController.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange)) { _ in
+            editorController.refresh()
         }
         .onChange(of: mode) { _, newMode in
             if newMode == .preview {
@@ -127,8 +216,11 @@ struct NoteEditorView: View {
                 attachments: note.attachments,
                 interactiveTasks: true
             ) { lineIndex in
-                note.body = MarkdownTaskParser.togglingTask(at: lineIndex, in: note.body)
-                touchNote()
+                let before = note.body
+                let after = MarkdownTaskParser.togglingTask(at: lineIndex, in: before)
+                if editorController.applyChange(before: before, after: after, selectionAfter: selectedRange) {
+                    touchNote()
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 18)
@@ -136,7 +228,7 @@ struct NoteEditorView: View {
             .textSelection(.enabled)
         }
         .scrollIndicators(.hidden)
-        .background(Color(uiColor: .systemBackground))
+        .background(Color.clear)
     }
 
     @ViewBuilder
@@ -237,10 +329,15 @@ struct NoteEditorView: View {
             Divider()
                 .frame(height: 24)
 
-            Button("Done") {
-                dismissKeyboard()
+            markdownToolbarButton("arrow.uturn.backward", label: "Undo") {
+                editorController.undo()
             }
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .disabled(!editorController.canUndo)
+
+            markdownToolbarButton("arrow.uturn.forward", label: "Redo") {
+                editorController.redo()
+            }
+            .disabled(!editorController.canRedo)
         }
         .frame(maxWidth: .infinity)
     }
@@ -263,33 +360,41 @@ struct NoteEditorView: View {
             .contentShape(Rectangle())
     }
 
+    private func performMarkdownCommand(_ command: (inout String, inout NSRange) -> Void) {
+        let before = note.body
+        var after = before
+        var selectionAfter = selectedRange
+        command(&after, &selectionAfter)
+        if editorController.applyChange(before: before, after: after, selectionAfter: selectionAfter) {
+            selectedRange = selectionAfter
+            touchNote()
+        }
+    }
+
     private func insertLinePrefix(_ prefix: String) {
-        MarkdownEditingCommand.insertLinePrefix(prefix, text: &note.body, selection: &selectedRange)
-        touchNote()
+        performMarkdownCommand { text, selection in
+            MarkdownEditingCommand.insertLinePrefix(prefix, text: &text, selection: &selection)
+        }
     }
 
     private func wrapSelection(with marker: String) {
-        MarkdownEditingCommand.wrapSelection(
-            with: marker,
-            text: &note.body,
-            selection: &selectedRange
-        )
-        touchNote()
+        performMarkdownCommand { text, selection in
+            MarkdownEditingCommand.wrapSelection(with: marker, text: &text, selection: &selection)
+        }
     }
 
     private func insertSnippet(_ snippet: String) {
-        MarkdownEditingCommand.insert(snippet, text: &note.body, selection: &selectedRange)
-        touchNote()
+        performMarkdownCommand { text, selection in
+            MarkdownEditingCommand.insert(snippet, text: &text, selection: &selection)
+        }
     }
 
     private func insertTemplate(_ template: String, placeholder: String) {
-        MarkdownEditingCommand.insertTemplate(
-            template,
-            selecting: placeholder,
-            text: &note.body,
-            selection: &selectedRange
-        )
-        touchNote()
+        performMarkdownCommand { text, selection in
+            MarkdownEditingCommand.insertTemplate(
+                template, selecting: placeholder, text: &text, selection: &selection
+            )
+        }
     }
 
     @MainActor
@@ -308,11 +413,17 @@ struct NoteEditorView: View {
             pixelHeight: processed.pixelHeight,
             data: processed.data
         )
+        let token = "\n\n![Image](attachment://\(attachmentID.uuidString))\n\n"
+        let before = note.body
+        var after = before
+        var selectionAfter = selectedRange
+        MarkdownEditingCommand.insert(token, text: &after, selection: &selectionAfter)
+        guard editorController.applyChange(before: before, after: after, selectionAfter: selectionAfter) else {
+            return
+        }
+        selectedRange = selectionAfter
         modelContext.insert(attachment)
         attachment.note = note
-
-        let token = "\n\n![Image](attachment://\(attachmentID.uuidString))\n\n"
-        MarkdownEditingCommand.insert(token, text: &note.body, selection: &selectedRange)
         mode = .edit
         touchNote()
     }
@@ -331,6 +442,72 @@ struct NoteEditorView: View {
     private func copyWholeText() {
         UIPasteboard.general.string = note.body
         copyFeedback += 1
+    }
+
+    private func transform(_ action: NoteAIAction) {
+        guard let request = NoteAIRequest.capture(
+            action: action,
+            text: note.body,
+            range: selectedRange,
+            allowSelection: mode == .edit
+        ) else { return }
+
+        if action.isLocal {
+            let output = NoteAIProtectedText.applyLocal(action, to: request.selectedText)
+            _ = applyAIResult(request: request, mode: .replace, text: output)
+        } else {
+            aiRequest = request
+        }
+    }
+
+    /// Never apply stale AI output to a note that changed while the sheet was
+    /// open; preserve existing attachment references in the final Markdown.
+    private func applyAIResult(request: NoteAIRequest, mode operation: NoteAIApplyMode, text: String) -> Bool {
+        guard note.body == request.sourceBody else { return false }
+        let source = request.sourceBody as NSString
+        guard request.targetRange.location != NSNotFound,
+              request.targetRange.location >= 0,
+              request.targetRange.length <= source.length,
+              request.targetRange.location <= source.length - request.targetRange.length else {
+            return false
+        }
+
+        let editRange: NSRange
+        let insertion: String
+        switch operation {
+        case .replace:
+            editRange = request.targetRange
+            insertion = text
+        case .insertBelow:
+            // Inserting source attachment references again would duplicate
+            // their use within a note; offer Replace/Copy instead.
+            guard NoteAIProtectedText.attachmentReferences(in: request.selectedText).isEmpty else {
+                return false
+            }
+            editRange = NSRange(
+                location: request.targetRange.location + request.targetRange.length,
+                length: 0
+            )
+            insertion = "\n\n" + text
+        }
+
+        let updated = source.replacingCharacters(in: editRange, with: insertion)
+        guard NoteAIProtectedText.attachmentReferences(in: updated) ==
+              NoteAIProtectedText.attachmentReferences(in: request.sourceBody) else {
+            return false
+        }
+        let selectionAfter = NSRange(
+            location: editRange.location + insertion.utf16.count, length: 0
+        )
+        guard editorController.applyChange(
+            before: request.sourceBody,
+            after: updated,
+            selectionAfter: selectionAfter
+        ) else { return false }
+        selectedRange = selectionAfter
+        mode = .edit
+        touchNote()
+        return true
     }
 
     private func touchNote() {

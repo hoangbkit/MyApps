@@ -1,9 +1,12 @@
+import AppFoundation
 import PhotosUI
 import SwiftData
 import SwiftUI
 import UIKit
 
 struct AppEditorView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
@@ -47,15 +50,20 @@ struct AppEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                previewSection
-                appInfoSection
-                progressSection
-                businessSection
-                listDisplaySection
+                Group {
+                    previewSection
+                    appInfoSection
+                    progressSection
+                    businessSection
+                    listDisplaySection
+                }
+                .listRowBackground(MyAppsGlassSurface())
+                .listRowSeparatorTint(foundationTheme.borderColor)
             }
+            .scrollContentBackground(.hidden)
+            .myAppsPage()
             .font(.system(size: 17, weight: .regular, design: .rounded))
             .scrollDismissesKeyboard(.interactively)
-            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle(app == nil ? "New App" : "Edit App")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -129,7 +137,7 @@ struct AppEditorView: View {
                     Spacer()
                     Text("\(shortDescription.count)/180")
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor.opacity(0.75))
                 }
 
                 TextField(
@@ -241,13 +249,13 @@ struct AppEditorView: View {
             } label: {
                 HStack {
                     Text("Preset")
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(foundationTheme.primaryForegroundColor)
                     Spacer()
                     Text(activePreset?.rawValue ?? "Custom")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(foundationTheme.secondaryForegroundColor.opacity(0.75))
                 }
             }
 
@@ -309,22 +317,22 @@ struct AppEditorView: View {
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: field.symbolName)
-                        .foregroundStyle(field == .projectStatus ? projectStatus.color : Color(uiColor: .secondaryLabel))
+                        .foregroundStyle(field == .projectStatus ? projectStatus.color : foundationTheme.secondaryForegroundColor)
                         .frame(width: 22)
 
                     Text(field.title)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(foundationTheme.primaryForegroundColor)
 
                     Spacer()
 
                     if let selectedIndex {
                         Text("\(selectedIndex + 1)")
                             .font(.caption2.bold().monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
                     }
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(isSelected ? Color.accentColor : Color(uiColor: .tertiaryLabel))
+                        .foregroundStyle(isSelected ? Color.accentColor : foundationTheme.secondaryForegroundColor.opacity(0.75))
                 }
                 .contentShape(Rectangle())
             }
@@ -436,6 +444,8 @@ struct AppEditorView: View {
 }
 
 private struct AppIconEditorView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     @Environment(\.dismiss) private var dismiss
 
     let appName: String
@@ -460,26 +470,32 @@ private struct AppIconEditorView: View {
 
     var body: some View {
         Form {
-            Section {
-                VStack(spacing: 12) {
-                    AppIconView(
-                        name: appName,
-                        iconData: iconData,
-                        defaultIconStyle: defaultIconStyle,
-                        size: 104
-                    )
+            Group {
+                Section {
+                    VStack(spacing: 12) {
+                        AppIconView(
+                            name: appName,
+                            iconData: iconData,
+                            defaultIconStyle: defaultIconStyle,
+                            size: 104
+                        )
 
-                    Text(appName)
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
+                        Text(appName)
+                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-            }
 
-            defaultStyleSection
-            customImageSection
+                defaultStyleSection
+                customImageSection
+            }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
         .font(.system(size: 17, weight: .regular, design: .rounded))
         .navigationTitle("App Icon")
         .navigationBarTitleDisplayMode(.inline)
@@ -559,14 +575,14 @@ private struct AppIconEditorView: View {
                             .font(.system(size: 18, weight: .semibold))
                             .symbolRenderingMode(.palette)
                             .foregroundStyle(.white, Color.accentColor)
-                            .background(Circle().fill(Color(uiColor: .systemBackground)))
+                            .background(Circle().fill(foundationTheme.backgroundColor))
                             .offset(x: 4, y: 4)
                     }
                 }
 
                 Text(style.title)
                     .font(.system(size: 11, weight: isSelected ? .semibold : .regular, design: .rounded))
-                    .foregroundStyle(isSelected ? Color.accentColor : Color(uiColor: .secondaryLabel))
+                    .foregroundStyle(isSelected ? Color.accentColor : foundationTheme.secondaryForegroundColor)
             }
             .frame(width: 66)
         }

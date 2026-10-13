@@ -2,30 +2,18 @@ import SwiftData
 import SwiftUI
 
 private enum RootTab: Hashable {
-    case apps, repos, appStore, notes, settings
+    case repos, apps, appStore, notes, settings
 }
 
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var gitHubSession = GitHubSession()
-    @State private var selectedTab: RootTab = .apps
-    @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.system.rawValue
-
-    private var appearance: AppAppearance {
-        AppAppearance(rawValue: appearanceRawValue) ?? .system
-    }
-
+    @StateObject private var appStoreSession = AppStoreConnectSession()
+    @StateObject private var aiWritingSession = AIWritingSession()
+    @State private var selectedTab: RootTab = .repos
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack {
-                ProjectsView()
-            }
-            .tabItem {
-                Label("Apps", systemImage: "square.grid.2x2")
-            }
-            .tag(RootTab.apps)
-
             NavigationStack {
                 RepositoriesView {
                     selectedTab = .settings
@@ -38,12 +26,23 @@ struct RootView: View {
             .tag(RootTab.repos)
 
             NavigationStack {
-                AppStorePlaceholderView()
+                AppStoreAppsView {
+                    selectedTab = .settings
+                }
             }
+            .id(appStoreSession.connectionRevision)
             .tabItem {
-                Label("App Store", systemImage: "storefront")
+                Label("Apps", systemImage: "storefront")
             }
             .tag(RootTab.appStore)
+
+            NavigationStack {
+                ProjectsView()
+            }
+            .tabItem {
+                Label("Projects", systemImage: "square.grid.2x2")
+            }
+            .tag(RootTab.apps)
 
             NavigationStack {
                 NotesInboxView()
@@ -61,11 +60,16 @@ struct RootView: View {
             }
             .tag(RootTab.settings)
         }
+        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
         .environmentObject(gitHubSession)
-        .preferredColorScheme(appearance.colorScheme)
+        .environmentObject(appStoreSession)
+        .environmentObject(aiWritingSession)
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
-            await gitHubSession.restore()
+            async let restoreGitHub: Void = gitHubSession.restore()
+            async let restoreAppStore: Void = appStoreSession.restore()
+            _ = await (restoreGitHub, restoreAppStore)
         }
         .fontDesign(.rounded)
         .task { @MainActor in

@@ -1,6 +1,9 @@
+import AppFoundation
 import SwiftUI
 
 struct AppStatusLinesView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let items: [AppStatusItem]
 
     private var status: ProjectStatus? {
@@ -35,7 +38,7 @@ struct AppStatusLinesView: View {
                     ForEach(lines[lineIndex].indices, id: \.self) { itemIndex in
                         if itemIndex > 0 {
                             Text("•")
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor.opacity(0.75))
                         }
 
                         if let text = displayText(for: lines[lineIndex][itemIndex]) {
@@ -48,7 +51,7 @@ struct AppStatusLinesView: View {
             }
         }
         .font(.system(size: 16, weight: .medium, design: .rounded))
-        .foregroundStyle(.secondary)
+        .foregroundStyle(foundationTheme.secondaryForegroundColor)
     }
 
     private func displayText(for item: AppStatusItem) -> String? {

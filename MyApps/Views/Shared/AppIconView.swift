@@ -1,8 +1,9 @@
+import AppFoundation
 import SwiftUI
 import UIKit
 
 struct AppIconView: View {
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.appFoundationTheme) private var foundationTheme
 
     let name: String
     let iconData: Data?
@@ -32,6 +33,7 @@ struct AppIconView: View {
         Group {
             if let iconData, let image = UIImage(data: iconData) {
                 Image(uiImage: image)
+                    .renderingMode(.original)
                     .resizable()
                     .scaledToFill()
             } else {
@@ -43,12 +45,12 @@ struct AppIconView: View {
         .overlay {
             RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
                 .stroke(
-                    colorScheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.075),
+                    foundationTheme.borderColor,
                     lineWidth: 0.75
                 )
         }
         .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.10),
+            color: foundationTheme.appearance.shadow.color.opacity(0.5),
             radius: 5,
             y: 2
         )

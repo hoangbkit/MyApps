@@ -1,9 +1,13 @@
+import AppFoundation
 import SwiftData
 import SwiftUI
 import UIKit
 
 @main
+@MainActor
 struct MyAppsApp: App {
+    @State private var themes = MyAppsThemeCatalog.makeManager()
+
     private let modelContainer: ModelContainer = {
         let schema = Schema([
             ManagedApp.self,
@@ -32,6 +36,8 @@ struct MyAppsApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environment(themes)
+                .appFoundationTheme(themes)
         }
         .modelContainer(modelContainer)
     }

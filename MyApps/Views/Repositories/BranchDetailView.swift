@@ -1,6 +1,9 @@
+import AppFoundation
 import SwiftUI
 
 struct BranchDetailView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let repository: GitHubRepository
     let initialBranch: GitHubBranch
     @ObservedObject var model: GitLogViewModel
@@ -39,99 +42,105 @@ struct BranchDetailView: View {
 
     var body: some View {
         List {
-            Section {
-                LabeledContent("Branch", value: branch.name)
-                LabeledContent("Head", value: String(branch.commit.sha.prefix(12)))
-
-                if branch.name == repository.defaultBranch {
-                    Label("Default branch", systemImage: "checkmark.circle")
-                }
-
-                if branch.isProtected {
-                    Label("Protected", systemImage: "lock.shield")
-                }
-            }
-
-            if !branchExists {
+            Group {
                 Section {
-                    Text("This branch no longer exists. Pull to refresh or return to Branches.")
-                        .foregroundStyle(.secondary)
-                }
-            }
+                    LabeledContent("Branch", value: branch.name)
+                    LabeledContent("Head", value: String(branch.commit.sha.prefix(12)))
 
-            if branchExists && branch.name != repository.defaultBranch {
-                Section("Relative to \(repository.defaultBranch)") {
-                    if isLoadingComparison {
-                        ProgressView()
-                    } else if let comparison {
-                        LabeledContent("Ahead", value: comparison.aheadBy.formatted())
-                        LabeledContent("Behind", value: comparison.behindBy.formatted())
-                        LabeledContent("Status", value: comparison.status.capitalized)
-                    } else if let comparisonError {
-                        Text(comparisonError)
-                            .foregroundStyle(.secondary)
+                    if branch.name == repository.defaultBranch {
+                        Label("Default branch", systemImage: "checkmark.circle")
+                    }
+
+                    if branch.isProtected {
+                        Label("Protected", systemImage: "lock.shield")
                     }
                 }
-            }
 
-            Section("Actions") {
-                NavigationLink {
-                    CreateTagView(
-                        repository: repository,
-                        targetSHA: branch.commit.sha,
-                        targetDescription: "HEAD of \(branch.name)",
-                        existingTags: existingTags,
-                        client: client,
-                        onCreated: onTagCreated
-                    )
-                } label: {
-                    Label("Create Tag at HEAD", systemImage: "tag")
+                if !branchExists {
+                    Section {
+                        Text("This branch no longer exists. Pull to refresh or return to Branches.")
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                    }
                 }
-                .disabled(!repository.canAttemptWrite)
 
-                if let suggestedDestination {
+                if branchExists && branch.name != repository.defaultBranch {
+                    Section("Relative to \(repository.defaultBranch)") {
+                        if isLoadingComparison {
+                            ProgressView()
+                        } else if let comparison {
+                            LabeledContent("Ahead", value: comparison.aheadBy.formatted())
+                            LabeledContent("Behind", value: comparison.behindBy.formatted())
+                            LabeledContent("Status", value: comparison.status.capitalized)
+                        } else if let comparisonError {
+                            Text(comparisonError)
+                                .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                        }
+                    }
+                }
+
+                Section("Actions") {
                     NavigationLink {
-                        BranchMergeView(
+                        CreateTagView(
                             repository: repository,
-                            sourceBranch: branch,
-                            branches: branches,
-                            defaultDestination: suggestedDestination,
+                            targetSHA: branch.commit.sha,
+                            targetDescription: "HEAD of \(branch.name)",
+                            existingTags: existingTags,
                             client: client,
-                            onMerged: onRepositoryChanged
+                            onCreated: onTagCreated
                         )
                     } label: {
-                        Label("Merge into…", systemImage: "arrow.triangle.merge")
+                        Label("Create Tag at HEAD", systemImage: "tag")
                     }
                     .disabled(!repository.canAttemptWrite)
 
-                    if branch.name != repository.defaultBranch {
+                    if let suggestedDestination {
                         NavigationLink {
-                            BranchRebaseView(
+                            BranchMergeView(
                                 repository: repository,
                                 sourceBranch: branch,
                                 branches: branches,
-                                defaultDestination: repository.defaultBranch,
+                                defaultDestination: suggestedDestination,
                                 client: client,
-                                onRebased: onRepositoryChanged
+                                onMerged: onRepositoryChanged
                             )
                         } label: {
-                            Label("Rebase onto…", systemImage: "arrow.triangle.branch")
+                            Label("Merge into…", systemImage: "arrow.triangle.merge")
                         }
-                        .disabled(
-                            !repository.canAttemptWrite ||
-                            branch.isProtected
-                        )
+                        .disabled(!repository.canAttemptWrite)
+
+                        if branch.name != repository.defaultBranch {
+                            NavigationLink {
+                                BranchRebaseView(
+                                    repository: repository,
+                                    sourceBranch: branch,
+                                    branches: branches,
+                                    defaultDestination: repository.defaultBranch,
+                                    client: client,
+                                    onRebased: onRepositoryChanged
+                                )
+                            } label: {
+                                Label("Rebase onto…", systemImage: "arrow.triangle.branch")
+                            }
+                            .disabled(
+                                !repository.canAttemptWrite ||
+                                branch.isProtected
+                            )
+                        }
+                    }
+
+                    if !repository.canAttemptWrite {
+                        Text(repository.isArchived ? "Archived repositories are read-only." : "This GitHub connection has read-only access to the repository.")
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
                     }
                 }
-
-                if !repository.canAttemptWrite {
-                    Text(repository.isArchived ? "Archived repositories are read-only." : "This GitHub connection has read-only access to the repository.")
-                        .font(.system(size: 13, weight: .regular, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
+                .disabled(!branchExists)
             }
-            .disabled(!branchExists)
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
         .navigationTitle(branch.name)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {

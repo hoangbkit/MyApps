@@ -1,6 +1,9 @@
+import AppFoundation
 import SwiftUI
 
 struct BranchRebaseView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let repository: GitHubRepository
     let sourceBranch: GitHubBranch
     let branches: [GitHubBranch]
@@ -84,7 +87,7 @@ struct BranchRebaseView: View {
         } else {
             Section {
                 Text("Choose a destination branch to analyze the rebase.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(foundationTheme.secondaryForegroundColor)
             }
         }
     }
@@ -103,9 +106,15 @@ struct BranchRebaseView: View {
 
     var body: some View {
         List {
-            directionSection
-            rebaseSections
+            Group {
+                directionSection
+                rebaseSections
+            }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
         .navigationTitle("Rebase")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: model.destinationName) {
@@ -141,6 +150,8 @@ struct BranchRebaseView: View {
 }
 
 private struct BranchRebaseAnalysisSection: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let plan: BranchRebaseViewModel.Plan
 
     var body: some View {
@@ -156,7 +167,7 @@ private struct BranchRebaseAnalysisSection: View {
                     "No rebase is needed. The destination is already an ancestor of this branch.",
                     systemImage: "checkmark.circle"
                 )
-                .foregroundStyle(.secondary)
+                .foregroundStyle(foundationTheme.secondaryForegroundColor)
             } else if plan.isFastForward {
                 Label(
                     "No commits need replaying. The branch can move directly to the destination head.",
@@ -179,7 +190,7 @@ private struct BranchRebaseAnalysisSection: View {
                             .font(.system(size: 15, weight: .semibold, design: .rounded))
                         Text(commit.shortSHA)
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
                     }
                 }
             }
@@ -188,6 +199,8 @@ private struct BranchRebaseAnalysisSection: View {
 }
 
 private struct BranchRebasePrepareSection: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     @ObservedObject var model: BranchRebaseViewModel
     let repository: GitHubRepository
     let client: GitHubAPIClient?
@@ -203,7 +216,7 @@ private struct BranchRebasePrepareSection: View {
 
                 Text("The rebased commits are prepared as Git objects, but the branch has not moved yet.")
                     .font(.system(size: 13, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(foundationTheme.secondaryForegroundColor)
 
                 Button {
                     isConfirmingApply = true

@@ -1,11 +1,102 @@
+import AppFoundation
+import Combine
 import Runestone
 import SwiftUI
 import UIKit
 
+/// Keeps one native Runestone undo stack for typing, Markdown commands,
+/// preview checkbox changes, image insertion, and accepted AI rewrites.
+/// The editor stays mounted behind Preview so history is not discarded.
+@MainActor
+final class MarkdownEditorController: ObservableObject {
+    @Published private(set) var canUndo = false
+    @Published private(set) var canRedo = false
+
+    private weak var textView: Runestone.TextView?
+
+    func attach(_ view: Runestone.TextView) {
+        guard textView !== view else { return }
+        textView = view
+        refresh()
+    }
+
+    func refresh() {
+        let undoManager = textView?.undoManager
+        let newCanUndo = undoManager?.canUndo == true
+        let newCanRedo = undoManager?.canRedo == true
+        // Do not publish unchanged values from updateUIView: this would
+        // recursively trigger another SwiftUI representable update.
+        if canUndo != newCanUndo { canUndo = newCanUndo }
+        if canRedo != newCanRedo { canRedo = newCanRedo }
+    }
+
+    func undo() {
+        guard let undoManager = textView?.undoManager, undoManager.canUndo else { return }
+        undoManager.undo()
+        refresh()
+    }
+
+    func redo() {
+        guard let undoManager = textView?.undoManager, undoManager.canRedo else { return }
+        undoManager.redo()
+        refresh()
+    }
+
+    /// Calculate a single grapheme-safe contiguous edit, then let Runestone
+    /// register its native undo operation instead of assigning .text directly
+    /// (which resets its undo manager).
+    @discardableResult
+    func applyChange(before: String, after: String, selectionAfter: NSRange) -> Bool {
+        guard let view = textView, view.text == before else { return false }
+        guard before != after else {
+            view.selectedRange = clamp(selectionAfter, length: (after as NSString).length)
+            return true
+        }
+
+        let old = Array(before)
+        let new = Array(after)
+        var prefix = 0
+        while prefix < min(old.count, new.count), old[prefix] == new[prefix] {
+            prefix += 1
+        }
+        var suffix = 0
+        while suffix < old.count - prefix, suffix < new.count - prefix,
+              old[old.count - 1 - suffix] == new[new.count - 1 - suffix] {
+            suffix += 1
+        }
+
+        let location = String(old[..<prefix]).utf16.count
+        let oldLength = String(old[prefix..<(old.count - suffix)]).utf16.count
+        let replacement = String(new[prefix..<(new.count - suffix)])
+        let range = NSRange(location: location, length: oldLength)
+
+        // Separate this command from nearby typed characters, so a single
+        // Undo reliably reverts one toolbar command or accepted AI result.
+        view.undoManager?.endUndoGrouping()
+        view.replace(range, withText: replacement)
+        view.undoManager?.endUndoGrouping()
+
+        guard view.text == after else {
+            refresh()
+            return false
+        }
+        view.selectedRange = clamp(selectionAfter, length: (after as NSString).length)
+        refresh()
+        return true
+    }
+
+    private func clamp(_ range: NSRange, length: Int) -> NSRange {
+        let location = range.location == NSNotFound ? length : min(max(0, range.location), length)
+        return NSRange(location: location, length: min(max(0, range.length), length - location))
+    }
+}
+
+
 struct MarkdownTextEditor: UIViewRepresentable {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Binding var text: String
     @Binding var selectedRange: NSRange
-    var focusOnAppear = false
+    @ObservedObject var editorController: MarkdownEditorController
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -15,11 +106,12 @@ struct MarkdownTextEditor: UIViewRepresentable {
         let textView = Runestone.TextView()
         textView.editorDelegate = context.coordinator
         textView.backgroundColor = .clear
+        applyTheme(to: textView, coordinator: context.coordinator)
         textView.alwaysBounceVertical = true
         textView.keyboardDismissMode = .interactive
         textView.isLineWrappingEnabled = true
         textView.showLineNumbers = false
-        textView.lineSelectionDisplayType = .line
+        textView.lineSelectionDisplayType = .disabled
         textView.lineHeightMultiplier = 1.28
         textView.textContainerInset = UIEdgeInsets(top: 16, left: 13, bottom: 120, right: 13)
         textView.smartDashesType = .no
@@ -28,18 +120,18 @@ struct MarkdownTextEditor: UIViewRepresentable {
         textView.autocapitalizationType = .sentences
         textView.autocorrectionType = .yes
         textView.spellCheckingType = .yes
-        textView.insertionPointColor = .systemBlue
-        textView.selectionBarColor = .systemBlue
-        textView.selectionHighlightColor = UIColor.systemBlue.withAlphaComponent(0.22)
         textView.verticalOverscrollFactor = 0.35
         textView.isFindInteractionEnabled = true
         textView.text = text
         textView.selectedRange = clampedSelection(for: text)
+        editorController.attach(textView)
         return textView
     }
 
     func updateUIView(_ textView: Runestone.TextView, context: Context) {
         context.coordinator.parent = self
+        applyTheme(to: textView, coordinator: context.coordinator)
+        editorController.attach(textView)
 
         if textView.text != text {
             let offset = textView.contentOffset
@@ -51,13 +143,18 @@ struct MarkdownTextEditor: UIViewRepresentable {
         if textView.selectedRange != validRange {
             textView.selectedRange = validRange
         }
+    }
 
-        if focusOnAppear, !context.coordinator.didRequestFocus {
-            context.coordinator.didRequestFocus = true
-            DispatchQueue.main.async {
-                textView.becomeFirstResponder()
-            }
-        }
+    private func applyTheme(to textView: Runestone.TextView, coordinator: Coordinator) {
+        let appearance = foundationTheme.appearance
+        guard coordinator.appliedAppearance != appearance else { return }
+        coordinator.appliedAppearance = appearance
+        textView.theme = NoteEditorTheme(appearance: appearance)
+        let accent = appearance.accent.myAppsUIColor
+        textView.insertionPointColor = accent
+        textView.selectionBarColor = accent
+        textView.selectionHighlightColor = accent.withAlphaComponent(0.22)
+        textView.keyboardAppearance = appearance.preferredColorScheme == .dark ? .dark : .light
     }
 
     private func clampedSelection(for value: String) -> NSRange {
@@ -70,7 +167,7 @@ struct MarkdownTextEditor: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, @preconcurrency TextViewDelegate {
         var parent: MarkdownTextEditor
-        var didRequestFocus = false
+        var appliedAppearance: ThemeAppearance?
 
         init(_ parent: MarkdownTextEditor) {
             self.parent = parent
@@ -79,11 +176,48 @@ struct MarkdownTextEditor: UIViewRepresentable {
         func textViewDidChange(_ textView: Runestone.TextView) {
             parent.text = textView.text
             parent.selectedRange = textView.selectedRange
+            parent.editorController.refresh()
         }
 
         func textViewDidChangeSelection(_ textView: Runestone.TextView) {
             parent.selectedRange = textView.selectedRange
         }
+    }
+}
+
+
+/// Uses the active palette without replacing the native editor or its undo stack.
+private final class NoteEditorTheme: Runestone.Theme {
+    private let base = Runestone.DefaultTheme()
+    private let appearance: ThemeAppearance
+
+    init(appearance: ThemeAppearance) {
+        self.appearance = appearance
+    }
+
+    let font = UIFont.monospacedSystemFont(ofSize: 18, weight: .regular)
+    var textColor: UIColor { appearance.primaryForeground.myAppsUIColor }
+    var gutterBackgroundColor: UIColor { .clear }
+    var gutterHairlineColor: UIColor { appearance.border.myAppsUIColor }
+    var lineNumberColor: UIColor { appearance.secondaryForeground.myAppsUIColor }
+    var lineNumberFont: UIFont { base.lineNumberFont }
+    var selectedLineBackgroundColor: UIColor { appearance.surface.myAppsUIColor }
+    var selectedLinesLineNumberColor: UIColor { appearance.accent.myAppsUIColor }
+    var selectedLinesGutterBackgroundColor: UIColor { appearance.surface.myAppsUIColor }
+    var invisibleCharactersColor: UIColor { appearance.secondaryForeground.myAppsUIColor }
+    var pageGuideHairlineColor: UIColor { appearance.border.myAppsUIColor }
+    var pageGuideBackgroundColor: UIColor { appearance.surface.myAppsUIColor }
+    var markedTextBackgroundColor: UIColor { appearance.accent.myAppsUIColor.withAlphaComponent(0.18) }
+
+    func textColor(for highlightName: String) -> UIColor? {
+        if highlightName.hasPrefix("comment") || highlightName.hasPrefix("punctuation") {
+            return appearance.secondaryForeground.myAppsUIColor
+        }
+        return base.textColor(for: highlightName) == nil ? nil : appearance.accent.myAppsUIColor
+    }
+
+    func fontTraits(for highlightName: String) -> Runestone.FontTraits {
+        base.fontTraits(for: highlightName)
     }
 }
 

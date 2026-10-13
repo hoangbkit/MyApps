@@ -1,6 +1,9 @@
+import AppFoundation
 import SwiftUI
 
 struct CreateReleaseView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let repository: GitHubRepository
     let tags: [GitHubTag]
     let existingReleases: [GitHubRelease]
@@ -47,65 +50,71 @@ struct CreateReleaseView: View {
 
     var body: some View {
         Form {
-            Section("Release") {
-                Picker("Tag", selection: Binding(
-                    get: { model.selectedTagName },
-                    set: { model.selectTag($0) }
-                )) {
-                    ForEach(sortedTags) { tag in
-                        Text(tag.name)
-                            .tag(tag.name)
-                    }
-                }
-
-                TextField("Release title", text: $model.title)
-
-                TextField("Release notes", text: $model.notes, axis: .vertical)
-                    .lineLimit(5...12)
-            }
-            .disabled(model.isCreating)
-
-            Section("Options") {
-                Toggle("Prerelease", isOn: $model.isPrerelease)
-                Toggle("Draft", isOn: $model.isDraft)
-            }
-            .disabled(model.isCreating)
-
-            if let validationMessage = model.validationMessage {
-                Section {
-                    Label(validationMessage, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section {
-                Button {
-                    isConfirmingCreate = true
-                } label: {
-                    if model.isCreating {
-                        HStack {
-                            ProgressView()
-                            Text("Creating…")
+            Group {
+                Section("Release") {
+                    Picker("Tag", selection: Binding(
+                        get: { model.selectedTagName },
+                        set: { model.selectTag($0) }
+                    )) {
+                        ForEach(sortedTags) { tag in
+                            Text(tag.name)
+                                .tag(tag.name)
                         }
-                    } else {
-                        Label("Create Release", systemImage: "shippingbox")
+                    }
+
+                    TextField("Release title", text: $model.title)
+
+                    TextField("Release notes", text: $model.notes, axis: .vertical)
+                        .lineLimit(5...12)
+                }
+                .disabled(model.isCreating)
+
+                Section("Options") {
+                    Toggle("Prerelease", isOn: $model.isPrerelease)
+                    Toggle("Draft", isOn: $model.isDraft)
+                }
+                .disabled(model.isCreating)
+
+                if let validationMessage = model.validationMessage {
+                    Section {
+                        Label(validationMessage, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
                     }
                 }
-                .disabled(
-                    model.isCreating ||
-                    !model.canCreate ||
-                    !repository.canAttemptWrite
-                )
-            } footer: {
-                if tags.isEmpty {
-                    Text("Create a Git tag first.")
-                } else if !repository.canAttemptWrite {
-                    Text(repository.isArchived ? "Archived repositories are read-only." : "This GitHub connection cannot create releases in this repository.")
-                } else {
-                    Text("Release assets are not uploaded by MyApps in this version.")
+
+                Section {
+                    Button {
+                        isConfirmingCreate = true
+                    } label: {
+                        if model.isCreating {
+                            HStack {
+                                ProgressView()
+                                Text("Creating…")
+                            }
+                        } else {
+                            Label("Create Release", systemImage: "shippingbox")
+                        }
+                    }
+                    .disabled(
+                        model.isCreating ||
+                        !model.canCreate ||
+                        !repository.canAttemptWrite
+                    )
+                } footer: {
+                    if tags.isEmpty {
+                        Text("Create a Git tag first.")
+                    } else if !repository.canAttemptWrite {
+                        Text(repository.isArchived ? "Archived repositories are read-only." : "This GitHub connection cannot create releases in this repository.")
+                    } else {
+                        Text("Release assets are not uploaded by MyApps in this version.")
+                    }
                 }
             }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
         .navigationTitle("Create Release")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog(

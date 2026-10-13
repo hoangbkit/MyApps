@@ -1,6 +1,9 @@
+import AppFoundation
 import SwiftUI
 
 struct CreateTagView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     let repository: GitHubRepository
     let targetSHA: String
     let targetDescription: String?
@@ -33,77 +36,83 @@ struct CreateTagView: View {
 
     var body: some View {
         Form {
-            Section("Tag") {
-                TextField("1.13", text: $model.name)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+            Group {
+                Section("Tag") {
+                    TextField("1.13", text: $model.name)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
 
-                Picker("Type", selection: $model.kind) {
-                    ForEach(GitHubTagKind.allCases) { kind in
-                        Text(kind.rawValue)
-                            .tag(kind)
-                    }
-                }
-
-                if model.kind == .annotated {
-                    TextField("Annotation message", text: $model.message, axis: .vertical)
-                        .lineLimit(3...6)
-                }
-            }
-            .disabled(model.isCreating)
-
-            Section("Target") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Commit")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text(targetSHA)
-                        .font(.system(size: 12, weight: .regular, design: .monospaced))
-                        .textSelection(.enabled)
-                }
-
-                if let targetDescription {
-                    Text(targetDescription)
-                        .font(.system(size: 14, weight: .regular, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if let validationError = model.validationError {
-                Section {
-                    Label(validationError, systemImage: "exclamationmark.triangle")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section {
-                Button {
-                    isConfirmingCreate = true
-                } label: {
-                    if model.isCreating {
-                        HStack {
-                            ProgressView()
-                            Text("Creating…")
+                    Picker("Type", selection: $model.kind) {
+                        ForEach(GitHubTagKind.allCases) { kind in
+                            Text(kind.rawValue)
+                                .tag(kind)
                         }
-                    } else {
-                        Label("Create Tag", systemImage: "tag")
+                    }
+
+                    if model.kind == .annotated {
+                        TextField("Annotation message", text: $model.message, axis: .vertical)
+                            .lineLimit(3...6)
                     }
                 }
-                .disabled(
-                    model.isCreating ||
-                    !model.canCreate ||
-                    !repository.canAttemptWrite
-                )
-            } footer: {
-                if !repository.canAttemptWrite {
-                    Text(repository.isArchived ? "Archived repositories are read-only." : "This GitHub connection cannot create tags in this repository.")
-                } else {
-                    Text("The tag will point exactly to the commit SHA shown above.")
+                .disabled(model.isCreating)
+
+                Section("Target") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Commit")
+                            .font(.caption)
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
+
+                        Text(targetSHA)
+                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+
+                    if let targetDescription {
+                        Text(targetDescription)
+                            .font(.system(size: 14, weight: .regular, design: .rounded))
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                    }
+                }
+
+                if let validationError = model.validationError {
+                    Section {
+                        Label(validationError, systemImage: "exclamationmark.triangle")
+                            .font(.footnote)
+                            .foregroundStyle(foundationTheme.secondaryForegroundColor)
+                    }
+                }
+
+                Section {
+                    Button {
+                        isConfirmingCreate = true
+                    } label: {
+                        if model.isCreating {
+                            HStack {
+                                ProgressView()
+                                Text("Creating…")
+                            }
+                        } else {
+                            Label("Create Tag", systemImage: "tag")
+                        }
+                    }
+                    .disabled(
+                        model.isCreating ||
+                        !model.canCreate ||
+                        !repository.canAttemptWrite
+                    )
+                } footer: {
+                    if !repository.canAttemptWrite {
+                        Text(repository.isArchived ? "Archived repositories are read-only." : "This GitHub connection cannot create tags in this repository.")
+                    } else {
+                        Text("The tag will point exactly to the commit SHA shown above.")
+                    }
                 }
             }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(foundationTheme.borderColor)
         }
+        .scrollContentBackground(.hidden)
+        .myAppsPage()
         .navigationTitle("Create Tag")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog(

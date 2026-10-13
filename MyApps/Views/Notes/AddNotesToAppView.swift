@@ -1,10 +1,14 @@
+import AppFoundation
 import SwiftData
 import SwiftUI
 
 struct AddNotesToAppView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
+
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \QuickNote.updatedAt, order: .reverse) private var notes: [QuickNote]
     @AppStorage(NoteSortOption.storageKey) private var noteSortRawValue = NoteSortOption.updated.rawValue
+    @AppStorage(NoteSortOption.directionStorageKey) private var directionRawValue = SortDirection.descending.rawValue
 
     let app: ManagedApp
 
@@ -14,23 +18,12 @@ struct AddNotesToAppView: View {
         NoteSortOption(rawValue: noteSortRawValue) ?? .updated
     }
 
+    private var sortDirection: SortDirection {
+        SortDirection(rawValue: directionRawValue) ?? .descending
+    }
+
     private var unassignedNotes: [QuickNote] {
-        notes
-            .filter { $0.app == nil }
-            .sorted { lhs, rhs in
-                if lhs.isPinned != rhs.isPinned {
-                    return lhs.isPinned && !rhs.isPinned
-                }
-
-                switch noteSortOption {
-                case .created:
-                    if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
-                case .updated:
-                    if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
-                }
-
-                return lhs.id.uuidString < rhs.id.uuidString
-            }
+        noteSortOption.sorted(notes.filter { $0.app == nil }, direction: sortDirection)
     }
 
     var body: some View {
@@ -44,29 +37,39 @@ struct AddNotesToAppView: View {
                     )
                 } else {
                     List(unassignedNotes) { note in
-                        Button {
-                            if selectedIDs.contains(note.id) {
-                                selectedIDs.remove(note.id)
-                            } else {
-                                selectedIDs.insert(note.id)
-                            }
-                        } label: {
-                            HStack(alignment: .top, spacing: 12) {
-                                RoundedCheckbox(isChecked: selectedIDs.contains(note.id), size: 20)
-                                    .padding(.top, 2)
+                        Group {
+                            Button {
+                                if selectedIDs.contains(note.id) {
+                                    selectedIDs.remove(note.id)
+                                } else {
+                                    selectedIDs.insert(note.id)
+                                }
+                            } label: {
+                                HStack(alignment: .top, spacing: 12) {
+                                    RoundedCheckbox(isChecked: selectedIDs.contains(note.id), size: 20)
+                                        .padding(.top, 2)
 
-                                Text(note.plainTextPreview.isEmpty ? "Empty note" : note.plainTextPreview)
-                                    .font(.system(size: 17, design: .rounded))
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(4)
-                                    .multilineTextAlignment(.leading)
+                                    Text(note.plainTextPreview.isEmpty ? "Empty note" : note.plainTextPreview)
+                                        .font(.system(size: 17, design: .rounded))
+                                        .foregroundStyle(foundationTheme.primaryForegroundColor)
+                                        .lineLimit(4)
+                                        .multilineTextAlignment(.leading)
+                                }
+                                .contentShape(Rectangle())
                             }
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparatorTint(foundationTheme.borderColor)
                     }
+                    .scrollContentBackground(.hidden)
+                    .myAppsPage()
                     .listStyle(.plain)
                 }
+            }
+            .myAppsPage()
+            .onChange(of: noteSortRawValue) { _, _ in
+                directionRawValue = SortDirection.descending.rawValue
             }
             .navigationTitle("Add Notes")
             .navigationBarTitleDisplayMode(.inline)
@@ -77,16 +80,26 @@ struct AddNotesToAppView: View {
 
                 ToolbarItemGroup(placement: .confirmationAction) {
                     Menu {
-                        Picker("Sort Notes", selection: $noteSortRawValue) {
-                            ForEach(NoteSortOption.allCases) { option in
-                                Label(option.title, systemImage: option.symbolName)
-                                    .tag(option.rawValue)
+                        Section("Sort By") {
+                            Picker("Sort Field", selection: $noteSortRawValue) {
+                                ForEach(NoteSortOption.allCases) { option in
+                                    Label(option.title, systemImage: option.symbolName)
+                                        .tag(option.rawValue)
+                                }
+                            }
+                        }
+                        Section("Order") {
+                            Picker("Sort Order", selection: $directionRawValue) {
+                                ForEach(SortDirection.allCases) { direction in
+                                    Label(direction.title(isText: false), systemImage: direction.symbolName)
+                                        .tag(direction.rawValue)
+                                }
                             }
                         }
                     } label: {
                         Image(systemName: "arrow.up.arrow.down")
                     }
-                    .accessibilityLabel("Sort Notes by \(noteSortOption.title)")
+                    .accessibilityLabel("Sort Notes by \(noteSortOption.title), \(sortDirection.title(isText: false))")
 
                     Button("Add") { assignSelectedNotes() }
                         .fontWeight(.semibold)

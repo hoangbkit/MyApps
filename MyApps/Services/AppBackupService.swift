@@ -1,3 +1,4 @@
+import AppFoundation
 import Foundation
 import SwiftData
 import SwiftUI
@@ -54,9 +55,27 @@ struct MyAppsBackupManifest: Codable, Sendable {
 }
 
 struct BackupPreferencesRecord: Codable, Sendable {
+    // Retained for decoding backups exported before AppFoundation themes.
     let appearanceRawValue: String
+    // Optional so older JSON and .myappsbackup manifests continue decoding.
+    let themeID: String?
     let appSortRawValue: String
     let noteSortRawValue: String
+    let aiWritingPreferences: AIWritingPreferences?
+
+    init(
+        appearanceRawValue: String,
+        themeID: String? = nil,
+        appSortRawValue: String,
+        noteSortRawValue: String,
+        aiWritingPreferences: AIWritingPreferences? = nil
+    ) {
+        self.appearanceRawValue = appearanceRawValue
+        self.themeID = themeID
+        self.appSortRawValue = appSortRawValue
+        self.noteSortRawValue = noteSortRawValue
+        self.aiWritingPreferences = aiWritingPreferences
+    }
 }
 
 struct BackupAppRecord: Codable, Sendable {
@@ -266,9 +285,14 @@ enum MyAppsBackupService {
 
         let defaults = UserDefaults.standard
         let preferences = BackupPreferencesRecord(
-            appearanceRawValue: defaults.string(forKey: AppAppearance.storageKey) ?? AppAppearance.system.rawValue,
+            appearanceRawValue: defaults.string(forKey: MyAppsThemeCatalog.legacyAppearanceStorageKey) ?? "System",
+            themeID: UserDefaultsThemeStateStore(storageKey: MyAppsThemeCatalog.storageKey)
+                .load().selectedThemeID ?? MyAppsThemeCatalog.catalog.fallbackThemeID,
             appSortRawValue: defaults.string(forKey: AppSortOption.storageKey) ?? AppSortOption.created.rawValue,
-            noteSortRawValue: defaults.string(forKey: NoteSortOption.storageKey) ?? NoteSortOption.updated.rawValue
+            noteSortRawValue: defaults.string(forKey: NoteSortOption.storageKey) ?? NoteSortOption.updated.rawValue,
+            aiWritingPreferences: defaults.data(forKey: AIWritingSession.storageKey)
+                .flatMap { try? JSONDecoder().decode(AIWritingPreferences.self, from: $0) }
+                ?? .starter
         )
 
         let manifest = MyAppsBackupManifest(
@@ -478,9 +502,27 @@ enum MyAppsBackupService {
 
             if let preferences = package.manifest.preferences {
                 let defaults = UserDefaults.standard
-                defaults.set(preferences.appearanceRawValue, forKey: AppAppearance.storageKey)
+                defaults.set(
+                    preferences.appearanceRawValue,
+                    forKey: MyAppsThemeCatalog.legacyAppearanceStorageKey
+                )
+                let themeID = MyAppsThemeCatalog.restoredThemeID(
+                    themeID: preferences.themeID,
+                    legacyAppearance: preferences.appearanceRawValue
+                )
+                let themeStore = UserDefaultsThemeStateStore(storageKey: MyAppsThemeCatalog.storageKey)
+                var state = themeStore.load()
+                state.selectedThemeID = themeID
+                state.previewThemeID = nil
+                state.previewExpiresAt = nil
+                state.lastKnownHasPro = false
+                themeStore.save(state)
                 defaults.set(preferences.appSortRawValue, forKey: AppSortOption.storageKey)
                 defaults.set(preferences.noteSortRawValue, forKey: NoteSortOption.storageKey)
+                if let aiProfiles = preferences.aiWritingPreferences,
+                   let profilesData = try? JSONEncoder().encode(aiProfiles) {
+                    defaults.set(profilesData, forKey: AIWritingSession.storageKey)
+                }
             }
         } catch {
             modelContext.rollback()

@@ -1,3 +1,4 @@
+import AppFoundation
 import SwiftData
 import SwiftUI
 
@@ -9,13 +10,14 @@ private enum NotesScope: String, CaseIterable, Identifiable {
 }
 
 struct NotesInboxView: View {
+    @Environment(\.appFoundationTheme) private var foundationTheme
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \QuickNote.updatedAt, order: .reverse) private var notes: [QuickNote]
     @AppStorage(NoteSortOption.storageKey) private var noteSortRawValue = NoteSortOption.updated.rawValue
+    @AppStorage(NoteSortOption.directionStorageKey) private var directionRawValue = SortDirection.descending.rawValue
 
     @State private var scope: NotesScope = .unassigned
     @State private var activeNote: QuickNote?
-    @State private var activeNoteStartsEditing = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 12, alignment: .top),
@@ -23,30 +25,20 @@ struct NotesInboxView: View {
     ]
 
     private var displayedNotes: [QuickNote] {
-        let scoped = switch scope {
-        case .unassigned: notes.filter { $0.app == nil }
-        case .all: notes
+        let scoped: [QuickNote]
+        switch scope {
+        case .unassigned: scoped = notes.filter { $0.app == nil }
+        case .all: scoped = notes
         }
-
-        return scoped.sorted { lhs, rhs in
-            if lhs.isPinned != rhs.isPinned {
-                return lhs.isPinned && !rhs.isPinned
-            }
-
-            switch noteSortOption {
-            case .created:
-                if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
-            case .updated:
-                if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
-            }
-
-            return lhs.id.uuidString < rhs.id.uuidString
-        }
+        return noteSortOption.sorted(scoped, direction: sortDirection)
     }
-
 
     private var noteSortOption: NoteSortOption {
         NoteSortOption(rawValue: noteSortRawValue) ?? .updated
+    }
+
+    private var sortDirection: SortDirection {
+        SortDirection(rawValue: directionRawValue) ?? .descending
     }
 
     var body: some View {
@@ -61,7 +53,7 @@ struct NotesInboxView: View {
                 notesGrid
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .myAppsPage()
         .navigationTitle("Notes")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -78,16 +70,26 @@ struct NotesInboxView: View {
                 .accessibilityLabel("Show \(scope.rawValue) Notes")
 
                 Menu {
-                    Picker("Sort Notes", selection: $noteSortRawValue) {
-                        ForEach(NoteSortOption.allCases) { option in
-                            Label(option.title, systemImage: option.symbolName)
-                                .tag(option.rawValue)
+                    Section("Sort By") {
+                        Picker("Sort Field", selection: $noteSortRawValue) {
+                            ForEach(NoteSortOption.allCases) { option in
+                                Label(option.title, systemImage: option.symbolName)
+                                    .tag(option.rawValue)
+                            }
+                        }
+                    }
+                    Section("Order") {
+                        Picker("Sort Order", selection: $directionRawValue) {
+                            ForEach(SortDirection.allCases) { direction in
+                                Label(direction.title(isText: false), systemImage: direction.symbolName)
+                                    .tag(direction.rawValue)
+                            }
                         }
                     }
                 } label: {
                     Image(systemName: "arrow.up.arrow.down")
                 }
-                .accessibilityLabel("Sort Notes by \(noteSortOption.title)")
+                .accessibilityLabel("Sort Notes by \(noteSortOption.title), \(sortDirection.title(isText: false))")
 
                 Button {
                     createNote()
@@ -97,9 +99,12 @@ struct NotesInboxView: View {
                 .accessibilityLabel("New Note")
             }
         }
+        .onChange(of: noteSortRawValue) { _, _ in
+            directionRawValue = SortDirection.descending.rawValue
+        }
         .navigationDestination(isPresented: activeNoteBinding) {
             if let activeNote {
-                NoteEditorView(note: activeNote, startsInEditMode: activeNoteStartsEditing)
+                NoteEditorView(note: activeNote)
             }
         }
     }
@@ -109,7 +114,6 @@ struct NotesInboxView: View {
             LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                 ForEach(displayedNotes) { note in
                     NoteCardView(note: note, showsApp: true) {
-                        activeNoteStartsEditing = false
                         activeNote = note
                     } onTogglePin: {
                         note.isPinned.toggle()
@@ -139,7 +143,6 @@ struct NotesInboxView: View {
     private func createNote() {
         let note = QuickNote()
         modelContext.insert(note)
-        activeNoteStartsEditing = true
         activeNote = note
     }
 }
