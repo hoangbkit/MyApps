@@ -1,7 +1,8 @@
 name: Release
 
 # Manual-only by design: this creates disposable mycli build releases,
-# not App Store/product releases.
+# not App Store/product releases. The generated Xcode project is included
+# alongside the app archive for local mycli signing and deployment.
 on:
   workflow_dispatch:
     inputs:
@@ -56,7 +57,12 @@ jobs:
         run: brew install xcodegen
 
       - name: Generate Xcode project
-        run: xcodegen generate --spec project.yml
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec project.yml
+          test -f MyApps.xcodeproj/project.pbxproj
+          test -f MyApps.xcodeproj/xcshareddata/xcschemes/MyApps.xcscheme
 
       - name: Set build release tag
         id: release
@@ -127,20 +133,38 @@ jobs:
 
           rm -rf "$IOS_DERIVED" "$IOS_ARCHIVE"
 
-      - name: Verify release archive
+      # Include the exact generated project used above so mycli can inspect
+      # target signing settings, including DEVELOPMENT_TEAM.
+      - name: Package generated Xcode project
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f MyApps.xcodeproj/project.pbxproj
+          test -f MyApps.xcodeproj/xcshareddata/xcschemes/MyApps.xcscheme
+          mkdir -p artifacts
+          ditto -c -k --sequesterRsrc --keepParent \
+            MyApps.xcodeproj \
+            "artifacts/MyApps-xcodeproj-${{ steps.release.outputs.tag }}.zip"
+
+      - name: Verify release archives
         shell: bash
         run: |
           set -euo pipefail
 
           ARCHIVE="artifacts/MyApps-iOS-${{ steps.release.outputs.build_slug }}-unsigned-${{ steps.release.outputs.tag }}.xcarchive.zip"
           test -f "$ARCHIVE"
-          ls -lh "$ARCHIVE"
+          test -f "artifacts/MyApps-xcodeproj-${{ steps.release.outputs.tag }}.zip"
+          ls -lh artifacts
 
-          bytes="$(stat -f%z "$ARCHIVE")"
-          if (( bytes >= 2147483648 )); then
-            echo "error: $ARCHIVE is too large for a GitHub Release asset" >&2
-            exit 1
-          fi
+          for archive in artifacts/*.zip; do
+            unzip -tq "$archive"
+            bytes="$(stat -f%z "$archive")"
+            if (( bytes >= 2147483648 )); then
+              echo "error: $archive is too large for a GitHub Release asset" >&2
+              exit 1
+            fi
+          done
 
       - name: Create GitHub prerelease
         env:

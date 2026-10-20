@@ -41,7 +41,7 @@ Secrets are stored in this device's Keychain (this-device-only), never in SwiftD
 
 App Store apps and version history use paginated requests. Xcode Cloud build history displays the newest 100 runs returned by the API, sorted by descending build number. Active build history and individual build details refresh every 30 seconds while the relevant screen is active and the app is foregrounded; pull-to-refresh remains available. Diagnostics use Apple's structured build issues and test results APIs, **not** raw Xcode build logs. The app does not currently offer artifact downloads or build cancellation.
 
-The Xcode project is generated from `project.yml`; run `./generate.sh` after pulling changes. The release workflow regenerates the project before building.
+The Xcode project is generated from `project.yml`; run `./generate.sh` after pulling changes. The release workflow regenerates the project before building and publishes that exact project as `MyApps-xcodeproj-<tag>.zip` alongside the unsigned app archive for local mycli signing and deployment.
 
 ## DeepSeek-powered Notes and AI Profiles (PR #5)
 

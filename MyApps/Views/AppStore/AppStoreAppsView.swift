@@ -99,6 +99,7 @@ struct AppStoreAppsView: View {
     @State private var hasLoaded = false
     @State private var loadFailed = false
     @State private var errorMessage: String?
+    @State private var loadGeneration = 0
 
     private var filteredApps: [AppStoreConnectApp] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -191,6 +192,10 @@ struct AppStoreAppsView: View {
             case .loading:
                 break
             case .disconnected:
+                loadGeneration += 1
+                isLoading = false
+                loadFailed = false
+                errorMessage = nil
                 apps = []
                 iconURLsByAppID = [:]
                 versionsByAppID = [:]
@@ -275,18 +280,25 @@ struct AppStoreAppsView: View {
 
         .searchable(text: $searchText, prompt: "Search apps")
         .refreshable {
-            await loadApps(bypassCache: true)
+            await loadApps()
         }
     }
 
     @MainActor
-    private func loadApps(bypassCache: Bool = false) async {
+    private func loadApps() async {
         guard let client = session.client() else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
+        let connectionRevision = session.connectionRevision
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if generation == loadGeneration { isLoading = false }
+        }
         do {
-            let catalog = try await client.appsWithIcons(bypassCache: bypassCache)
-            guard !Task.isCancelled else { return }
+            let catalog = try await client.appsWithIcons()
+            guard generation == loadGeneration,
+                  connectionRevision == session.connectionRevision,
+                  !Task.isCancelled else { return }
             apps = catalog.apps
             iconURLsByAppID = catalog.iconURLsByAppID
             versionsByAppID = catalog.versionsByAppID
@@ -301,11 +313,16 @@ struct AppStoreAppsView: View {
             let unresolved = catalog.apps.filter { publicIconURLsByAppID[$0.id] == nil }
             if !unresolved.isEmpty {
                 let publicArtwork = await AppStorePublicArtworkLookup.lookup(apps: unresolved)
-                guard !Task.isCancelled else { return }
+                guard generation == loadGeneration,
+                      connectionRevision == session.connectionRevision,
+                      !Task.isCancelled else { return }
                 publicIconURLsByAppID.merge(publicArtwork) { _, newURL in newURL }
             }
         } catch {
-            guard !Task.isCancelled else { return }
+            guard generation == loadGeneration,
+                  connectionRevision == session.connectionRevision,
+                  !Task.isCancelled,
+                  (error as? URLError)?.code != .cancelled else { return }
             loadFailed = true
             errorMessage = error.localizedDescription
         }
