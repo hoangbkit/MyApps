@@ -483,13 +483,10 @@ struct GitHubAPIClient: Sendable {
         }
     }
 
-    func repositories(bypassCache: Bool = false) async throws -> [GitHubRepository] {
+    func repositories() async throws -> [GitHubRepository] {
         let pageSize = 100
         var page = 1
         var repositories: [GitHubRepository] = []
-        let cachePolicy: URLRequest.CachePolicy = bypassCache
-            ? .reloadIgnoringLocalCacheData
-            : .returnCacheDataElseLoad
 
         while true {
             try Task.checkCancellation()
@@ -503,8 +500,7 @@ struct GitHubAPIClient: Sendable {
                     URLQueryItem(name: "direction", value: "desc"),
                     URLQueryItem(name: "per_page", value: String(pageSize)),
                     URLQueryItem(name: "page", value: String(page))
-                ],
-                cachePolicy: cachePolicy
+                ]
             )
 
             repositories.append(contentsOf: batch)
@@ -635,8 +631,8 @@ struct GitHubAPIClient: Sendable {
             throw GitHubAPIError.invalidURL
         }
 
-        // Repository catalog loads opt into a long-lived transport cache.
-        // Other REST reads and explicit refreshes continue to bypass it.
+        // Catalog loads must bypass cached responses too, so automatic reloads
+        // cannot restore an older list after a successful pull-to-refresh.
         var request = URLRequest(url: url, cachePolicy: cachePolicy)
         request.httpMethod = method
         request.httpBody = body

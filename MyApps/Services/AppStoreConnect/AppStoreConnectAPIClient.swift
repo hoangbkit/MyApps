@@ -326,14 +326,14 @@ struct AppStoreConnectAPIClient: Sendable {
         )
     }
 
-    func apps(bypassCache: Bool = false) async throws -> [AppStoreConnectApp] {
-        try await appsWithIcons(bypassCache: bypassCache).apps
+    func apps() async throws -> [AppStoreConnectApp] {
+        try await appsWithIcons().apps
     }
 
     /// Retrieves app icons and version statuses in the same paginated ASC request as the apps.
     /// Avoids public store lookup (which cannot find unreleased apps) and
     /// avoids N additional network requests for N apps.
-    func appsWithIcons(bypassCache: Bool = false) async throws -> AppStoreConnectAppCatalog {
+    func appsWithIcons() async throws -> AppStoreConnectAppCatalog {
         var url = try apiURL(path: "/v1/apps", query: [
             URLQueryItem(name: "limit", value: "200"),
             URLQueryItem(name: "include", value: "appStoreIcon,appStoreVersions"),
@@ -344,9 +344,6 @@ struct AppStoreConnectAPIClient: Sendable {
             ),
             URLQueryItem(name: "limit[appStoreVersions]", value: "50")
         ])
-        let cachePolicy: URLRequest.CachePolicy = bypassCache
-            ? .reloadIgnoringLocalCacheData
-            : .returnCacheDataElseLoad
 
         var apps: [AppStoreConnectApp] = []
         var icons: [String: URL] = [:]
@@ -355,10 +352,8 @@ struct AppStoreConnectAPIClient: Sendable {
 
         while visited.insert(url).inserted {
             try Task.checkCancellation()
-            let page: AppStoreConnectPage<AppStoreConnectApp> = try await get(
-                url: url,
-                cachePolicy: cachePolicy
-            )
+            // Use the same uncached read for every page and every load path.
+            let page: AppStoreConnectPage<AppStoreConnectApp> = try await get(url: url)
 
             var includedIcons: [String: URL] = [:]
             var includedVersions: [String: AppStoreConnectVersion] = [:]
