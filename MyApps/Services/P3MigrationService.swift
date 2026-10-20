@@ -34,8 +34,8 @@ enum P3MigrationService {
                     sections.append(existingBody)
                 }
 
-                if note.legacyKind == .checklist || !note.checklistItems.isEmpty {
-                    let tasks = note.checklistItems
+                if note.legacyKind == .checklist || !note.allChecklistItems.isEmpty {
+                    let tasks = note.allChecklistItems
                         .sorted {
                             if $0.sortOrder == $1.sortOrder { return $0.createdAt < $1.createdAt }
                             return $0.sortOrder < $1.sortOrder
@@ -56,7 +56,7 @@ enum P3MigrationService {
                 note.legacyKind = .markdown
                 note.updatedAt = Date()
 
-                for item in Array(note.checklistItems) {
+                for item in Array(note.allChecklistItems) {
                     context.delete(item)
                 }
                 changed = true

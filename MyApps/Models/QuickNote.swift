@@ -17,10 +17,13 @@ final class QuickNote {
 
     // Legacy P1/P2 checklist records. P3 migrates them into Markdown task lines.
     @Relationship(deleteRule: .cascade, inverse: \ChecklistItem.note)
-    var checklistItems: [ChecklistItem] = []
+    var checklistItems: [ChecklistItem]?
 
     @Relationship(deleteRule: .cascade, inverse: \NoteAttachment.note)
-    var attachments: [NoteAttachment] = []
+    var attachments: [NoteAttachment]?
+
+    var allChecklistItems: [ChecklistItem] { checklistItems ?? [] }
+    var allAttachments: [NoteAttachment] { attachments ?? [] }
 
     init(markdown: String = "") {
         self.id = UUID()
@@ -37,7 +40,7 @@ final class QuickNote {
     }
 
     var isEffectivelyEmpty: Bool {
-        body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty
+        body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && allAttachments.isEmpty
     }
 
     var openTaskCount: Int {

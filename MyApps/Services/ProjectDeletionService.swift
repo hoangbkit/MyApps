@@ -5,7 +5,7 @@ import SwiftData
 enum ProjectDeletionService {
     static func deleteProjectKeepingNotes(_ project: ManagedApp, in context: ModelContext) {
         let now = Date()
-        for note in Array(project.notes) {
+        for note in Array(project.allNotes) {
             note.app = nil
             note.updatedAt = now
         }
@@ -13,7 +13,7 @@ enum ProjectDeletionService {
     }
 
     static func deleteProjectAndNotes(_ project: ManagedApp, in context: ModelContext) {
-        for note in Array(project.notes) {
+        for note in Array(project.allNotes) {
             context.delete(note)
         }
         context.delete(project)

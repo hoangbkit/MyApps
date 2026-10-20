@@ -15,9 +15,15 @@ struct MyAppsApp: App {
             ChecklistItem.self,
             NoteAttachment.self
         ])
+        // Keep the default store location so existing local libraries migrate
+        // in place and are uploaded to this account's private CloudKit database.
+        let configuration = ModelConfiguration(
+            schema: schema,
+            cloudKitDatabase: .private("iCloud.com.hoangbkit.myapps")
+        )
 
         do {
-            return try ModelContainer(for: schema)
+            return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
             fatalError("Unable to create MyApps database: \(error)")
         }

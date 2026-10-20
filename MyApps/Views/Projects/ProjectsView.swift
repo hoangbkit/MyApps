@@ -367,7 +367,7 @@ struct ProjectsView: View {
     @ViewBuilder
     private var deletionActions: some View {
         if let project = projectPendingDeletion {
-            if project.notes.isEmpty {
+            if project.allNotes.isEmpty {
                 Button("Delete App", role: .destructive) {
                     ProjectDeletionService.deleteProjectKeepingNotes(project, in: modelContext)
                     projectPendingDeletion = nil
@@ -388,7 +388,7 @@ struct ProjectsView: View {
 
     @ViewBuilder
     private var deletionMessage: some View {
-        if let project = projectPendingDeletion, !project.notes.isEmpty {
+        if let project = projectPendingDeletion, !project.allNotes.isEmpty {
             Text("This app contains \(noteCountLabel(for: project)). Keep them as unassigned notes or delete them with the app.")
         } else {
             Text("This removes the app from MyApps.")
@@ -396,6 +396,6 @@ struct ProjectsView: View {
     }
 
     private func noteCountLabel(for project: ManagedApp) -> String {
-        "\(project.notes.count) note\(project.notes.count == 1 ? "" : "s")"
+        "\(project.allNotes.count) note\(project.allNotes.count == 1 ? "" : "s")"
     }
 }

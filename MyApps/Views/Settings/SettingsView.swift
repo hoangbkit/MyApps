@@ -44,8 +44,8 @@ struct SettingsView: View {
                 AIProfilesSettingsSection()
 
                 Section("Storage") {
-                    LabeledContent("Mode", value: "Offline")
-                    Text("MyApps stores its library locally on this device with SwiftData.")
+                    LabeledContent("Mode", value: "iCloud Sync")
+                    Text("Projects, notes, and images stay available offline and sync when iCloud is available. Use the same iCloud account on each device. Settings and service connections stay on this device.")
                         .font(.system(size: 15, weight: .regular, design: .rounded))
                         .foregroundStyle(foundationTheme.secondaryForegroundColor)
                 }
@@ -121,7 +121,7 @@ struct SettingsView: View {
                     "This backup contains \(pendingRestore.appCount) app\(pendingRestore.appCount == 1 ? "" : "s"), " +
                     "\(pendingRestore.noteCount) note\(pendingRestore.noteCount == 1 ? "" : "s"), and " +
                     "\(pendingRestore.attachmentCount) attachment\(pendingRestore.attachmentCount == 1 ? "" : "s"). " +
-                    "Your current local library will be replaced."
+                    "Your current library will be replaced. This replacement also syncs to your other devices through iCloud."
                 )
             }
         }
