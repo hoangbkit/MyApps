@@ -228,7 +228,7 @@ enum MyAppsBackupService {
         let noteRecords = notes
             .sorted { $0.createdAt < $1.createdAt }
             .map { note in
-                let attachmentRecords = note.attachments
+                let attachmentRecords = note.allAttachments
                     .sorted { $0.createdAt < $1.createdAt }
                     .map { attachment in
                         let assetPath: String?
@@ -265,7 +265,7 @@ enum MyAppsBackupService {
                     createdAt: note.createdAt,
                     updatedAt: note.updatedAt,
                     appID: note.app?.id,
-                    checklistItems: note.checklistItems
+                    checklistItems: note.allChecklistItems
                         .sorted { lhs, rhs in
                             if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
                             return lhs.createdAt < rhs.createdAt
@@ -472,7 +472,7 @@ enum MyAppsBackupService {
                     item.id = itemRecord.id
                     item.createdAt = itemRecord.createdAt
                     modelContext.insert(item)
-                    note.checklistItems.append(item)
+                    item.note = note
                 }
 
                 for attachmentRecord in record.attachments {
@@ -494,7 +494,7 @@ enum MyAppsBackupService {
                     )
                     attachment.createdAt = attachmentRecord.createdAt
                     modelContext.insert(attachment)
-                    note.attachments.append(attachment)
+                    attachment.note = note
                 }
             }
 

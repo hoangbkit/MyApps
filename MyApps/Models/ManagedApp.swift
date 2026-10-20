@@ -31,7 +31,10 @@ final class ManagedApp {
     var updatedAt: Date = Date()
 
     @Relationship(deleteRule: .nullify, inverse: \QuickNote.app)
-    var notes: [QuickNote] = []
+    var notes: [QuickNote]?
+
+    // CloudKit can deliver records and their relationships separately.
+    var allNotes: [QuickNote] { notes ?? [] }
 
     init(
         name: String,
@@ -123,7 +126,7 @@ final class ManagedApp {
     }
 
     var openChecklistCount: Int {
-        notes.reduce(into: 0) { result, note in
+        allNotes.reduce(into: 0) { result, note in
             result += note.openTaskCount
         }
     }

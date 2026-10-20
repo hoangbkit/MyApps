@@ -213,7 +213,7 @@ struct NoteEditorView: View {
         ScrollView {
             GitHubMarkdownView(
                 markdown: note.body,
-                attachments: note.attachments,
+                attachments: note.allAttachments,
                 interactiveTasks: true
             ) { lineIndex in
                 let before = note.body

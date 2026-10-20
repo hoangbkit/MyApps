@@ -1,6 +1,6 @@
 # MyApps v1.0 P3.5
 
-A lightweight, offline iOS notebook for managing the apps you build and keeping flexible Markdown notes with each app.
+A lightweight iOS notebook for managing the apps you build and keeping flexible Markdown notes with each app. The library works offline and syncs through your private iCloud database.
 
 ## Requirements
 
@@ -17,6 +17,29 @@ brew install xcodegen
 ```
 
 `generate.sh` removes any stale generated project before recreating `MyApps.xcodeproj`.
+
+## iCloud library sync
+
+Projects, notes, project icons, and note images sync using SwiftData and the private CloudKit container `iCloud.com.hoangbkit.myapps`. Changes are saved locally first; uploads and downloads happen in the background when iCloud is available. Devices must use the same iCloud account and CloudKit environment. There is no custom sync server or manual sync button.
+
+The existing default SwiftData store and persisted relationship names are retained. The three to-many relationships are now optional for CloudKit compatibility; the app treats a relationship that has not arrived yet as an empty collection. No library reset or backup reimport is required when upgrading the primary device.
+
+Theme, sort preferences, repository pins, and AI profiles remain device-local. GitHub, App Store Connect, and DeepSeek credentials remain in device-only Keychain and must be entered separately on each device. API catalogs continue to be fetched from their services.
+
+Before installing the first sync-enabled build:
+
+1. Export a full backup from the device containing the library you want to keep.
+2. In Apple Developer, enable iCloud/CloudKit and Push Notifications for `com.hoangbkit.myapps`, create or select `iCloud.com.hoangbkit.myapps`, and associate it with the app ID under team `J458WW3452`. Refresh the development provisioning profile, or let Xcode automatic signing refresh it.
+3. Run `./generate.sh`, then install a signed development build. The entitlement file and remote-notification background mode are included in both the project spec and the checked-in project settings.
+4. Let the primary device upload before opening a clean second installation with the same iCloud account. Do not restore the same backup independently on both devices: those would be separate records even when their app-level UUIDs match.
+
+The manual release workflow keeps the existing archive/project ZIP names. It seeds the app's iCloud and push entitlement requests into an ad-hoc signature without Apple credentials; local `mycli`/Xcode export must replace this with a provisioned development signature. Keep the local source checkout up to date, including `MyApps.entitlements`. Before relying on the deployment, check its signed entitlements for the CloudKit container, `CloudKit` service, and APNs environment, and confirm that the embedded profile authorizes them.
+
+Development-signed internal builds use CloudKit's development environment. If a build is later distributed using a production environment, deploy the schema to production in CloudKit Console and use that environment on both devices.
+
+Basic device check: create a project with an icon and a note containing an image; confirm both arrive on the second device. Edit the note, move it between projects, pin it, and delete it from the other device. Make an edit offline and verify it arrives after reconnecting. Check the existing library after upgrading. Sync is asynchronous; avoid editing the same note on both devices simultaneously.
+
+Backup restore still replaces the current library rather than merging it. Its deletions and restored records also sync to other devices; the confirmation explicitly states this.
 
 ## AppFoundation Themes (PR #5)
 

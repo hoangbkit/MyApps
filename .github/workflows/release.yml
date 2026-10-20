@@ -86,7 +86,8 @@ jobs:
           echo "Build release: $tag ($BUILD_CONFIGURATION)"
 
       # mycli signs and exports the archive locally using the developer
-      # machine's credentials, so CI intentionally leaves it unsigned.
+      # machine's credentials. CI only uses ad-hoc signing to retain the
+      # iCloud/push entitlement requests; it needs no signing credentials.
       - name: Archive unsigned iOS app
         shell: bash
         run: |
@@ -125,6 +126,9 @@ jobs:
             echo "error: unexpected iOS bundle identifier" >&2
             exit 1
           }
+
+          bash scripts/prepare-ios-archive-entitlements.sh \
+            "$IOS_ARCHIVE" MyApps/Resources/MyApps.entitlements
 
           mkdir -p artifacts
           ditto -c -k --sequesterRsrc --keepParent \

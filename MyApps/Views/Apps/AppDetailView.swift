@@ -31,7 +31,7 @@ struct AppDetailView: View {
     }
 
     private var sortedNotes: [QuickNote] {
-        noteSortOption.sorted(app.notes, direction: sortDirection)
+        noteSortOption.sorted(app.allNotes, direction: sortDirection)
     }
 
     var body: some View {
@@ -150,7 +150,7 @@ struct AppDetailView: View {
             isPresented: $isConfirmingDelete,
             titleVisibility: .visible
         ) {
-            if app.notes.isEmpty {
+            if app.allNotes.isEmpty {
                 Button("Delete App", role: .destructive) {
                     ProjectDeletionService.deleteProjectKeepingNotes(app, in: modelContext)
                     dismiss()
@@ -166,7 +166,7 @@ struct AppDetailView: View {
                 }
             }
         } message: {
-            if app.notes.isEmpty {
+            if app.allNotes.isEmpty {
                 Text("This removes the app from MyApps.")
             } else {
                 Text("This app contains \(noteCountLabel). Keep its notes as unassigned notes, or delete them with the app.")
@@ -224,7 +224,7 @@ struct AppDetailView: View {
     }
 
     private var noteCountLabel: String {
-        "\(app.notes.count) note\(app.notes.count == 1 ? "" : "s")"
+        "\(app.allNotes.count) note\(app.allNotes.count == 1 ? "" : "s")"
     }
 
     private func createNote() {
