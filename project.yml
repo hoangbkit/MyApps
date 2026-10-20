@@ -18,6 +18,14 @@ settings:
     CLANG_ENABLE_MODULES: YES
     SWIFT_STRICT_CONCURRENCY: complete
 
+schemes:
+  MyApps:
+    build:
+      targets:
+        MyApps: all
+    management:
+      shared: true
+
 packages:
   Runestone:
     url: https://github.com/simonbs/Runestone.git

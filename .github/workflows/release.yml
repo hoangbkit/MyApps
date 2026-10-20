@@ -57,7 +57,12 @@ jobs:
         run: brew install xcodegen
 
       - name: Generate Xcode project
-        run: xcodegen generate --spec project.yml
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec project.yml
+          test -f MyApps.xcodeproj/project.pbxproj
+          test -f MyApps.xcodeproj/xcshareddata/xcschemes/MyApps.xcscheme
 
       - name: Set build release tag
         id: release
