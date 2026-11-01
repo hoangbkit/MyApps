@@ -550,7 +550,11 @@ actor RegionalPricingService {
     ) async -> [PricingPriceRecord] {
         var pointDetails: [String: (Decimal, String?)] = [:]
         var territoryByPoint: [String: String] = [:]
-        let currencies = Dictionary(uniqueKeysWithValues: territories.map { ($0.id, $0.currency) })
+        // Do not trap if Apple's paged territory catalog repeats an ID.
+        var currencies: [String: String?] = [:]
+        for territory in territories {
+            currencies[territory.id] = territory.currency
+        }
         for resource in included {
             guard resource.type == "inAppPurchasePricePoints" ||
                   resource.type == "subscriptionPricePoints" else { continue }
