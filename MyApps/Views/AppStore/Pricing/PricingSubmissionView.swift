@@ -1,16 +1,21 @@
 import AppFoundation
 import SwiftUI
 
-/// Final confirmation is the only UI path able to dispatch an IAP schedule POST.
-/// Subscription products remain read-only until Pass 5.
+/// The only UI where a fully reviewed price proposal can trigger an Apple POST.
+/// Lifetime submits one schedule; standard subscriptions submit per territory.
 struct PricingSubmissionView: View {
     @Environment(\.appFoundationTheme) private var theme
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var session: AppStoreConnectSession
 
     let model: RegionalPricingViewModel
     @State private var plan: LifetimeSchedulePlan?
     @State private var report: PricingSubmissionReport?
+    @State private var subscriptionPlan: SubscriptionWritePlan?
+    @State private var subscriptionReport: SubscriptionSubmissionReport?
+    @State private var acknowledgesDecrease = false
+    @State private var confirmingResume = false
     @State private var errorMessage: String?
     @State private var isPreparing = false
     @State private var isSending = false
@@ -30,8 +35,14 @@ struct PricingSubmissionView: View {
                             PricingDisplay.amount(proposal.selectedUSPoint.customerPrice,
                                                   currency: proposal.selectedUSPoint.currency))
                         LabeledContent("Effective Date", value: proposal.effectiveDate)
-                        LabeledContent("Apple Base Territory",
-                            value: proposal.configuredBaseTerritory ?? "Unknown")
+                        if proposal.product.kind == .lifetime {
+                            LabeledContent("Apple Base Territory",
+                                value: proposal.configuredBaseTerritory ?? "Unknown")
+                        } else {
+                            LabeledContent("Subscription Duration",
+                                value: proposal.product.duration ?? "Unknown")
+                            LabeledContent("Billing Plan", value: "UPFRONT")
+                        }
                     }
                     Section("Frozen Review Scope") {
                         LabeledContent("Eligible", value: String(proposal.summary.eligible))
@@ -39,8 +50,13 @@ struct PricingSubmissionView: View {
                         LabeledContent("Decreases", value: String(proposal.summary.decreases))
                         LabeledContent("Excluded", value: String(proposal.summary.excluded))
                         LabeledContent("Blockers", value: String(proposal.summary.blocked))
-                        LabeledContent("Automatic → Manual",
-                            value: String(proposal.summary.automaticToManual))
+                        if proposal.product.kind == .lifetime {
+                            LabeledContent("Automatic → Manual",
+                                value: String(proposal.summary.automaticToManual))
+                        }
+                    }
+                    if let subscriptionPlan {
+                        subscriptionPreflight(subscriptionPlan)
                     }
                     if let plan {
                         Section("Preflight — Apple's Current State") {
@@ -93,11 +109,16 @@ struct PricingSubmissionView: View {
                                 .foregroundStyle(.orange)
                         }
                         if proposal.product.kind == .subscription {
-                            Text("Subscription submission is disabled until Pass 5.")
+                            Text("Price increases preserve the current public price for existing subscribers. Previously preserved cohorts are not un-preserved.")
+                            Text("Price decreases affect existing subscribers at renewal. You cannot preserve a higher price through a decrease.")
+                            Text("Apple controls any required notifications or consent. The API cannot prove individual subscriber treatment, even when new public prices are verified.")
                         } else {
                             Text("One complete lifetime price schedule will be sent only after final confirmation. Apple may adjust other automatic storefront prices; any unresolved effects block submission.")
                             Text("Apple acceptance does not mean prices are live. Verification or read-only reconciliation may still be needed.")
                         }
+                    }
+                    if let subscriptionReport {
+                        subscriptionReportSection(subscriptionReport)
                     }
                     if let report {
                         Section("Submission Status") {
@@ -128,7 +149,16 @@ struct PricingSubmissionView: View {
                     }
                     Section {
                         if isSending {
-                            ProgressView("Submitting or verifying lifetime schedule…")
+                            ProgressView("Submitting or reconciling Apple prices…")
+                        } else if proposal.product.kind == .subscription {
+                            if subscriptionPlan?.isNoOp == true {
+                                Label("No subscription price changes required.", systemImage: "checkmark.circle")
+                            } else {
+                                Button("Submit Subscription Prices") {
+                                    confirmingSubmission = true
+                                }
+                                .disabled(!maySubmitSubscription)
+                            }
                         } else if plan?.isNoOp == true {
                             Label("No price changes required.", systemImage: "checkmark.circle")
                         } else {
@@ -154,24 +184,50 @@ struct PricingSubmissionView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .task {
-                guard !loaded else { return }
+            .task(id: session.connectionRevision) {
+                if loaded { model.markRemoteStale() }
                 loaded = true
                 await loadPrevious()
                 await prepare()
             }
+            .onChange(of: acknowledgesDecrease) { _, _ in
+                if proposal?.product.kind == .subscription {
+                    Task { await prepare() }
+                }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { pauseDispatch() }
+            }
+            .onDisappear { pauseDispatch() }
             .confirmationDialog(
-                "Confirm Lifetime Price Submission?",
+                proposal?.product.kind == .subscription
+                    ? "Confirm Subscription Price Changes?" : "Confirm Lifetime Price Submission?",
                 isPresented: $confirmingSubmission,
                 titleVisibility: .visible
             ) {
-                Button("Submit Price Schedule") { Task { await submit() } }
-                    .disabled(!maySubmit)
+                Button(proposal?.product.kind == .subscription
+                       ? "Submit Subscription Prices" : "Submit Price Schedule") {
+                    Task { await submit() }
+                }
+                .disabled(proposal?.product.kind == .subscription
+                    ? !maySubmitSubscription : !maySubmit)
                 Button("Cancel", role: .cancel) {}
             } message: {
-                if let plan {
+                if let subscriptionPlan, proposal?.product.kind == .subscription {
+                    Text("Send \(subscriptionPlan.changes.count) separate territory price requests. \(subscriptionPlan.excluded.count) countries are excluded. Existing subscriber prices are preserved on increases; decreases affect renewals. A partial submission cannot be rolled back together.")
+                } else if let plan {
                     Text("Send 1 schedule for \(plan.affectedTerritories.count) changed storefronts, preserve \(plan.preservedEntries.count) manual entries, and keep base territory \(plan.baseTerritoryID). \(plan.excludedTerritories.count) countries are excluded. This request cannot be automatically undone.")
                 }
+            }
+            .confirmationDialog("Resume Remaining Subscription Changes?",
+                                isPresented: $confirmingResume,
+                                titleVisibility: .visible) {
+                Button("Resume Verified Remaining Requests") {
+                    Task { await resumeSubscription() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Only planned or definitively rejected changes are eligible. The app rechecks Apple state and will not replay accepted or unknown requests.")
             }
         }
     }
