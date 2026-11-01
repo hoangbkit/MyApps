@@ -304,9 +304,11 @@ private struct AppStoreConnectBuildRunCreateRequest: Encodable {
 
 struct AppStoreConnectAPIClient: Sendable {
     private let credentials: AppStoreConnectCredentials
+    private let networkSession: URLSession
     private static let apiHost = "api.appstoreconnect.apple.com"
 
-    init(credentials: AppStoreConnectCredentials) throws {
+    /// Inject a URLSession backed by a fixture URLProtocol for offline transport verification.
+    init(credentials: AppStoreConnectCredentials, networkSession: URLSession = .shared) throws {
         guard UUID(uuidString: credentials.issuerID) != nil,
               !credentials.keyID.isEmpty,
               !credentials.privateKeyPEM.isEmpty else {
@@ -318,6 +320,13 @@ struct AppStoreConnectAPIClient: Sendable {
             throw AppStoreConnectAPIError.invalidPrivateKey
         }
         self.credentials = credentials
+        self.networkSession = networkSession
+    }
+
+    /// Non-secret identity for partitioning pricing caches; never use the signing key in a cache key.
+    var pricingAccountScope: String {
+        let source = Data("\(credentials.issuerID):\(credentials.keyID)".utf8)
+        return SHA256.hash(data: source).map { String(format: "%02x", $0) }.joined()
     }
 
     func validate() async throws {
@@ -526,13 +535,13 @@ struct AppStoreConnectAPIClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 30
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await networkSession.data(for: request)
         try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse else {
             throw AppStoreConnectAPIError.invalidResponse
         }
         guard http.statusCode == 201 else {
-            throw AppStoreConnectAPIError.httpStatus(http.statusCode)
+            throw Self.apiError(status: http.statusCode, data: data, retryAfter: http.value(forHTTPHeaderField: "Retry-After"))
         }
         guard let buildRun = try JSONDecoder()
             .decode(AppStoreConnectSingle<AppStoreConnectBuildRun>.self, from: data).data else {
@@ -560,13 +569,13 @@ struct AppStoreConnectAPIClient: Sendable {
         throw AppStoreConnectAPIError.invalidResponse
     }
 
-    private func get<Response: Decodable & Sendable>(
+    func get<Response: Decodable & Sendable>(
         path: String, query: [URLQueryItem] = []
     ) async throws -> Response {
         try await get(url: apiURL(path: path, query: query))
     }
 
-    private func get<Response: Decodable & Sendable>(
+    func get<Response: Decodable & Sendable>(
         url: URL,
         cachePolicy: URLRequest.CachePolicy = .reloadIgnoringLocalCacheData
     ) async throws -> Response {
@@ -580,13 +589,13 @@ struct AppStoreConnectAPIClient: Sendable {
         }
         request.timeoutInterval = 30
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await networkSession.data(for: request)
         try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse else {
             throw AppStoreConnectAPIError.invalidResponse
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw AppStoreConnectAPIError.httpStatus(http.statusCode)
+            throw Self.apiError(status: http.statusCode, data: data, retryAfter: http.value(forHTTPHeaderField: "Retry-After"))
         }
         do {
             return try JSONDecoder().decode(Response.self, from: data)
@@ -595,12 +604,43 @@ struct AppStoreConnectAPIClient: Sendable {
         }
     }
 
+    private struct WireAPIError: Decodable {
+        let errors: [Item]
+        struct Item: Decodable {
+            let code: String?
+            let title: String?
+            let detail: String?
+            let source: Source?
+            struct Source: Decodable { let pointer: String? }
+        }
+    }
+
+    private static func apiError(status: Int, data: Data, retryAfter: String?) -> AppStoreConnectAPIError {
+        // Keep historical 404 handling for an unconfigured Xcode Cloud product.
+        if status == 404 { return .httpStatus(404) }
+        guard let wire = try? JSONDecoder().decode(WireAPIError.self, from: data),
+              let first = wire.errors.first else { return .httpStatus(status) }
+        func cleaned(_ value: String?) -> String? {
+            guard let value else { return nil }
+            return String(value.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }
+                .prefix(300))
+        }
+        return .appleResponse(
+            status: status,
+            code: cleaned(first.code),
+            title: cleaned(first.title),
+            detail: cleaned(first.detail),
+            pointer: cleaned(first.source?.pointer),
+            retryAfter: cleaned(retryAfter)
+        )
+    }
+
     private func isTrusted(_ url: URL) -> Bool {
         url.scheme == "https" && url.host == Self.apiHost &&
         (url.port == nil || url.port == 443) && url.user == nil && url.password == nil
     }
 
-    private func apiURL(path: String, query: [URLQueryItem]) throws -> URL {
+    func apiURL(path: String, query: [URLQueryItem]) throws -> URL {
         var components = URLComponents()
         components.scheme = "https"
         components.host = Self.apiHost
@@ -649,6 +689,8 @@ enum AppStoreConnectAPIError: LocalizedError, Equatable {
     case invalidPrivateKey
     case invalidResponse
     case httpStatus(Int)
+    case appleResponse(status: Int, code: String?, title: String?, detail: String?, pointer: String?, retryAfter: String?)
+    case unsupportedPricingMediaType(String)
 
     var errorDescription: String? {
         switch self {
@@ -664,6 +706,14 @@ enum AppStoreConnectAPIError: LocalizedError, Equatable {
             "The private key is not a valid App Store Connect .p8 signing key."
         case .invalidResponse:
             "App Store Connect returned an unexpected response."
+        case let .appleResponse(status, code, title, detail, pointer, retryAfter):
+            let description = [title, detail].compactMap { $0 }.joined(separator: ": ")
+            let codeSuffix = code.map { " [\($0)]" } ?? ""
+            let fieldSuffix = pointer.map { " (\($0))" } ?? ""
+            let retrySuffix = retryAfter.map { " Retry after: \($0)." } ?? ""
+            return "App Store Connect HTTP \(status)\(codeSuffix). \(description)\(fieldSuffix).\(retrySuffix)"
+        case let .unsupportedPricingMediaType(type):
+            "Apple returned \(type) for this pricing resource; this response format is not supported by the read-only client."
         case .httpStatus(401):
             "App Store Connect rejected the credentials. Check the issuer ID, key ID, and private key."
         case .httpStatus(403):
