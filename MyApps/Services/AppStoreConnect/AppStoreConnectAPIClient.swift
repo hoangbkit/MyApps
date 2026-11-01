@@ -597,6 +597,10 @@ struct AppStoreConnectAPIClient: Sendable {
         guard (200..<300).contains(http.statusCode) else {
             throw Self.apiError(status: http.statusCode, data: data, retryAfter: http.value(forHTTPHeaderField: "Retry-After"))
         }
+        if let type = http.mimeType?.lowercased(),
+           type != "application/json", !type.hasSuffix("+json") {
+            throw AppStoreConnectAPIError.unsupportedPricingMediaType(type)
+        }
         do {
             return try JSONDecoder().decode(Response.self, from: data)
         } catch {
