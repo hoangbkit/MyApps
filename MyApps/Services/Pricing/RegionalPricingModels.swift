@@ -124,7 +124,7 @@ enum RegionalPricingDiff: String, Codable, Sendable {
     case increase, decrease, unchanged, unknown
 }
 
-enum RegionalPricingWarning: String, Codable, Sendable {
+enum RegionalPricingWarning: String, Codable, Hashable, Sendable {
     case unmapped, unverifiedMapping, missingReference, missingLadder, invalidLadder,
          clamped, invalidOverride, unknownBaseline, unknownAvailability,
          unsupportedPlan, scheduleConflict, missingBaseTerritory,
