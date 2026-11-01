@@ -373,6 +373,10 @@ actor RegionalPricingService {
                 for try await item in group { completed.append(item) }
                 return completed
             }
+            guard Set(details.map(\.id)) == Set(slice.map(\.id)) else {
+                throw PricingReadError.unsupportedRepresentation(
+                    "Apple returned price-point details inconsistent with equalization IDs.")
+            }
             for detail in details {
                 guard let territoryID = detail.relatedID("territory"),
                       let currency = currencies[territoryID],
