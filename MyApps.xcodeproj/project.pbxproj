@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F2B000000000000000000001 /* RegionalPricingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A000000000000000000001 /* RegionalPricingModels.swift */; };
+		F2B000000000000000000002 /* RegionalPricingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A000000000000000000002 /* RegionalPricingEngine.swift */; };
+		F2B000000000000000000003 /* PricingDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A000000000000000000003 /* PricingDraftStore.swift */; };
+		F2B000000000000000000004 /* country-tiers-v1.json in Resources */ = {isa = PBXBuildFile; fileRef = F2A000000000000000000004 /* country-tiers-v1.json */; };
 		F1B000000000000000000001 /* AppStoreConnectPricingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A000000000000000000001 /* AppStoreConnectPricingModels.swift */; };
 		F1B000000000000000000002 /* AppStoreConnectPricingAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A000000000000000000002 /* AppStoreConnectPricingAPI.swift */; };
 		F1B000000000000000000003 /* RegionalPricingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A000000000000000000003 /* RegionalPricingService.swift */; };
@@ -100,6 +104,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F2A000000000000000000001 /* RegionalPricingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingModels.swift; sourceTree = "<group>"; };
+		F2A000000000000000000002 /* RegionalPricingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingEngine.swift; sourceTree = "<group>"; };
+		F2A000000000000000000003 /* PricingDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingDraftStore.swift; sourceTree = "<group>"; };
+		F2A000000000000000000004 /* country-tiers-v1.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = country-tiers-v1.json; sourceTree = "<group>"; };
 		F1A000000000000000000001 /* AppStoreConnectPricingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreConnectPricingModels.swift; sourceTree = "<group>"; };
 		F1A000000000000000000002 /* AppStoreConnectPricingAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreConnectPricingAPI.swift; sourceTree = "<group>"; };
 		F1A000000000000000000003 /* RegionalPricingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingService.swift; sourceTree = "<group>"; };
@@ -353,6 +361,9 @@
 			isa = PBXGroup;
 			children = (
 				F1A000000000000000000003 /* RegionalPricingService.swift */,
+				F2A000000000000000000001 /* RegionalPricingModels.swift */,
+				F2A000000000000000000002 /* RegionalPricingEngine.swift */,
+				F2A000000000000000000003 /* PricingDraftStore.swift */,
 			);
 			path = Pricing;
 			sourceTree = "<group>";
@@ -442,10 +453,19 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		F2C000000000000000000001 /* Pricing Resources */ = {
+			isa = PBXGroup;
+			children = (
+				F2A000000000000000000004 /* country-tiers-v1.json */,
+			);
+			path = Pricing;
+			sourceTree = "<group>";
+		};
 		FE2E956FCFFCC156A80A5F70 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 				DEBC773D8E7ACEA7F5F514FE /* Assets.xcassets */,
+				F2C000000000000000000001 /* Pricing Resources */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -531,6 +551,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C9868DDCF59E8C264E2852E /* Assets.xcassets in Resources */,
+				F2B000000000000000000004 /* country-tiers-v1.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -559,6 +580,9 @@
 				F1B000000000000000000001 /* AppStoreConnectPricingModels.swift in Sources */,
 				F1B000000000000000000002 /* AppStoreConnectPricingAPI.swift in Sources */,
 				F1B000000000000000000003 /* RegionalPricingService.swift in Sources */,
+				F2B000000000000000000001 /* RegionalPricingModels.swift in Sources */,
+				F2B000000000000000000002 /* RegionalPricingEngine.swift in Sources */,
+				F2B000000000000000000003 /* PricingDraftStore.swift in Sources */,
 				C2CFB80A8AB2BBC076513252 /* AppStoreConnectCredentialStore.swift in Sources */,
 				19C82E4D96AEAF0EA0A43E84 /* AppStoreConnectSession.swift in Sources */,
 				AD371378896ABB936F006031 /* AppStoreConnectSettingsSection.swift in Sources */,
