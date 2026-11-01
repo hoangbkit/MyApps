@@ -412,3 +412,38 @@ The same request for an immediate price change uses `startDate: null`; for a dec
 7. Review with the account holder before any live price mutation. **No live price-changing test was authorized or performed.**
 
 **Release assessment:** Passes 1–5 are implemented as source changes, but **not production-validated**. There is no successful build/test/fixture run or verified Apple production response for this PR. Treat all write functionality as unsafe for real money-changing use until authorized validation is completed and code-review findings resolved.
+
+
+---
+
+## Consolidation pass — pricing correctness (2026-11-01)
+
+Scope: **PR #9 only**. The changes below correct existing Pass 1–5 pricing code, without changing unrelated Info, Xcode Cloud, CI, or other app features. This is a source review **without executing Xcode, tests, CI, fixtures, or authenticated pricing writes**.
+
+### Confirmed and corrected
+
+1. **Automatic IAP GET:** `GET /v1/inAppPurchasePriceSchedules/{id}/automaticPrices` no longer sends an unsupported `include=inAppPurchasePricePoint,territory`; the manual endpoint retains its documented include. Unknown related data is resolved through supported point sources or displayed as incomplete.
+2. **IAP inline POST relationship:** Apple's `InAppPurchasePriceInlineCreate.Relationships.InAppPurchaseV2.Data` schema specifies `type: inAppPurchases` (the property is named `inAppPurchaseV2`). Corrected the payload from `inAppPurchasesV2`.
+3. **Lifetime point amounts:** Missing IAP price-point amounts now come from the documented `GET /v2/inAppPurchases/{id}/pricePoints?filter[territory]=...` ladder, not an undocumented individual IAP point-detail GET. Point amount and territory are sourced from Apple; missing territory/point remains an explicit diagnostic, never a guessed amount.
+4. **CSV equalizations:** Apple's point equalization endpoint may return CSV. Instead of decoding unknown CSV columns or generating synthetic IDs, the read path can fetch **Apple's JSON `relationships/equalizations` identifiers**, and resolve individual price point details with a **maximum of 4 concurrent GETs**. Subscription point detail GET is documented. IAP CSV responses remain restricted if its individual point-detail resource cannot be independently verified. No heuristic FX fallback.
+5. **Duplicate/conflicting data:** Paginated territory `included` records no longer crash a unique-key dictionary initializer. Duplicate or conflicting equalization countries, amounts, currencies and unmatched returned IDs are rejected explicitly.
+6. **Lifetime maintenance:** A previously automatic storefront with no configured-base equalization can no longer be silently interpreted as an intentional conversion to manual maintenance; it is blocked for review.
+7. **Subscription batch preflight:** Immediately before every 1–3 POST group, refresh and verify `UPFRONT` billing-plan shape, storefront availability, current public baseline, future schedule, and the selected valid point. Missing or changed values stop remaining sends rather than using stale initial preflight.
+8. **Draft persistence ordering:** Monotonic revisions prevent delayed asynchronous override saves from overwriting a newer same-view draft. Disk-write failures are surfaced rather than silently ignored.
+
+### Safety restrictions retained
+
+- Lifetime requests remain one complete schedule POST. Existing ambiguous/multi-window schedule edits, uncertain automatic effects and indirect excluded-country changes block.
+- Standard `UPFRONT` subscriptions only; commitment and adjusted-plan variants block. Increasing a subscription preserves existing price by default; decreasing requires renewal-impact acknowledgment.
+- HTTP 201 is accepted, not live. In-flight/unknown outcomes require read-only reconciliation; there is no blind POST retry.
+- Account/product-bound protected journal, frozen preflight, explicit final confirmation, pause-before-new-group, and maximum-three subscription group concurrency remain unchanged.
+- Apple is not assumed to provide a cross-request transaction, atomic multi-territory rollback, or a documented idempotency key.
+
+### Remaining verification limitations
+
+- **No successful compilation, simulator, physical-device review, fixture test, CI or live authenticated Apple query is available for this PR.** These must be completed before using write paths to change commercial prices.
+- IAP CSV equalization point hydration may require a separately verified product-scoped ladder approach; the implementation will block if Apple does not expose a supported detail representation.
+- The CSV→JSON linkage fallback adds up to one GET per related point in bounded batches. Actual request limits and latency require a redacted fixture/runtime review. Avoid promising instant generation.
+- Apple does not expose enough information in public price reads to prove individual subscribers' preserved/cohort billing; reporting must keep this marked unverified even after public prices match.
+
+**Next recommended action:** a separately authorized compile and offline fixture validation pass, then manual QA on a supported iPhone. Keep PR #9 draft until those results are reviewed. Do not use live App Store price mutations as tests.
