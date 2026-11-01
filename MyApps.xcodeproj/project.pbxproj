@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F4B000000000000000000001 /* LifetimeSchedulePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A000000000000000000001 /* LifetimeSchedulePlanner.swift */; };
+		F4B000000000000000000002 /* PricingSubmissionJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A000000000000000000002 /* PricingSubmissionJournal.swift */; };
+		F4B000000000000000000003 /* PricingSubmissionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A000000000000000000003 /* PricingSubmissionCoordinator.swift */; };
 		F3B000000000000000000001 /* RegionalPricingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000001 /* RegionalPricingViewModel.swift */; };
 		F3B000000000000000000002 /* AppStorePricingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000002 /* AppStorePricingView.swift */; };
 		F3B000000000000000000003 /* RegionalPricingReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000003 /* RegionalPricingReviewView.swift */; };
@@ -109,6 +112,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F4A000000000000000000001 /* LifetimeSchedulePlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifetimeSchedulePlanner.swift; sourceTree = "<group>"; };
+		F4A000000000000000000002 /* PricingSubmissionJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingSubmissionJournal.swift; sourceTree = "<group>"; };
+		F4A000000000000000000003 /* PricingSubmissionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingSubmissionCoordinator.swift; sourceTree = "<group>"; };
 		F3A000000000000000000001 /* RegionalPricingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingViewModel.swift; sourceTree = "<group>"; };
 		F3A000000000000000000002 /* AppStorePricingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStorePricingView.swift; sourceTree = "<group>"; };
 		F3A000000000000000000003 /* RegionalPricingReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingReviewView.swift; sourceTree = "<group>"; };
@@ -387,6 +393,9 @@
 				F2A000000000000000000002 /* RegionalPricingEngine.swift */,
 				F2A000000000000000000003 /* PricingDraftStore.swift */,
 				F3A000000000000000000001 /* RegionalPricingViewModel.swift */,
+				F4A000000000000000000001 /* LifetimeSchedulePlanner.swift */,
+				F4A000000000000000000002 /* PricingSubmissionJournal.swift */,
+				F4A000000000000000000003 /* PricingSubmissionCoordinator.swift */,
 			);
 			path = Pricing;
 			sourceTree = "<group>";
@@ -607,6 +616,9 @@
 				F2B000000000000000000002 /* RegionalPricingEngine.swift in Sources */,
 				F2B000000000000000000003 /* PricingDraftStore.swift in Sources */,
 				F3B000000000000000000001 /* RegionalPricingViewModel.swift in Sources */,
+				F4B000000000000000000001 /* LifetimeSchedulePlanner.swift in Sources */,
+				F4B000000000000000000002 /* PricingSubmissionJournal.swift in Sources */,
+				F4B000000000000000000003 /* PricingSubmissionCoordinator.swift in Sources */,
 				F3B000000000000000000002 /* AppStorePricingView.swift in Sources */,
 				F3B000000000000000000003 /* RegionalPricingReviewView.swift in Sources */,
 				F3B000000000000000000004 /* RegionalPriceOverrideView.swift in Sources */,
