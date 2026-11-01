@@ -261,6 +261,13 @@ final class RegionalPricingViewModel {
         Task { [drafts] in try? await drafts?.save(generated) }
     }
 
+    /// All accepted or remotely changed schedules require a fresh review.
+    func markRemoteStale() {
+        isStale = true
+        needsRegeneration = true
+        referenceSet = nil
+    }
+
     func clearError() { errorMessage = nil }
 
     private static func parseDay(_ value: String) -> Date? {
