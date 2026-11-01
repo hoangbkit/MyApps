@@ -194,11 +194,13 @@ struct PricingUSSummary: Codable, Sendable {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate]
         let date = formatter.string(from: Date())
-        return prices.filter {
+        let candidates = prices.filter {
             $0.territoryID == "USA" && $0.preserved != true &&
             ($0.startDate == nil || $0.startDate! <= date) &&
             ($0.endDate == nil || $0.endDate! >= date)
-        }.sorted {
+        }
+        if Set(candidates.compactMap(\\.planType)).count > 1 { return nil }
+        return candidates.sorted {
             if $0.startDate != $1.startDate { return ($0.startDate ?? "") > ($1.startDate ?? "") }
             if $0.manual != $1.manual { return $0.manual == true }
             return $0.id < $1.id
@@ -221,13 +223,16 @@ struct PricingSnapshot: Codable, Sendable {
 
     // Preserved subscriber prices are NOT public new-subscriber prices.
     func publicPrice(territoryID: String, planType: String? = nil, on date: String) -> PricingPriceRecord? {
-        prices.filter {
+        let candidates = prices.filter {
             $0.territoryID == territoryID &&
             $0.preserved != true &&
             (planType == nil || $0.planType == planType) &&
             ($0.startDate == nil || $0.startDate! <= date) &&
             ($0.endDate == nil || $0.endDate! >= date)
-        }.sorted {
+        }
+        // Multiple billing plans cannot be collapsed into a single "current" price.
+        if planType == nil && Set(candidates.compactMap(\\.planType)).count > 1 { return nil }
+        return candidates.sorted {
             if $0.startDate != $1.startDate {
                 return ($0.startDate ?? "") > ($1.startDate ?? "")
             }
