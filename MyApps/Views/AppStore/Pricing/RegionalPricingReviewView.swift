@@ -108,7 +108,7 @@ struct RegionalPricingReviewView: View {
         }
         .sheet(isPresented: $showingSubmission) {
             if let proposal = model.proposal {
-                PricingSubmissionView(proposal: proposal, isCurrentReview: model.isReviewCurrent)
+                PricingSubmissionView(model: model)
             }
         }
     }
