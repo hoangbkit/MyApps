@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F3B000000000000000000001 /* RegionalPricingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000001 /* RegionalPricingViewModel.swift */; };
+		F3B000000000000000000002 /* AppStorePricingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000002 /* AppStorePricingView.swift */; };
+		F3B000000000000000000003 /* RegionalPricingReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000003 /* RegionalPricingReviewView.swift */; };
+		F3B000000000000000000004 /* RegionalPriceOverrideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000004 /* RegionalPriceOverrideView.swift */; };
+		F3B000000000000000000005 /* PricingSubmissionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000005 /* PricingSubmissionView.swift */; };
 		F2B000000000000000000001 /* RegionalPricingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A000000000000000000001 /* RegionalPricingModels.swift */; };
 		F2B000000000000000000002 /* RegionalPricingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A000000000000000000002 /* RegionalPricingEngine.swift */; };
 		F2B000000000000000000003 /* PricingDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A000000000000000000003 /* PricingDraftStore.swift */; };
@@ -104,6 +109,11 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F3A000000000000000000001 /* RegionalPricingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingViewModel.swift; sourceTree = "<group>"; };
+		F3A000000000000000000002 /* AppStorePricingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStorePricingView.swift; sourceTree = "<group>"; };
+		F3A000000000000000000003 /* RegionalPricingReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingReviewView.swift; sourceTree = "<group>"; };
+		F3A000000000000000000004 /* RegionalPriceOverrideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPriceOverrideView.swift; sourceTree = "<group>"; };
+		F3A000000000000000000005 /* PricingSubmissionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingSubmissionView.swift; sourceTree = "<group>"; };
 		F2A000000000000000000001 /* RegionalPricingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingModels.swift; sourceTree = "<group>"; };
 		F2A000000000000000000002 /* RegionalPricingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingEngine.swift; sourceTree = "<group>"; };
 		F2A000000000000000000003 /* PricingDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingDraftStore.swift; sourceTree = "<group>"; };
@@ -212,10 +222,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		F3C000000000000000000001 /* Pricing Views */ = {
+			isa = PBXGroup;
+			children = (
+				F3A000000000000000000002 /* AppStorePricingView.swift */,
+				F3A000000000000000000003 /* RegionalPricingReviewView.swift */,
+				F3A000000000000000000004 /* RegionalPriceOverrideView.swift */,
+				F3A000000000000000000005 /* PricingSubmissionView.swift */,
+			);
+			path = Pricing;
+			sourceTree = "<group>";
+		};
 		0985B771B280F37EB8BC7AD9 /* AppStore */ = {
 			isa = PBXGroup;
 			children = (
 				1A7EBC214DA814B4D0D18D2E /* AppStoreAppDetailView.swift */,
+				F3C000000000000000000001 /* Pricing Views */,
 				E82583C4E597E9D73A18CA25 /* AppStoreAppIconView.swift */,
 				CD54E144443943A2F5EBBD93 /* AppStoreAppsView.swift */,
 				ABE75EB3EB402E358F99A161 /* AppStorePlaceholderView.swift */,
@@ -364,6 +386,7 @@
 				F2A000000000000000000001 /* RegionalPricingModels.swift */,
 				F2A000000000000000000002 /* RegionalPricingEngine.swift */,
 				F2A000000000000000000003 /* PricingDraftStore.swift */,
+				F3A000000000000000000001 /* RegionalPricingViewModel.swift */,
 			);
 			path = Pricing;
 			sourceTree = "<group>";
@@ -583,6 +606,11 @@
 				F2B000000000000000000001 /* RegionalPricingModels.swift in Sources */,
 				F2B000000000000000000002 /* RegionalPricingEngine.swift in Sources */,
 				F2B000000000000000000003 /* PricingDraftStore.swift in Sources */,
+				F3B000000000000000000001 /* RegionalPricingViewModel.swift in Sources */,
+				F3B000000000000000000002 /* AppStorePricingView.swift in Sources */,
+				F3B000000000000000000003 /* RegionalPricingReviewView.swift in Sources */,
+				F3B000000000000000000004 /* RegionalPriceOverrideView.swift in Sources */,
+				F3B000000000000000000005 /* PricingSubmissionView.swift in Sources */,
 				C2CFB80A8AB2BBC076513252 /* AppStoreConnectCredentialStore.swift in Sources */,
 				19C82E4D96AEAF0EA0A43E84 /* AppStoreConnectSession.swift in Sources */,
 				AD371378896ABB936F006031 /* AppStoreConnectSettingsSection.swift in Sources */,
