@@ -113,6 +113,46 @@ actor PricingSubmissionJournal {
                       options: [.atomic, .completeFileProtection])
     }
 
+    /// Same protected Application Support journal as lifetime IAP, with a
+    /// separate file for per-territory subscription batches.
+    func loadSubscription(accountScope: String, productID: String) throws -> SubscriptionSubmissionBatch? {
+        let file = subscriptionLocation(accountScope: accountScope, productID: productID)
+        guard FileManager.default.fileExists(atPath: file.path) else { return nil }
+        let batch = try JSONDecoder().decode(SubscriptionSubmissionBatch.self,
+                                             from: Data(contentsOf: file))
+        guard batch.schemaVersion == 1,
+              batch.plan.accountScope == accountScope,
+              batch.plan.product.id == productID,
+              batch.entries.allSatisfy({
+                  $0.change.request.data.relationships.subscription.data.id == productID
+              }) else { throw RegionalPricingError.mismatchedAccount }
+        return batch
+    }
+
+    func saveSubscription(_ batch: SubscriptionSubmissionBatch) throws {
+        guard batch.schemaVersion == 1 else {
+            throw RegionalPricingError.invalidDraft("Unsupported subscription journal version.")
+        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.complete])
+        var protected = directory
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try protected.setResourceValues(values)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(batch)
+        try data.write(to: subscriptionLocation(accountScope: batch.plan.accountScope,
+                                                productID: batch.plan.product.id),
+                      options: [.atomic, .completeFileProtection])
+    }
+
+    private func subscriptionLocation(accountScope: String, productID: String) -> URL {
+        let key = Data(("subscription:" + accountScope + ":" + productID).utf8)
+        let hash = SHA256.hash(data: key).map { String(format: "%02x", $0) }.joined()
+        return directory.appendingPathComponent(hash + ".json", isDirectory: false)
+    }
+
     private func location(accountScope: String, productID: String) -> URL {
         let identifier = Data((accountScope + ":" + productID).utf8)
         let hash = SHA256.hash(data: identifier)
