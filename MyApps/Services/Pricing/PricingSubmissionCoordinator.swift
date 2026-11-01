@@ -391,6 +391,9 @@ actor PricingSubmissionCoordinator {
         guard !candidates.isEmpty else { return .init(batch: batch) }
         let scope = key(account: batch.plan.accountScope, product: batch.plan.product.id)
         paused.remove(scope) // A newly explicit Submit/Resume clears previous pause.
+        batch.stoppedReason = nil
+        batch.updatedAt = Date()
+        try await journal.saveSubscription(batch)
         for offset in stride(from: 0, to: candidates.count, by: 3) {
             if Task.isCancelled || paused.contains(scope) {
                 batch.stoppedReason = "Task canceled. Unsent entries remain planned."
