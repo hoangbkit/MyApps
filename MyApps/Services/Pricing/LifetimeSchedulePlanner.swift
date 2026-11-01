@@ -275,7 +275,9 @@ enum LifetimeSchedulePlanner {
                 .init(id: price.id, attributes: .init(
                     startDate: price.startDate, endDate: price.endDate),
                     relationships: .init(
-                        inAppPurchaseV2: .init(data: .init(type: "inAppPurchasesV2", id: productID)),
+                        // Apple schema uses the legacy resource type spelling in this
+                        // relationship even though the property is named inAppPurchaseV2.
+                        inAppPurchaseV2: .init(data: .init(type: "inAppPurchases", id: productID)),
                         inAppPurchasePricePoint: .init(
                             data: .init(type: "inAppPurchasePricePoints", id: price.pointID))
                     ))
