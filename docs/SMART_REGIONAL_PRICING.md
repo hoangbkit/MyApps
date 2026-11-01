@@ -104,3 +104,64 @@ Use an injected `URLSession` (fixture URLProtocol) and fixed response bodies. Al
 **Verification:** Apple documentation reviewed; source inspected manually. **No Xcode build, tests, CI, fixture execution, or live Apple API calls were run.** An Xcode build and the fixtures above remain necessary to establish compile/runtime correctness. Use `./generate.sh` to regenerate from `project.yml` if the checked-in project drifts.
 
 **Next pass:** mapping, deterministic engine, overrides, versioned local drafts (Pass 2 only, when explicitly requested).
+
+
+---
+
+## Pass 2 — Bundled mapping, deterministic suggestions, and protected drafts
+
+**Implemented on the same PR branch:** `feature/smart-regional-pricing-pass1`. This section supersedes the old "Next pass" handoff above; Pass 3 remains future work.
+
+### Country mapping: sources and coverage
+
+Bundled `MyApps/Resources/Pricing/country-tiers-v1.json`, copied into the app target's resources phase via both XcodeGen and the checked-in Xcode project. The loader validates unique ISO-like opaque territory keys, tiers 1–5, nonempty provenance, the USA tier-1 anchor, and internally consistent high-income PPP comparisons.
+
+- Version: `2026-11-01.v1`; rule: `worldbank-fy2027-gdp-ppp-2024-80pct-v1`.
+- Income source: [World Bank FY2027 classification](https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups), 2025 Atlas-method GNI bands, accessed 2026-11-01.
+- Same-year high-income PPP source: 2024 World Bank WDI values [reposted by Worldometer](https://www.worldometers.info/gdp/gdp-per-capita/?metric=ppp&region=worldwide&source=wb&year=2024). The US anchor used is **85,810 current international dollars (2024)**. Each observed entry stores its actual PPP value, anchor and year. **This mirror has not been independently crosschecked against the live World Bank API.** Its values must not be described as household disposable income or app willingness to pay.
+- Current Apple territory IDs must still be checked against `GET /v1/territories`. Apple's [TerritoryCode](https://developer.apple.com/documentation/appstoreconnectapi/territorycode) documentation provides the code convention; no authenticated account or live Apple territory list was available at build time.
+- Scope of static bundle: **251 distinct ISO-style entries** (superset, not a claim that Apple currently sells in 251 markets).
+  - Tier 1: 25 entries, including USA; tier 2: 63; tier 3: 59; tier 4: 47; tier 5: 25.
+  - **32 entries remain unclassified or legacy**, explicitly marked `needsReview`. For them the engine uses Apple's full reference at multiplier **1.00** and displays an unverified-mapping warning instead of inventing a discounted tier.
+  - High-income territories with no *established same-year PPP observation in the bundled source* are provisionally tier 2, with the missing-observation provenance. Guernsey/Jersey are explicitly crosswalked from the World Bank's "Channel Islands" high-income group, not guessed from currency.
+  - Additional Apple codes absent from the bundle receive the same visible Apple-reference/1.00 fallback; if their equalized reference is missing too, the row blocks rather than fabricating a price.
+- The mapping includes unavailable or historical ISO3 territories for defensive coverage. **Mapping coverage against actual current Apple storefronts is not verified until a real authorized read returns the territory set.** No runtime World Bank requests are made.
+
+Preset multipliers: tier 1 **1.00**, tier 2 **0.85**, tier 3 **0.65**, tier 4 **0.45**, tier 5 **0.30**. They are MyApps business heuristics, not recommendations endorsed by the World Bank. Global multiplier editing is not part of this pass.
+
+### Implementation details
+
+- `RegionalPricingModels.swift`: normalized, Codable/Sendable preset, mapping/provenance, proposal, rows, overrides, warning/diff/status, excluded territories, subscriber-policy acknowledgment, and per-product sibling advisory contracts.
+- `RegionalPricingService.loadReferenceSet`: loads reference equalizations and country price-point ladders on demand for one product with **four concurrent reads maximum**. Fetches actual proposed base-territory equalizations for non-US IAP base countries rather than conflating US reference with Apple's configured base. A missing ladder blocks that territory; a missing required global equalization blocks included rows. Unknown commitment/other subscription plans block standard pricing generation.
+- `RegionalPricingEngine.generate`: a **pure** function. Validates the selected US point belongs to the selected product and date is valid. Each row independently computes `target = Decimal(Apple equalized local customer price) × tier factor` and selects a valid point with the smallest absolute local-price error. Ties choose the lower amount; duplicate amounts choose the Apple reference ID, then lowest opaque ID. USA retains its exact selected point. Out-of-range targets clamp to the closest valid point with a visible warning. No FX conversion, separate VAT adjustment, arbitrary price amounts or constructed Apple point IDs.
+- Public price is resolved relative to selected date, independent of preserved subscription cohorts. Maintenance-mode changes, future schedule conflicts, missing price/currency, and excluded automatically affected IAP countries are flagged. Existing manual IAP countries stay manual unless a separately reviewed reset-to-Apple feature is implemented. A 1.00 fallback does not imply validated PPP.
+- `RegionalPricingEngine.validatedOverride` permits only matching Apple point/product/territory/plan/currency. Regenerating revalidates previously saved overrides; invalid ones remain visible with blockers rather than being silently deleted. Target values always derive from original Apple reference and **never** from a previous discounted proposal.
+- Fingerprints hash sorted semantic row/reference/preset/date/maintenance/override/subscriber-policy state, not array delivery order or timestamps. The existing Pass 1 snapshot fingerprint remains a preliminary read snapshot rather than a write-safe CAS guarantee.
+- `PricingDraftStore`: `Application Support/RegionalPricingDrafts`, hashed account/product filenames, `Codable` version 1, atomic protected writes, excluded from device backup. No SwiftData/CloudKit schema change. Credential-scope mismatches are rejected; restored drafts **always require a fresh remote review** and never auto-submit. This is not the later Pass 4 operation journal.
+- Advisory comparisons require an *explicit verified service-level identity* plus subscription group/currency. Only when these agree can a yearly price >12× monthly become a warning. Comparing lifetime price to recurring purchases is informational only.
+
+### Worked fixtures — invented numbers, NOT live Apple prices
+
+| Scenario | Reference and allowed points | Expected deterministic result |
+| --- | --- | --- |
+| Tier 3 | Reference ¥620; 65% target ¥403; valid points ¥400/¥410 | Choose ¥400 |
+| Tier 4 repeat | Reference 10.00; factor 0.45; point ladder 4.49/4.59 | Choose 4.49 twice, never discount 4.49 again |
+| Equidistant | Target 5.00; allowed 4.00 and 6.00 | Choose 4.00 |
+| Duplicate amount | Two valid 3.99 points | Reference ID wins if present, else lowest opaque ID |
+| Zero-decimal currency | Ref 120 units; tier 4 target 54; points 50 and 60 | Choose 50 |
+| Below minimum | Target 0.20, smallest valid 0.49 | Choose 0.49 with clamped warning |
+| Missing equalization | No confirmed Apple point for territory | Row blocked; no guessed FX price |
+| Unknown storefront | New code absent from bundled list | 1.00 factor + warning; still needs valid Apple points |
+| Invalid saved override | Old point removed from Apple's ladder | Preserve override visually; block selected row |
+| IAP non-US base | US chosen, configured base DEU | Calculate configured-base proposal, fetch its equalizations; block if effects unknown |
+| Preserved subscription | Public price 4.99; preserved subscriber price 3.99 | Public baseline 4.99, preserved price remains separate |
+| Future schedule | Upcoming Apple row after proposal date | Explicit schedule-conflict blocker |
+
+### Remaining Pass 2 verification and limitations
+
+- **No Xcode toolchain available for an iOS build in this environment. No unit tests, fixture execution, CI dispatch, live Apple reads, or pricing writes were performed.** Compile/runtime correctness has not been established; the first permitted build must validate strict Swift 6 concurrency, XcodeGen project membership, and resource-bundle lookup.
+- No authenticated Apple read was available to confirm all API response variants, territory set, price ladders, equalization media types, or subscription plan fields. CSV/adjusted equalizations are not parsed; affected flows intentionally block instead of using unverified fallback amounts.
+- A refreshed Apple snapshot and valid ladders are mandatory before the review can be trusted. The Pass 4 write planner must separately verify full schedule semantics, subscriber treatment, indirect base-price effects and Apple state immediately before dispatch.
+- **Not implemented in this pass:** pricing screens, a main-actor review view model, submissions, write journal, resume/reconciliation, subscription cohort writes, analytics or backend.
+
+**Handoff for Pass 3:** use the above pure models/engine and the service's `loadReferenceSet` to implement only the read-only Generate/Review experience, override picker, and stale-review UX in the existing app-detail dropdown. Do not enable Submit before Pass 4/5.
