@@ -69,6 +69,7 @@ struct LifetimeSchedulePlan: Codable, Sendable {
     let selectedUSPoint: PricingPoint
     let affectedTerritories: [String]
     let indirectTerritories: [String]
+    let expectedAutomaticPoints: [String: String]
     let excludedTerritories: [String]
     let preservedEntries: [LifetimeScheduleEntry]
     let entries: [LifetimeScheduleEntry]
@@ -173,10 +174,12 @@ enum LifetimeSchedulePlanner {
                 preserved: true))
         }
         let changedTerritories = Set(changes.map(\.territoryID))
-        // Existing manual prices cannot be overwritten by adding a competing
-        // entry without explicit date-window semantics; block instead.
+        // Retain an existing current manual entry when scheduling a FUTURE
+        // price. Same-day replacement semantics remain unverified and blocked.
         for entry in persisted where changedTerritories.contains(entry.territoryID) {
-            blockers.append("Existing manual entry for \(entry.territoryID) needs confirmed schedule replacement semantics.")
+            if date <= today {
+                blockers.append("Same-day replacement of current manual price in \(entry.territoryID) is not verified; choose a future date.")
+            }
         }
         // Any US base change may affect excluded automatic countries, even if
         // their rows happen to compare unchanged due to stale reference data.
@@ -219,6 +222,9 @@ enum LifetimeSchedulePlanner {
             effectiveDate: date, selectedUSPoint: proposal.selectedUSPoint,
             affectedTerritories: changes.map(\.territoryID).sorted(),
             indirectTerritories: indirect.sorted(),
+            expectedAutomaticPoints: Dictionary(uniqueKeysWithValues: changes.compactMap {
+                $0.proposedMode == .automatic ? $0.selectedPoint.map { ($0.territoryID, $0.id) } : nil
+            }),
             excludedTerritories: excluded.map(\.territoryID).sorted(),
             preservedEntries: persisted, entries: entries,
             blockers: Array(Set(blockers)).sorted(),
@@ -236,6 +242,7 @@ enum LifetimeSchedulePlanner {
             baseTerritoryID: fresh.baseTerritoryID ?? "",
             effectiveDate: proposal.effectiveDate, selectedUSPoint: proposal.selectedUSPoint,
             affectedTerritories: [], indirectTerritories: [],
+            expectedAutomaticPoints: [:],
             excludedTerritories: proposal.exclusions.sorted(),
             preservedEntries: [], entries: [], blockers: blockers, warnings: warnings,
             request: nil)
