@@ -13,6 +13,7 @@ actor PricingDraftStore {
     private let directory: URL
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    private var lastSavedRevision: [String: UInt64] = [:]
 
     init(directory: URL? = nil) throws {
         guard let location = directory ??
@@ -32,16 +33,18 @@ actor PricingDraftStore {
         encoder.outputFormatting = [.sortedKeys]
     }
 
-    func save(_ proposal: RegionalPricingProposal) throws {
+    func save(_ proposal: RegionalPricingProposal, revision: UInt64) throws {
         guard proposal.schemaVersion == 1 else {
             throw RegionalPricingError.invalidDraft("Unsupported draft schema.")
         }
-        // The document includes account scope and opaque product IDs, no credentials,
-        // JWTs, key material or unencrypted secrets.
+        let file = fileURL(account: proposal.accountScope, product: proposal.product.id)
+        let key = file.lastPathComponent
+        // Asynchronous UI saves can arrive out of order. Never replace a
+        // newer country override with an older proposal snapshot.
+        if let latest = lastSavedRevision[key], revision < latest { return }
         let payload = try encoder.encode(proposal)
-        try payload.write(to: fileURL(account: proposal.accountScope,
-                                      product: proposal.product.id),
-                          options: [.atomic, .completeFileProtection])
+        try payload.write(to: file, options: [.atomic, .completeFileProtection])
+        lastSavedRevision[key] = revision
     }
 
     func load(accountScope: String, productID: String) throws -> RestoredRegionalPricingDraft? {
