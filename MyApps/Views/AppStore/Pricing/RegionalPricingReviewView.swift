@@ -52,37 +52,41 @@ struct RegionalPricingReviewView: View {
     @ViewBuilder
     private func pricingForm(_ model: RegionalPricingViewModel) -> some View {
         Form {
-            if model.phase == .loading && model.snapshot == nil {
-                ProgressView("Loading product pricing…")
-                    .frame(maxWidth: .infinity, alignment: .center)
-            }
-            if let message = model.errorMessage {
-                Section {
-                    Label(message, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.orange)
-                    Button("Dismiss Message") { model.clearError() }
-                    if model.snapshot == nil {
-                        Button("Retry Loading") {
-                            Task { await model.load(initial: true, refresh: true) }
+            Group {
+                if model.phase == .loading && model.snapshot == nil {
+                    ProgressView("Loading product pricing…")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                if let message = model.errorMessage {
+                    Section {
+                        Label(message, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                        Button("Dismiss Message") { model.clearError() }
+                        if model.snapshot == nil {
+                            Button("Retry Loading") {
+                                Task { await model.load(initial: true, refresh: true) }
+                            }
                         }
                     }
                 }
-            }
-            if let snapshot = model.snapshot {
-                referenceSection(model: model, snapshot: snapshot)
-                if let proposal = model.proposal {
-                    resultSection(model: model, proposal: proposal)
-                    countrySection(model: model, proposal: proposal)
-                    submissionSection(proposal: proposal)
+                if let snapshot = model.snapshot {
+                    referenceSection(model: model, snapshot: snapshot)
+                    if let proposal = model.proposal {
+                        resultSection(model: model, proposal: proposal)
+                        countrySection(model: model, proposal: proposal)
+                        submissionSection(proposal: proposal)
+                    }
+                    explanationSection(model: model, snapshot: snapshot)
+                } else if !model.isWorking {
+                    ContentUnavailableView(
+                        "Pricing Data Unavailable",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text("Pull down to retry. Existing drafts are never submitted automatically.")
+                    )
                 }
-                explanationSection(model: model, snapshot: snapshot)
-            } else if !model.isWorking {
-                ContentUnavailableView(
-                    "Pricing Data Unavailable",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text("Pull down to retry. Existing drafts are never submitted automatically.")
-                )
             }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(theme.borderColor)
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)

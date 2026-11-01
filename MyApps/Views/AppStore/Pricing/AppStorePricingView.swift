@@ -74,72 +74,76 @@ struct AppStorePricingView: View {
 
     var body: some View {
         List {
-            if !hasLoaded && isLoading {
-                ProgressView("Loading App Store products…")
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .listRowBackground(Color.clear)
-            } else if !hasLoaded {
-                ContentUnavailableView {
-                    Label("Could Not Load Pricing", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(errorMessage ?? "App Store Connect product discovery is unavailable.")
-                } actions: {
-                    Button("Retry") { Task { await load(refresh: true) } }
-                }
-                .listRowBackground(Color.clear)
-            } else {
-                if let errorMessage {
-                    Section {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
+            Group {
+                if !hasLoaded && isLoading {
+                    ProgressView("Loading App Store products…")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .listRowBackground(Color.clear)
+                } else if !hasLoaded {
+                    ContentUnavailableView {
+                        Label("Could Not Load Pricing", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(errorMessage ?? "App Store Connect product discovery is unavailable.")
+                    } actions: {
                         Button("Retry") { Task { await load(refresh: true) } }
                     }
-                }
-                Section {
-                    TextField("Find a product or subscription", text: $searchText)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-                if lifetimeProducts.isEmpty && subscriptionGroups.isEmpty && unsupported.isEmpty {
-                    ContentUnavailableView(
-                        "No Products",
-                        systemImage: "cart",
-                        description: Text("There are no matching App Store Connect products.")
-                    )
                     .listRowBackground(Color.clear)
-                }
-                if !lifetimeProducts.isEmpty {
-                    Section("Lifetime Purchases") {
-                        ForEach(lifetimeProducts) { product in
-                            row(product)
+                } else {
+                    if let errorMessage {
+                        Section {
+                            Label(errorMessage, systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                            Button("Retry") { Task { await load(refresh: true) } }
                         }
                     }
-                }
-                ForEach(subscriptionGroups) { group in
-                    Section(group.name) {
-                        ForEach(group.products) { product in
-                            row(product)
-                        }
+                    Section {
+                        TextField("Find a product or subscription", text: $searchText)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                     }
-                }
-                if !unsupported.isEmpty {
-                    Section("Unsupported Products") {
-                        ForEach(unsupported) { product in
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(product.name)
-                                Text(product.unsupportedReason ?? "Unsupported product type")
-                                    .font(.caption)
-                                    .foregroundStyle(theme.secondaryForegroundColor)
+                    if lifetimeProducts.isEmpty && subscriptionGroups.isEmpty && unsupported.isEmpty {
+                        ContentUnavailableView(
+                            "No Products",
+                            systemImage: "cart",
+                            description: Text("There are no matching App Store Connect products.")
+                        )
+                        .listRowBackground(Color.clear)
+                    }
+                    if !lifetimeProducts.isEmpty {
+                        Section("Lifetime Purchases") {
+                            ForEach(lifetimeProducts) { product in
+                                row(product)
                             }
                         }
                     }
-                }
-                Section {
-                    Text("Generate and review regional prices before any changes. Lifetime and standard subscription submissions require a separate final confirmation; unsupported plans remain read-only.")
-                        .font(.footnote)
-                        .foregroundStyle(theme.secondaryForegroundColor)
+                    ForEach(subscriptionGroups) { group in
+                        Section(group.name) {
+                            ForEach(group.products) { product in
+                                row(product)
+                            }
+                        }
+                    }
+                    if !unsupported.isEmpty {
+                        Section("Unsupported Products") {
+                            ForEach(unsupported) { product in
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(product.name)
+                                    Text(product.unsupportedReason ?? "Unsupported product type")
+                                        .font(.caption)
+                                        .foregroundStyle(theme.secondaryForegroundColor)
+                                }
+                            }
+                        }
+                    }
+                    Section {
+                        Text("Generate and review regional prices before any changes. Lifetime and standard subscription submissions require a separate final confirmation; unsupported plans remain read-only.")
+                            .font(.footnote)
+                            .foregroundStyle(theme.secondaryForegroundColor)
+                    }
                 }
             }
+            .listRowBackground(MyAppsGlassSurface())
+            .listRowSeparatorTint(theme.borderColor)
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
