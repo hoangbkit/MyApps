@@ -561,36 +561,83 @@ actor RegionalPricingService {
                 territoryByPoint[resource.id] = territory
             }
         }
-        // A response's included collection can be capped; resolve missing point
-        // resources in bounded batches rather than silently treating them as free.
-        let missing = Array(Set(seeds.compactMap(\.point).filter {
-            pointDetails[$0] == nil || (pointDetails[$0]?.1 == nil && territoryByPoint[$0] == nil)
-        })).sorted()
-        for batchStart in stride(from: 0, to: missing.count, by: 4) {
-            let batch = Array(missing[batchStart..<min(batchStart + 4, missing.count)])
-            let responses = await withTaskGroup(
-                of: (String, AppStoreConnectAPIClient.PricePointResource?, String?).self,
-                returning: [(String, AppStoreConnectAPIClient.PricePointResource?, String?)].self
-            ) { group in
-                for point in batch {
-                    group.addTask { [client] in
-                        do { return (point, try await client.pricingPoint(id: point, kind: product.kind), nil) }
-                        catch { return (point, nil, error.localizedDescription) }
+        // Apple documents lifetime point lookup through the product's
+        // territory-filtered pricePoints collection, not a standalone IAP
+        // point detail read. Resolve missing amounts from that authoritative
+        // list. Subscription point details have a documented single GET.
+        for seed in seeds {
+            if let point = seed.point, let territory = seed.territory {
+                territoryByPoint[point] = territory
+            }
+        }
+        if product.kind == .lifetime {
+            let neededTerritories = Array(Set(seeds.compactMap { seed -> String? in
+                guard let point = seed.point, pointDetails[point] == nil else { return nil }
+                return seed.territory
+            })).sorted()
+            for start in stride(from: 0, to: neededTerritories.count, by: 4) {
+                let batch = Array(neededTerritories[start..<min(start + 4, neededTerritories.count)])
+                let results = await withTaskGroup(
+                    of: (String, [PricingPoint]?, String?).self,
+                    returning: [(String, [PricingPoint]?, String?)].self
+                ) { group in
+                    for territory in batch {
+                        group.addTask { [self] in
+                            do {
+                                return (territory,
+                                    try await loadPoints(product: product, territoryID: territory), nil)
+                            } catch {
+                                return (territory, nil, error.localizedDescription)
+                            }
+                        }
+                    }
+                    var completed: [(String, [PricingPoint]?, String?)] = []
+                    for await item in group { completed.append(item) }
+                    return completed
+                }
+                for (territory, ladder, failure) in results {
+                    if let ladder {
+                        for point in ladder {
+                            pointDetails[point.id] = (point.customerPrice, territory)
+                            territoryByPoint[point.id] = territory
+                        }
+                    } else {
+                        issues.append(PricingReadIssue(
+                            resource: "price ladder \(territory)",
+                            message: failure ?? "Unable to resolve lifetime price amounts."))
                     }
                 }
-                var completed: [(String, AppStoreConnectAPIClient.PricePointResource?, String?)] = []
-                for await response in group { completed.append(response) }
-                return completed
             }
-            for (point, resource, error) in responses {
-                if let resource, let value = PricingDecimal.parse(resource.attributes?.customerPrice) {
-                    pointDetails[point] = (value, resource.relatedID("territory"))
-                    if let territory = resource.relatedID("territory") {
-                        territoryByPoint[point] = territory
+        } else {
+            let missing = Array(Set(seeds.compactMap(\.point).filter {
+                pointDetails[$0] == nil || (pointDetails[$0]?.1 == nil && territoryByPoint[$0] == nil)
+            })).sorted()
+            for batchStart in stride(from: 0, to: missing.count, by: 4) {
+                let batch = Array(missing[batchStart..<min(batchStart + 4, missing.count)])
+                let responses = await withTaskGroup(
+                    of: (String, AppStoreConnectAPIClient.PricePointResource?, String?).self,
+                    returning: [(String, AppStoreConnectAPIClient.PricePointResource?, String?)].self
+                ) { group in
+                    for point in batch {
+                        group.addTask { [client] in
+                            do { return (point, try await client.pricingPoint(id: point, kind: product.kind), nil) }
+                            catch { return (point, nil, error.localizedDescription) }
+                        }
                     }
-                } else {
-                    issues.append(PricingReadIssue(resource: "point \(point)",
-                        message: error ?? "Apple returned a missing or invalid point amount."))
+                    var completed: [(String, AppStoreConnectAPIClient.PricePointResource?, String?)] = []
+                    for await response in group { completed.append(response) }
+                    return completed
+                }
+                for (point, resource, error) in responses {
+                    if let resource, let value = PricingDecimal.parse(resource.attributes?.customerPrice) {
+                        pointDetails[point] = (value, resource.relatedID("territory"))
+                        if let territory = resource.relatedID("territory") {
+                            territoryByPoint[point] = territory
+                        }
+                    } else {
+                        issues.append(PricingReadIssue(resource: "point \(point)",
+                            message: error ?? "Apple returned a missing or invalid point amount."))
+                    }
                 }
             }
         }
