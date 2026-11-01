@@ -311,10 +311,12 @@ struct RegionalPricingReviewView: View {
             }
             if !snapshot.issues.isEmpty {
                 DisclosureGroup("\(snapshot.issues.count) Apple data notices") {
-                    ForEach(Array(snapshot.issues.enumerated()), id: \.offset) { _, issue in
+                    ForEach(snapshot.issues.indices, id: \.self) { index in
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(issue.resource).font(.subheadline.weight(.medium))
-                            Text(issue.message).font(.footnote)
+                            Text(snapshot.issues[index].resource)
+                                .font(.subheadline.weight(.medium))
+                            Text(snapshot.issues[index].message)
+                                .font(.footnote)
                         }
                     }
                 }
