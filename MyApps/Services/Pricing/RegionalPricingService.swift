@@ -275,23 +275,29 @@ actor RegionalPricingService {
         })).sorted()
         for batchStart in stride(from: 0, to: missing.count, by: 4) {
             let batch = Array(missing[batchStart..<min(batchStart + 4, missing.count)])
-            await withTaskGroup(of: (String, AppStoreConnectAPIClient.PricePointResource?, String?).self) { group in
+            let responses = await withTaskGroup(
+                of: (String, AppStoreConnectAPIClient.PricePointResource?, String?).self,
+                returning: [(String, AppStoreConnectAPIClient.PricePointResource?, String?)].self
+            ) { group in
                 for point in batch {
                     group.addTask { [client] in
                         do { return (point, try await client.pricingPoint(id: point, kind: product.kind), nil) }
                         catch { return (point, nil, error.localizedDescription) }
                     }
                 }
-                for await (point, resource, error) in group {
-                    if let resource, let value = PricingDecimal.parse(resource.attributes?.customerPrice) {
-                        pointDetails[point] = (value, resource.relatedID("territory"))
-                        if let territory = resource.relatedID("territory") {
-                            territoryByPoint[point] = territory
-                        }
-                    } else {
-                        issues.append(PricingReadIssue(resource: "point \(point)",
-                            message: error ?? "Apple returned a missing or invalid point amount."))
+                var completed: [(String, AppStoreConnectAPIClient.PricePointResource?, String?)] = []
+                for await response in group { completed.append(response) }
+                return completed
+            }
+            for (point, resource, error) in responses {
+                if let resource, let value = PricingDecimal.parse(resource.attributes?.customerPrice) {
+                    pointDetails[point] = (value, resource.relatedID("territory"))
+                    if let territory = resource.relatedID("territory") {
+                        territoryByPoint[point] = territory
                     }
+                } else {
+                    issues.append(PricingReadIssue(resource: "point \(point)",
+                        message: error ?? "Apple returned a missing or invalid point amount."))
                 }
             }
         }
