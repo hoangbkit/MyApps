@@ -306,6 +306,129 @@ actor RegionalPricingService {
         }
     }
 
+    /// Prepare all network-dependent inputs before the pure Pass 2 engine runs.
+    /// Never derive Apple point identities from an encoded price or cached discount.
+    func loadReferenceSet(
+        snapshot: PricingSnapshot,
+        selectedUSPoint: PricingPoint,
+        mapping: RegionalPricingMapping,
+        preset: RegionalPricingPreset = .balanced,
+        overrides: [RegionalPricingOverride] = []
+    ) async throws -> RegionalPricingReferenceSet {
+        guard selectedUSPoint.productID == snapshot.product.id,
+              selectedUSPoint.territoryID == "USA",
+              snapshot.usPoints.contains(where: { $0.id == selectedUSPoint.id }) else {
+            throw RegionalPricingError.invalidReference("US point is not part of the selected product.")
+        }
+        let plan: String?
+        if snapshot.product.kind == .subscription {
+            let types = Set(snapshot.planTerritories.map(\.planType))
+            guard types == ["UPFRONT"] else {
+                throw PricingReadError.unsupportedPlan(
+                    "Only confirmed standard UPFRONT subscriptions are supported; additional plans need adjusted equalizations."
+                )
+            }
+            plan = "UPFRONT"
+        } else {
+            plan = nil
+        }
+        var issues: [String] = []
+        let rawEqualized: [PricingPoint]
+        do {
+            rawEqualized = try await loadEqualizedPoints(
+                product: snapshot.product, sourcePointID: selectedUSPoint.id)
+        } catch {
+            // Missing/CSV/ambiguous equalization is never replaced by naive FX.
+            rawEqualized = []
+            issues.append("Apple US-point equalizations unavailable: \(error.localizedDescription)")
+        }
+        func typed(_ point: PricingPoint) -> PricingPoint {
+            PricingPoint(id: point.id, productID: point.productID,
+                territoryID: point.territoryID, planType: plan,
+                currency: point.currency, customerPrice: point.customerPrice)
+        }
+        let equalized = Dictionary(rawEqualized.map { ($0.territoryID, typed($0)) },
+                                   uniquingKeysWith: { first, _ in first })
+        var ladders: [String: [PricingPoint]] = [:]
+        let eligible = snapshot.territories.filter { $0.available != false }.sorted { $0.id < $1.id }
+        // Bound networking to four concurrent territory ladders; no eager
+        // fetching of ladders for unrelated products.
+        for offset in stride(from: 0, to: eligible.count, by: 4) {
+            let batch = Array(eligible[offset..<min(offset + 4, eligible.count)])
+            let responses = await withTaskGroup(
+                of: (String, [PricingPoint]?, String?).self,
+                returning: [(String, [PricingPoint]?, String?)].self
+            ) { group in
+                for territory in batch {
+                    group.addTask { [self] in
+                        do {
+                            let points = try await loadPoints(product: snapshot.product,
+                                                              territoryID: territory.id)
+                            return (territory.id, points, nil)
+                        } catch {
+                            return (territory.id, nil, error.localizedDescription)
+                        }
+                    }
+                }
+                var collected: [(String, [PricingPoint]?, String?)] = []
+                for await response in group { collected.append(response) }
+                return collected
+            }
+            for (territory, points, failure) in responses {
+                if let points {
+                    ladders[territory] = points.map(typed)
+                } else {
+                    issues.append("\(territory): \(failure ?? "Price ladder unavailable.")")
+                }
+            }
+        }
+
+        // Select the actual configured base's proposal first, then ask Apple
+        // for THAT base point's automatic equalizations. This is deliberately
+        // distinct from the US reference when baseTerritory != USA.
+        var baseAutomatic: [String: PricingPoint]? = nil
+        if snapshot.product.kind == .lifetime {
+            if snapshot.baseTerritoryID == "USA" {
+                baseAutomatic = equalized
+            } else if let base = snapshot.baseTerritoryID,
+                      let baseReference = equalized[base],
+                      let baseLadder = ladders[base], !baseLadder.isEmpty {
+                let baseMapping = mapping.assignment(for: base)
+                let factor = (baseMapping == nil || baseMapping?.needsReview == true)
+                    ? Decimal(1) : preset.factors[baseMapping?.tier ?? 1] ?? 1
+                let target = baseReference.customerPrice * factor
+                let saved = overrides.first { $0.territoryID == base && $0.planType == nil }
+                let chosen = saved.flatMap { saved in
+                    baseLadder.first { $0.id == saved.point.id &&
+                        $0.customerPrice == saved.point.customerPrice }
+                } ?? RegionalPricingEngine.nearest(
+                    to: target, points: baseLadder, referenceID: baseReference.id)
+                if let chosen {
+                    do {
+                        let result = try await loadEqualizedPoints(
+                            product: snapshot.product, sourcePointID: chosen.id)
+                        baseAutomatic = Dictionary(
+                            result.map { ($0.territoryID, typed($0)) },
+                            uniquingKeysWith: { first, _ in first }
+                        )
+                    } catch {
+                        issues.append("Configured-base equalizations unavailable: \(error.localizedDescription)")
+                    }
+                }
+            } else {
+                issues.append("Configured base price point missing; automatic consequences unknown.")
+            }
+        }
+        return RegionalPricingReferenceSet(
+            sourceUSPoint: typed(selectedUSPoint),
+            equalizedByTerritory: equalized,
+            laddersByTerritory: ladders,
+            automaticFromConfiguredBase: baseAutomatic,
+            planType: plan,
+            readIssues: issues.sorted()
+        )
+    }
+
     func invalidateCaches() {
         territoryCache = nil
     }
