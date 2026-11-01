@@ -36,6 +36,14 @@ struct RegionalPriceOverrideView: View {
                         }
                     }
                     Section("Prices") {
+                        if let proposal = model.proposal {
+                            LabeledContent("Price Rounding", value: proposal.effectiveRoundingPolicy.title)
+                            if proposal.effectiveRoundingPolicy == .nearestCommon {
+                                Text(RegionalCommonPriceRules.description(for: row.currency))
+                                    .font(.footnote)
+                                    .foregroundStyle(theme.secondaryForegroundColor)
+                            }
+                        }
                         LabeledContent("Current at Effective Date",
                             value: PricingDisplay.amount(row.baselinePrice?.customerPrice,
                                 currency: row.currency))
@@ -80,7 +88,7 @@ struct RegionalPriceOverrideView: View {
                                     .foregroundStyle(.orange)
                             }
                             ForEach(row.warnings, id: \.self) { warning in
-                                Label(warning.rawValue, systemImage: "info.circle")
+                                Label(warning.explanation, systemImage: "info.circle")
                                     .foregroundStyle(theme.secondaryForegroundColor)
                             }
                         }
@@ -148,3 +156,4 @@ struct RegionalPriceOverrideView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 }
+

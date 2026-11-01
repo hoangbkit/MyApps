@@ -185,28 +185,13 @@ struct RegionalPricingReviewView: View {
                 .environment(\.calendar, PricingDay.calendar)
                 .environment(\.timeZone, PricingDay.timeZone)
                 .disabled(model.isWorking)
-            LabeledContent("Strategy", value: "Balanced · 5 tiers")
-            if model.isWorking {
-                ProgressView(model.phase == .generating
-                    ? "Reading Apple price points and generating…"
-                    : "Refreshing Apple's pricing…")
-            }
-            Button {
-                Task { await model.generate() }
-            } label: {
-                Label(model.proposal == nil ? "Generate Regional Prices" : "Regenerate Prices",
-                      systemImage: "globe")
-            }
-            .disabled(model.isWorking || model.selectedUSPoint == nil || model.isStale)
         } header: {
             Text("Reference")
         } footer: {
             Text("Uses Apple's actual US price point and equalized local references. No pricing is changed in App Store Connect.")
         }
 
-        if product.kind == .subscription {
-            subscriberPolicySection(model)
-        }
+        policiesSection(model)
 
         if model.isStale || model.restoredDraft || model.needsRegeneration {
             Section {
@@ -251,56 +236,87 @@ struct RegionalPricingReviewView: View {
         return amount - wholeDollars == Decimal(99) / Decimal(100)
     }
 
-    private func subscriberPolicySection(_ model: RegionalPricingViewModel) -> some View {
+    private func policiesSection(_ model: RegionalPricingViewModel) -> some View {
         Section {
-            ForEach(RegionalSubscriberPolicy.allCases) { option in
-                Button {
-                    model.changeSubscriberPolicy(option)
-                } label: {
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(option.title)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(theme.primaryForegroundColor)
-                            Text(option.explanation)
-                                .font(.footnote)
-                                .foregroundStyle(theme.secondaryForegroundColor)
-                        }
-                        Spacer(minLength: 0)
-                        Image(systemName: model.subscriberPolicy == option
-                            ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(model.subscriberPolicy == option
-                                ? theme.primaryForegroundColor : theme.secondaryForegroundColor)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
+            LabeledContent("Country Strategy", value: "Balanced · 5 tiers")
+            Text("Apply 100%, 85%, 65%, 45%, or 30% to Apple's local equivalent of your US reference price, according to each country's tier.")
+                .font(.footnote)
+                .foregroundStyle(theme.secondaryForegroundColor)
+            Picker("Price Rounding", selection: Binding(
+                get: { model.roundingPolicy },
+                set: { model.changeRoundingPolicy($0) }
+            )) {
+                ForEach(RegionalPriceRoundingPolicy.allCases) { option in
+                    Text(option.title).tag(option)
                 }
-                .buttonStyle(.plain)
-                .disabled(model.isWorking)
-                .accessibilityAddTraits(model.subscriberPolicy == option ? .isSelected : [])
             }
-            DisclosureGroup("Decreases, Consent, and Older Preserved Prices") {
-                Text(SubscriptionPricingGuidance.decreases)
-                Text(SubscriptionPricingGuidance.consent)
-                Text(SubscriptionPricingGuidance.olderGroups)
-                Text("To remove older price preservation, open this app in App Store Connect, select the subscription, then Subscription Pricing → View all Subscription Pricing → Starting Price → Edit Price. This separate action is not submitted by MyApps.")
-                if let url = URL(string: "https://appstoreconnect.apple.com/apps/\(product.appID)") {
-                    Link("Manage Older Preserved Prices in App Store Connect", destination: url)
-                }
-                Link("Apple's Subscription Pricing Guide", destination: SubscriptionPricingGuidance.helpURL)
+            .disabled(model.isWorking)
+            Text(model.roundingPolicy.explanation)
+                .font(.footnote)
+                .foregroundStyle(theme.secondaryForegroundColor)
+            if product.kind == .subscription {
+                subscriberPolicyRows(model)
             }
-            .font(.footnote)
+            if model.isWorking {
+                ProgressView(model.phase == .generating
+                    ? "Reading Apple price points and generating…"
+                    : "Refreshing Apple's pricing…")
+            }
+            Button {
+                Task { await model.generate() }
+            } label: {
+                Label(model.proposal == nil ? "Generate Regional Prices" : "Regenerate Prices",
+                      systemImage: "globe")
+            }
+            .disabled(model.isWorking || model.selectedUSPoint == nil)
         } header: {
-            Text("Existing Subscribers")
+            Text("Pricing Policies")
         } footer: {
-            Text("New proposals default to Keep Current Prices. Saved proposals retain their selection. The increase policy applies to every included country with an increase. Excluded countries are unchanged. Your selection is saved with the generated proposal; nothing is submitted here.")
+            Text("New proposals default to Nearest Common Price and, for subscriptions, Keep Current Prices. Saved proposals retain their policies. Change a policy and generate again to update suggestions. Your US reference and manual overrides stay exact. Generate does not submit prices to Apple.")
         }
+    }
+
+    @ViewBuilder
+    private func subscriberPolicyRows(_ model: RegionalPricingViewModel) -> some View {
+        Picker("Existing Subscribers — Increases", selection: Binding(
+            get: { model.subscriberPolicy },
+            set: { model.changeSubscriberPolicy($0) }
+        )) {
+            ForEach(RegionalSubscriberPolicy.allCases) { option in
+                Text(option.title).tag(option)
+            }
+        }
+        .disabled(model.isWorking)
+        Text(model.subscriberPolicy.explanation)
+            .font(.footnote)
+            .foregroundStyle(theme.secondaryForegroundColor)
+        DisclosureGroup("Decreases, Consent, and Older Preserved Prices") {
+            Text(SubscriptionPricingGuidance.decreases)
+            Text(SubscriptionPricingGuidance.consent)
+            Text(SubscriptionPricingGuidance.olderGroups)
+            Text("To remove older price preservation, open this app in App Store Connect, select the subscription, then Subscription Pricing → View all Subscription Pricing → Starting Price → Edit Price. This separate action is not submitted by MyApps.")
+            if let url = URL(string: "https://appstoreconnect.apple.com/apps/\(product.appID)") {
+                Link("Manage Older Preserved Prices in App Store Connect", destination: url)
+            }
+            Link("Apple's Subscription Pricing Guide", destination: SubscriptionPricingGuidance.helpURL)
+        }
+        .font(.footnote)
     }
 
     @ViewBuilder
     private func resultSection(model: RegionalPricingViewModel,
                                proposal: RegionalPricingProposal) -> some View {
         Section("Proposal Summary") {
+            LabeledContent("Price Rounding", value: proposal.effectiveRoundingPolicy.title)
+            let fallbacks = proposal.rows.filter {
+                !$0.excluded && $0.warnings.contains(.commonPriceFallback)
+            }.count
+            if fallbacks > 0 {
+                Label("\(fallbacks) countries used nearest available pricing because no common rule or matching point was available. Open a country for details.",
+                      systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            }
             LabeledContent("Eligible Storefronts", value: "\(proposal.summary.eligible)")
             LabeledContent("Price Increases", value: "\(proposal.summary.increases)")
             LabeledContent("Price Decreases", value: "\(proposal.summary.decreases)")
@@ -417,7 +433,8 @@ struct RegionalPricingReviewView: View {
         Section {
             if let mapping = model.mapping {
                 DisclosureGroup("How suggestions are calculated") {
-                    Text("Each local target is Apple's equalized price for the selected US point multiplied by 100%, 85%, 65%, 45%, or 30%, then matched to the nearest valid Apple price point.")
+                    Text("Each local target is Apple's equalized price for the selected US point multiplied by 100%, 85%, 65%, 45%, or 30%. The selected rounding policy chooses the nearest valid common or available Apple price. Ties choose the lower price.")
+                    Text("Common-price conventions are versioned MyApps rules, not Apple's curated dashboard list. Examples: .99 in USD/EUR, multiples of 10 in JPY, and multiples of 1,000 in VND. Country details show the applied rule; unsupported currencies or empty common lists fall back with a warning.")
                     LabeledContent("Mapping Version", value: mapping.version)
                     LabeledContent("World Bank Income Edition",
                         value: mapping.incomeClassificationEdition)
@@ -472,6 +489,7 @@ struct RegionalPricingReviewView: View {
         return pieces.joined(separator: " · ")
     }
 }
+
 
 
 

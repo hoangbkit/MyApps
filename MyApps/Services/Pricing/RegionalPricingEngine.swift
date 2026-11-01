@@ -1,6 +1,67 @@
 import CryptoKit
 import Foundation
 
+/// Versioned MyApps conventions, not a claim to reproduce Apple's curated
+/// dashboard list. Unsupported currencies explicitly fall back with a warning.
+enum RegionalCommonPriceRules {
+    static let version = "common-prices-v1"
+
+    private enum Convention {
+        case fraction99, wholeEnding9, chineseWhole, multiple(Int)
+    }
+
+    private static func convention(for currency: String) -> Convention? {
+        switch currency {
+        case "USD", "EUR", "GBP", "AUD", "CAD", "NZD", "CHF", "SGD", "HKD",
+             "MYR", "BRL", "PEN", "PLN", "RON", "TRY", "ZAR", "ILS":
+            return .fraction99
+        case "INR", "MXN", "THB", "PHP", "NOK", "SEK", "DKK":
+            return .wholeEnding9
+        case "CNY": return .chineseWhole
+        case "JPY", "TWD": return .multiple(10)
+        case "KRW": return .multiple(100)
+        case "VND", "IDR": return .multiple(1_000)
+        default: return nil
+        }
+    }
+
+    static func description(for currency: String?) -> String {
+        guard let currency, let rule = convention(for: currency) else {
+            return "No common-price rule; nearest available with a warning"
+        }
+        switch rule {
+        case .fraction99: return "Prices ending in .99"
+        case .wholeEnding9: return "Whole amounts ending in 9"
+        case .chineseWhole: return "Whole amounts ending in 0, 8, or 9"
+        case .multiple(let step): return "Whole multiples of \(step)"
+        }
+    }
+
+    static func matches(_ point: PricingPoint) -> Bool {
+        guard point.customerPrice > 0, let currency = point.currency,
+              let rule = convention(for: currency) else { return false }
+        let amount = point.customerPrice
+        switch rule {
+        case .fraction99:
+            return remainder(amount, by: 1) == Decimal(99) / Decimal(100)
+        case .wholeEnding9:
+            return remainder(amount, by: 1) == 0 && remainder(amount, by: 10) == 9
+        case .chineseWhole:
+            let ending = remainder(amount, by: 10)
+            return remainder(amount, by: 1) == 0 && (ending == 0 || ending == 8 || ending == 9)
+        case .multiple(let step):
+            return remainder(amount, by: Decimal(step)) == 0
+        }
+    }
+
+    private static func remainder(_ amount: Decimal, by divisor: Decimal) -> Decimal {
+        var quotient = amount / divisor
+        var whole = Decimal()
+        NSDecimalRound(&whole, &quotient, 0, .down)
+        return amount - whole * divisor
+    }
+}
+
 /// Pure generator. No network access, credentials, clock reads, or remote mutation.
 /// The service must fetch complete Apple equalizations and ladders beforehand.
 enum RegionalPricingEngine {
@@ -14,6 +75,7 @@ enum RegionalPricingEngine {
         existingOverrides: [RegionalPricingOverride] = [],
         exclusions: Set<String> = [],
         subscriberPolicy: RegionalSubscriberPolicy = .preserveExistingOnIncrease,
+        roundingPolicy: RegionalPriceRoundingPolicy = .nearestCommon,
         acknowledgedWarnings: Set<String> = [],
         proposalID: UUID = UUID()
     ) throws -> RegionalPricingProposal {
@@ -114,7 +176,10 @@ enum RegionalPricingEngine {
             if territory.id == "USA" {
                 suggestion = selectedUSPoint
             } else if let target, !usable.isEmpty {
-                suggestion = nearest(to: target, points: usable, referenceID: reference?.id)
+                let rounded = roundedPrice(to: target, points: usable,
+                    referenceID: reference?.id, policy: roundingPolicy)
+                suggestion = rounded.point
+                if rounded.usedFallback { warnings.append(.commonPriceFallback) }
                 if let minimum = usable.first?.customerPrice,
                    let maximum = usable.last?.customerPrice,
                    (target < minimum || target > maximum) {
@@ -237,6 +302,7 @@ enum RegionalPricingEngine {
             snapshot: snapshot, us: selectedUSPoint, preset: preset,
             mapping: mapping, date: effectiveDate, rows: rows,
             subscriberPolicy: subscriberPolicy,
+            roundingPolicy: roundingPolicy,
             acknowledgedWarnings: acknowledgedWarnings.sorted()
         )
         return RegionalPricingProposal(
@@ -248,6 +314,7 @@ enum RegionalPricingEngine {
             configuredBaseTerritory: snapshot.baseTerritoryID,
             overrides: sortedOverrides, exclusions: selectedExclusions,
             subscriberPolicy: subscriberPolicy,
+            roundingPolicy: roundingPolicy,
             acknowledgedWarnings: acknowledgedWarnings.sorted(),
             rows: rows, summary: summary, fingerprint: fingerprint
         )
@@ -316,6 +383,20 @@ enum RegionalPricingEngine {
         }
     }
 
+    /// Filter real Apple points; never manufacture a rounded price or point ID.
+    /// Shared with configured-base selection so automatic IAP effects use the
+    /// exact same proposed base point as the review engine.
+    static func roundedPrice(to target: Decimal, points: [PricingPoint],
+                             referenceID: String?, policy: RegionalPriceRoundingPolicy)
+        -> (point: PricingPoint?, usedFallback: Bool) {
+        guard policy == .nearestCommon else {
+            return (nearest(to: target, points: points, referenceID: referenceID), false)
+        }
+        let common = points.filter { RegionalCommonPriceRules.matches($0) }
+        return (nearest(to: target, points: common.isEmpty ? points : common,
+                        referenceID: referenceID), common.isEmpty)
+    }
+
     private static func validDate(_ value: String) -> Bool {
         guard value.range(of: #"^\d{4}-\d{2}-\d{2}$"#,
                           options: .regularExpression) != nil else { return false }
@@ -331,6 +412,7 @@ enum RegionalPricingEngine {
         snapshot: PricingSnapshot, us: PricingPoint, preset: RegionalPricingPreset,
         mapping: RegionalPricingMapping, date: String, rows: [RegionalPricingRow],
         subscriberPolicy: RegionalSubscriberPolicy,
+        roundingPolicy: RegionalPriceRoundingPolicy,
         acknowledgedWarnings: [String]
     ) -> String {
         func decimal(_ value: Decimal?) -> String {
@@ -341,6 +423,7 @@ enum RegionalPricingEngine {
             snapshot.semanticFingerprint, mapping.version, mapping.ruleVersion,
             preset.id, String(preset.version), us.id, decimal(us.customerPrice), date,
             snapshot.baseTerritoryID ?? "-", subscriberPolicy.rawValue,
+            roundingPolicy.rawValue, RegionalCommonPriceRules.version,
             acknowledgedWarnings.sorted().joined(separator: ",")
         ]
         for row in rows.sorted(by: { $0.id < $1.id }) {
@@ -361,3 +444,4 @@ enum RegionalPricingEngine {
             .map { String(format: "%02x", $0) }.joined()
     }
 }
+

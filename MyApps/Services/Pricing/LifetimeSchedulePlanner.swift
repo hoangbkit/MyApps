@@ -78,6 +78,7 @@ struct LifetimeSchedulePlan: Codable, Sendable {
     let baseTerritoryID: String
     let effectiveDate: String
     let selectedUSPoint: PricingPoint
+    let roundingPolicy: RegionalPriceRoundingPolicy?
     let affectedTerritories: [String]
     let indirectTerritories: [String]
     let expectedAutomaticPoints: [String: String]
@@ -99,6 +100,12 @@ enum LifetimeSchedulePlanner {
                      today: String) -> LifetimeSchedulePlan {
         var blockers: [String] = []
         var warnings: [String] = []
+        let commonFallbacks = proposal.rows.filter {
+            !$0.excluded && $0.warnings.contains(.commonPriceFallback)
+        }.count
+        if commonFallbacks > 0 {
+            warnings.append("\(commonFallbacks) countries use nearest available prices because common-price rounding has no currency rule or matching Apple point.")
+        }
         let unchanged = proposal.matchingSnapshot(fresh)
         if !unchanged { blockers.append("Apple pricing state has changed since review. Refresh and regenerate.") }
         if proposal.product.kind != .lifetime || fresh.product.kind != .lifetime {
@@ -235,6 +242,7 @@ enum LifetimeSchedulePlanner {
             proposalFingerprint: proposal.fingerprint,
             baselineFingerprint: fresh.semanticFingerprint, baseTerritoryID: base,
             effectiveDate: date, selectedUSPoint: proposal.selectedUSPoint,
+            roundingPolicy: proposal.effectiveRoundingPolicy,
             affectedTerritories: changes.map(\.territoryID).sorted(),
             indirectTerritories: indirect.sorted(),
             expectedAutomaticPoints: Dictionary(uniqueKeysWithValues: changes.compactMap {
@@ -256,6 +264,7 @@ enum LifetimeSchedulePlanner {
             proposalFingerprint: proposal.fingerprint, baselineFingerprint: fresh.semanticFingerprint,
             baseTerritoryID: fresh.baseTerritoryID ?? "",
             effectiveDate: proposal.effectiveDate, selectedUSPoint: proposal.selectedUSPoint,
+            roundingPolicy: proposal.effectiveRoundingPolicy,
             affectedTerritories: [], indirectTerritories: [],
             expectedAutomaticPoints: [:],
             excludedTerritories: proposal.exclusions.sorted(),
@@ -294,3 +303,4 @@ enum LifetimeSchedulePlanner {
         return parser.date(from: value).map { parser.string(from: $0) == value } ?? false
     }
 }
+

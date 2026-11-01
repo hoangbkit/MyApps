@@ -24,6 +24,7 @@ final class RegionalPricingViewModel {
     var selectedUSPointID: String = ""
     var effectiveDate: Date = PricingDay.initialSelection()
     private(set) var subscriberPolicy: RegionalSubscriberPolicy = .preserveExistingOnIncrease
+    private(set) var roundingPolicy: RegionalPriceRoundingPolicy = .nearestCommon
 
     private var draftRevision: UInt64 = 0
     private var requestID = UUID()
@@ -54,6 +55,7 @@ final class RegionalPricingViewModel {
 
     var isReviewCurrent: Bool {
         proposal != nil && !isStale && !needsRegeneration && !restoredDraft &&
+            proposal?.effectiveRoundingPolicy == roundingPolicy &&
             (product.kind != .subscription || proposal?.subscriberPolicy == subscriberPolicy)
     }
 
@@ -79,6 +81,7 @@ final class RegionalPricingViewModel {
         proposal = nil
         selectedUSPointID = ""
         subscriberPolicy = .preserveExistingOnIncrease
+        roundingPolicy = .nearestCommon
         isStale = true
         needsRegeneration = true
         restoredDraft = false
@@ -113,6 +116,7 @@ final class RegionalPricingViewModel {
                 guard requestID == token else { return }
                 proposal = draft.proposal
                 subscriberPolicy = draft.proposal.subscriberPolicy
+                roundingPolicy = draft.proposal.effectiveRoundingPolicy
                 selectedUSPointID = draft.proposal.selectedUSPoint.id
                 if let date = Self.parseDay(draft.proposal.effectiveDate) {
                     effectiveDate = date
@@ -151,23 +155,16 @@ final class RegionalPricingViewModel {
 
     func changeSubscriberPolicy(_ policy: RegionalSubscriberPolicy) {
         guard product.kind == .subscription, !isWorking, subscriberPolicy != policy else { return }
-        let wasCurrent = isReviewCurrent
-        let previousPolicy = subscriberPolicy
         subscriberPolicy = policy
-        guard let current = proposal else { return }
-        guard wasCurrent, let snapshot, let mapping, let references = referenceSet else {
-            needsRegeneration = true
-            return
-        }
-        do {
-            // A policy change does not alter price ladders or require an Apple read.
-            // Rebuild to bind the selection into the proposal fingerprint and draft.
-            try rebuild(snapshot: snapshot, mapping: mapping, references: references,
-                prior: current, overrides: current.overrides, subscriberPolicy: policy)
-        } catch {
-            subscriberPolicy = previousPolicy
-            errorMessage = error.localizedDescription
-        }
+        needsRegeneration = proposal != nil
+    }
+
+    func changeRoundingPolicy(_ policy: RegionalPriceRoundingPolicy) {
+        guard !isWorking, roundingPolicy != policy else { return }
+        roundingPolicy = policy
+        // Rounding can change a non-US IAP base point and its automatic effects.
+        referenceSet = nil
+        needsRegeneration = proposal != nil
     }
 
     func reviewUpdatedBaseline() async {
@@ -177,6 +174,11 @@ final class RegionalPricingViewModel {
     }
 
     func generate() async {
+        guard !isWorking else { return }
+        if isStale {
+            await load(refresh: true)
+            guard errorMessage == nil, !Task.isCancelled else { return }
+        }
         guard !isWorking, let snapshot, let mapping,
               let point = selectedUSPoint else {
             errorMessage = "Select a valid US price point first."
@@ -195,6 +197,7 @@ final class RegionalPricingViewModel {
             let previous = proposal
             let references = try await service.loadReferenceSet(
                 snapshot: snapshot, selectedUSPoint: point, mapping: mapping,
+                roundingPolicy: roundingPolicy,
                 overrides: previous?.overrides ?? []
             )
             try Task.checkCancellation()
@@ -204,6 +207,7 @@ final class RegionalPricingViewModel {
                 references: references, existingOverrides: previous?.overrides ?? [],
                 exclusions: Set(previous?.exclusions ?? []),
                 subscriberPolicy: subscriberPolicy,
+                roundingPolicy: roundingPolicy,
                 acknowledgedWarnings: Set(previous?.acknowledgedWarnings ?? []),
                 proposalID: previous?.id ?? UUID()
             )
@@ -276,8 +280,7 @@ final class RegionalPricingViewModel {
                          references: RegionalPricingReferenceSet,
                          prior: RegionalPricingProposal,
                          overrides: [RegionalPricingOverride],
-                         exclusions: Set<String>? = nil,
-                         subscriberPolicy: RegionalSubscriberPolicy? = nil) throws {
+                         exclusions: Set<String>? = nil) throws {
         // A base-territory override can affect all automatic IAP equalizations.
         // Do not reuse the old reference snapshot in this case.
         if product.kind == .lifetime,
@@ -297,7 +300,8 @@ final class RegionalPricingViewModel {
             mapping: mapping, effectiveDate: prior.effectiveDate,
             references: references, existingOverrides: overrides,
             exclusions: exclusions ?? Set(prior.exclusions),
-            subscriberPolicy: subscriberPolicy ?? prior.subscriberPolicy,
+            subscriberPolicy: prior.subscriberPolicy,
+            roundingPolicy: prior.effectiveRoundingPolicy,
             acknowledgedWarnings: Set(prior.acknowledgedWarnings),
             proposalID: prior.id
         )
@@ -331,6 +335,7 @@ final class RegionalPricingViewModel {
         PricingDay.parse(value)
     }
 }
+
 
 
 

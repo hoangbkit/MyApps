@@ -48,6 +48,7 @@ struct PricingSubmissionView: View {
                                     PricingDisplay.amount(proposal.selectedUSPoint.customerPrice,
                                                           currency: proposal.selectedUSPoint.currency))
                                 LabeledContent("Effective Date", value: proposal.effectiveDate)
+                                LabeledContent("Price Rounding", value: proposal.effectiveRoundingPolicy.title)
                                 if proposal.product.kind == .lifetime {
                                     LabeledContent("Apple Base Territory",
                                         value: proposal.configuredBaseTerritory ?? "Unknown")
@@ -138,6 +139,8 @@ struct PricingSubmissionView: View {
                         }
                         if let report {
                             Section("Submission Status") {
+                                LabeledContent("Submitted Rounding", value:
+                                    (report.operation.plan.roundingPolicy ?? .nearestAvailable).title)
                                 LabeledContent("Group Status", value: report.operation.state.rawValue)
                                 LabeledContent("Verified", value: String(report.verified))
                                 LabeledContent("Pending Verification",
@@ -290,6 +293,7 @@ struct PricingSubmissionView: View {
             LabeledContent("Product", value: batch.plan.product.name)
             LabeledContent("Product ID", value: batch.plan.product.productID ?? batch.plan.product.id)
             LabeledContent("Effective Date", value: batch.plan.effectiveDate)
+            LabeledContent("Price Rounding", value: (batch.plan.roundingPolicy ?? .nearestAvailable).title)
             LabeledContent("US Reference", value: batch.plan.selectedUSPoint.map {
                 PricingDisplay.amount($0.customerPrice, currency: $0.currency)
             } ?? "Not recorded in this older saved submission")
@@ -407,6 +411,7 @@ struct PricingSubmissionView: View {
     @ViewBuilder
     private func subscriptionReportSection(_ summary: SubscriptionSubmissionReport) -> some View {
         Section("Subscription Submission") {
+            LabeledContent("Submitted Rounding", value: (summary.batch.plan.roundingPolicy ?? .nearestAvailable).title)
             LabeledContent("Submitted Increase Policy", value: summary.batch.plan.subscriberPolicy.summary)
             LabeledContent("Verified", value: String(summary.verifiedCount))
             LabeledContent("Accepted, Unverified", value: String(summary.acceptedCount))
@@ -698,5 +703,6 @@ struct PricingSubmissionView: View {
         }
     }
 }
+
 
 

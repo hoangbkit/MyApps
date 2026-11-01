@@ -152,6 +152,25 @@ enum RegionalPricingMode: String, Codable, Sendable {
     case base, automatic, manual, subscription, unknown
 }
 
+enum RegionalPriceRoundingPolicy: String, Codable, CaseIterable, Sendable, Identifiable {
+    case nearestCommon, nearestAvailable
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .nearestCommon: "Nearest Common Price"
+        case .nearestAvailable: "Nearest Available Price"
+        }
+    }
+    var explanation: String {
+        switch self {
+        case .nearestCommon:
+            "Default. After applying the country tier, choose the nearest valid Apple price matching MyApps' currency-specific common-price rules. If no rule or matching point is available, use the nearest available price and show a warning."
+        case .nearestAvailable:
+            "After applying the country tier, choose the nearest price from Apple's full valid list, regardless of its ending."
+        }
+    }
+}
+
 enum RegionalSubscriberPolicy: String, Codable, CaseIterable, Sendable, Identifiable {
     case preserveExistingOnIncrease
     // Keep the original wire value so existing drafts remain readable.
@@ -208,7 +227,13 @@ enum RegionalPricingWarning: String, Codable, Hashable, Sendable {
          clamped, invalidOverride, unknownBaseline, unknownAvailability,
          unsupportedPlan, scheduleConflict, missingBaseTerritory,
          indirectAutomaticChange, manualMaintenance, includedStateChanged,
-         pendingFutureSchedule, incompleteSnapshot
+         pendingFutureSchedule, incompleteSnapshot, commonPriceFallback
+
+    var explanation: String {
+        self == .commonPriceFallback
+            ? "No common-price rule or matching Apple point is available for this currency. Used the nearest available Apple price instead."
+            : rawValue
+    }
 }
 
 struct RegionalPricingOverride: Codable, Sendable {
@@ -278,10 +303,14 @@ struct RegionalPricingProposal: Codable, Sendable, Identifiable {
     var overrides: [RegionalPricingOverride]
     let exclusions: [String]
     let subscriberPolicy: RegionalSubscriberPolicy
+    // Missing in old drafts means their original full-ladder rounding behavior.
+    let roundingPolicy: RegionalPriceRoundingPolicy?
     let acknowledgedWarnings: [String]
     let rows: [RegionalPricingRow]
     let summary: RegionalPricingSummary
     let fingerprint: String
+
+    var effectiveRoundingPolicy: RegionalPriceRoundingPolicy { roundingPolicy ?? .nearestAvailable }
 
     // A draft is always treated as unverified until the current Apple snapshot
     // and the valid Apple point ladders have been loaded again.
@@ -339,5 +368,6 @@ enum RegionalPricingSiblingAdvisory {
         return result.sorted()
     }
 }
+
 
 

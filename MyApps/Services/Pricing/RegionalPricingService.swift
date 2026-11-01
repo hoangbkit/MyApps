@@ -435,6 +435,7 @@ actor RegionalPricingService {
         selectedUSPoint: PricingPoint,
         mapping: RegionalPricingMapping,
         preset: RegionalPricingPreset = .balanced,
+        roundingPolicy: RegionalPriceRoundingPolicy = .nearestCommon,
         overrides: [RegionalPricingOverride] = []
     ) async throws -> RegionalPricingReferenceSet {
         guard selectedUSPoint.productID == snapshot.product.id,
@@ -523,8 +524,9 @@ actor RegionalPricingService {
                 let chosen = saved.flatMap { saved in
                     baseLadder.first { $0.id == saved.point.id &&
                         $0.customerPrice == saved.point.customerPrice }
-                } ?? RegionalPricingEngine.nearest(
-                    to: target, points: baseLadder, referenceID: baseReference.id)
+                } ?? RegionalPricingEngine.roundedPrice(
+                    to: target, points: baseLadder, referenceID: baseReference.id,
+                    policy: roundingPolicy).point
                 if let chosen {
                     do {
                         let result = try await loadEqualizedPoints(
@@ -732,5 +734,6 @@ actor RegionalPricingService {
             .map { String(format: "%02x", $0) }.joined()
     }
 }
+
 
 

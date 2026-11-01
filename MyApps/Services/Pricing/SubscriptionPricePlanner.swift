@@ -76,6 +76,7 @@ struct SubscriptionWritePlan: Codable, Sendable {
     // Optional so journals written before this field remain readable.
     let selectedUSPoint: PricingPoint?
     let subscriberPolicy: RegionalSubscriberPolicy
+    let roundingPolicy: RegionalPriceRoundingPolicy?
     let excluded: [String]
     let changes: [SubscriptionPriceChange]
     let blockers: [String]
@@ -103,6 +104,12 @@ enum SubscriptionPricePlanner {
         var blockers: [String] = []
         var warnings: [String] = []
         var changes: [SubscriptionPriceChange] = []
+        let commonFallbacks = proposal.rows.filter {
+            !$0.excluded && $0.warnings.contains(.commonPriceFallback)
+        }.count
+        if commonFallbacks > 0 {
+            warnings.append("\(commonFallbacks) countries use nearest available prices because common-price rounding has no currency rule or matching Apple point.")
+        }
 
         if proposal.product.kind != .subscription || fresh.product.kind != .subscription {
             blockers.append("Not an auto-renewable subscription.")
@@ -215,7 +222,8 @@ enum SubscriptionPricePlanner {
             accountScope: proposal.accountScope, proposalFingerprint: proposal.fingerprint,
             baselineFingerprint: fresh.semanticFingerprint, effectiveDate: proposal.effectiveDate,
             selectedUSPoint: proposal.selectedUSPoint,
-            subscriberPolicy: proposal.subscriberPolicy, excluded: proposal.exclusions.sorted(),
+            subscriberPolicy: proposal.subscriberPolicy,
+            roundingPolicy: proposal.effectiveRoundingPolicy, excluded: proposal.exclusions.sorted(),
             changes: changes, blockers: Array(Set(blockers)).sorted(),
             warnings: Array(Set(warnings)).sorted(),
             requiresDecreaseAcknowledgment: decreases
@@ -231,5 +239,6 @@ enum SubscriptionPricePlanner {
         return formatter.date(from: date).map { formatter.string(from: $0) == date } ?? false
     }
 }
+
 
 

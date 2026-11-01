@@ -493,7 +493,7 @@ Regional Review now exposes both choices from Apple's **Plan Subscription Price 
 | Remove older subscriber groups' preservation | Separate dashboard action | No MyApps write | The screen explains the distinction and links to App Store Connect with Apple's navigation steps |
 
 - Selection is stored in the proposal and fingerprint, restored from the draft, and displayed in summary, preflight, final confirmation, reports, and Resume. Existing draft/journal enum raw values remain readable; no new mandatory journal fields were added.
-- Changing policy on a current proposal rebuilds it locally using the same validated points, overrides and exclusions. It does not load ladders or send a write. A stale/restored proposal must still be regenerated before submission.
+- Changing a policy stages the selection and requires explicit Generate/Regenerate before submission. It does not load ladders or send a write. A stale/restored proposal must still be regenerated before submission.
 - Applying increases to existing current-price subscribers requires a separate, initially unchecked acknowledgment. Both preflight and the final uncached submission preflight enforce it. The saved immutable plan records the policy and exact per-country preserve flag; Resume retains them.
 - Neither increase choice un-preserves older groups. The UI describes this and Apple's separate dashboard workflow instead of presenting a switch that would falsely promise to migrate all subscribers.
 - Apple decides actual notification/consent requirements. MyApps does not claim to reproduce the dashboard's per-subscriber consent indicators or independently verify subscriber billing after a public price match.
@@ -501,4 +501,32 @@ Regional Review now exposes both choices from Apple's **Plan Subscription Price 
 Primary sources: [Apple's subscription pricing help](https://developer.apple.com/help/app-store-connect/manage-subscriptions/manage-pricing-for-auto-renewable-subscriptions/), [Apple's pricing walkthrough](https://developer.apple.com/videos/play/tech-talks/110350/?time=515), and [Apple's create-price API attributes](https://developer.apple.com/documentation/appstoreconnectapi/subscriptionpricecreaterequest/data-data.dictionary/attributes-data.dictionary).
 
 Validation: source and call-site review plus `git diff --check`. No tests, CI dispatch, compiler/Xcode build, authenticated Apple read or pricing write was run. Pending device checks: both choices before/after generation, draft restoration and policy changes, mixed increase/decrease acknowledgments, exact request booleans, unchanged/excluded countries, and partial-submission Resume retaining its original policy.
+
+## Pricing Policies section and common-price rounding — November 1, 2026
+
+The review screen now separates **Reference** (product, exact US price, effective day) from **Pricing Policies** (Balanced five-tier strategy, rounding, subscription increase treatment, explanations, and Generate/Regenerate at the bottom). Subscription-only controls and expandable decrease/consent/older-group guidance are omitted for lifetime products.
+
+- New proposals default to **Nearest Common Price** and **Keep Current Prices** for subscriber increases. **Nearest Available Price** retains the original full-ladder behavior. Changes to either policy stage settings and invalidate submission until explicit generation; they never fetch or write by themselves. Generation of a remotely stale proposal refreshes the Apple baseline first.
+- The tier calculation still uses Apple's local reference × the existing factor. Common rounding filters the validated local ladder using `common-prices-v1`, then uses the existing nearest-distance matcher and lower-price tie break. US reference and manual overrides remain exact. No arbitrary amount or Apple resource ID is generated.
+- These are explicit **MyApps conventions**, not a reproduction of Apple's curated dashboard list, and they are not a claim about optimal revenue. Only matching points actually present in Apple's product/territory/plan ladder are candidates.
+
+| Currencies | MyApps common convention v1 |
+| --- | --- |
+| USD, EUR, GBP, AUD, CAD, NZD, CHF, SGD, HKD, MYR, BRL, PEN, PLN, RON, TRY, ZAR, ILS | Fractional part .99 |
+| INR, MXN, THB, PHP, NOK, SEK, DKK | Whole amounts ending in 9 |
+| CNY | Whole amounts ending in 0, 8, or 9 |
+| JPY, TWD | Multiples of 10 |
+| KRW | Multiples of 100 |
+| VND, IDR | Multiples of 1,000 |
+| Other currencies, missing currency, or no matching common point | Fall back to nearest available and add a visible warning; existing currency/data blockers still apply |
+
+- Fallback counts appear in Proposal Summary and both submission planners; country details show the convention and a readable fallback explanation. Decimal arithmetic is used throughout, without binary floating-point rounding.
+- Lifetime configured-base selection uses the **same matcher and policy** before requesting that base point's automatic equalizations. Changing rounding invalidates old reference inputs, avoiding incorrect indirect automatic price effects for non-US bases.
+- The selected rounding policy and rule version participate in the proposal fingerprint. Both lifetime and subscription preflight carry the policy through fresh references and regeneration. Country override/exclusion rebuilds retain it.
+- Proposals and both frozen write plans store an optional policy for backward compatibility. Missing policy in an older draft/journal means **Nearest Available Price**, never a silent switch to common rounding. Restored drafts still require regeneration; existing saved submission requests and Resume retain their exact original payloads. Submission review/reports show the stored policy.
+
+Apple's documentation describes multiple local pricing conventions and valid price points, but does not establish this MyApps subset as the exact dashboard shortlist: [Apple pricing conventions](https://developer.apple.com/in-app-purchase/), [Apple pricing upgrades](https://developer.apple.com/news/?id=qzex35ch). The remaining currencies deliberately fall back rather than assuming .99 globally.
+
+Validation: source/call-site/diff review and `git diff --check`; no tests, CI, Xcode/compiler build, authenticated Apple reads, or pricing writes were run. Device/fixture checks remain pending for both products, common/full switching, both subscriber policies, Decimal ties/endpoints, supported/unsupported currencies, an empty common subset, non-US lifetime base effects, exact manual overrides, legacy drafts/journals, and saved-batch recovery.
+
 

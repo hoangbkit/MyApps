@@ -63,6 +63,7 @@ actor PricingSubmissionCoordinator {
         }
         let references = try await service.loadReferenceSet(
             snapshot: fresh, selectedUSPoint: point, mapping: mapping,
+            roundingPolicy: proposal.effectiveRoundingPolicy,
             overrides: proposal.overrides)
         let regenerated = try RegionalPricingEngine.generate(
             snapshot: fresh, selectedUSPoint: point, mapping: mapping,
@@ -70,6 +71,7 @@ actor PricingSubmissionCoordinator {
             existingOverrides: proposal.overrides,
             exclusions: Set(proposal.exclusions),
             subscriberPolicy: proposal.subscriberPolicy,
+            roundingPolicy: proposal.effectiveRoundingPolicy,
             acknowledgedWarnings: Set(proposal.acknowledgedWarnings),
             proposalID: proposal.id)
         guard regenerated.fingerprint == proposal.fingerprint else {
@@ -292,12 +294,14 @@ actor PricingSubmissionCoordinator {
         }
         let references = try await service.loadReferenceSet(
             snapshot: fresh, selectedUSPoint: point, mapping: mapping,
+            roundingPolicy: proposal.effectiveRoundingPolicy,
             overrides: proposal.overrides)
         let regenerated = try RegionalPricingEngine.generate(
             snapshot: fresh, selectedUSPoint: point, mapping: mapping,
             effectiveDate: proposal.effectiveDate, references: references,
             existingOverrides: proposal.overrides, exclusions: Set(proposal.exclusions),
             subscriberPolicy: proposal.subscriberPolicy,
+            roundingPolicy: proposal.effectiveRoundingPolicy,
             acknowledgedWarnings: Set(proposal.acknowledgedWarnings),
             proposalID: proposal.id)
         guard regenerated.fingerprint == proposal.fingerprint else {
@@ -716,5 +720,6 @@ private extension PricingSubmissionOperation {
         plan.product
     }
 }
+
 
 
