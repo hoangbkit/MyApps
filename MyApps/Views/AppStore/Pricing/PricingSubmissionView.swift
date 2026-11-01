@@ -402,9 +402,24 @@ struct PricingSubmissionView: View {
             if proposal.product.kind == .subscription {
                 subscriptionReport = try await PricingSubmissionCoordinator.shared.previousSubscription(
                     accountScope: proposal.accountScope, productID: proposal.product.id)
+                if subscriptionReport?.requiresReconciliation == true,
+                   let client = session.client(),
+                   client.pricingAccountScope == proposal.accountScope {
+                    // Relaunch is GET-only. No pending POST is replayed.
+                    subscriptionReport = try await PricingSubmissionCoordinator.shared.reconcileSubscription(
+                        accountScope: proposal.accountScope, productID: proposal.product.id,
+                        client: client)
+                }
             } else {
                 report = try await PricingSubmissionCoordinator.shared.previous(
                     accountScope: proposal.accountScope, productID: proposal.product.id)
+                if report?.operation.canReconcile == true,
+                   let client = session.client(),
+                   client.pricingAccountScope == proposal.accountScope {
+                    report = try await PricingSubmissionCoordinator.shared.reconcile(
+                        accountScope: proposal.accountScope, productID: proposal.product.id,
+                        client: client)
+                }
             }
         } catch {
             errorMessage = error.localizedDescription
