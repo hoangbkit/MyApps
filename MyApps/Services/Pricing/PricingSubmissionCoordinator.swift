@@ -325,7 +325,7 @@ actor PricingSubmissionCoordinator {
                     change: $0, state: .planned, attempts: 0, remoteID: nil,
                     error: nil, preservationVerified: nil, lastUpdated: now)
             },
-            stoppedReason: nil, createdAt: now, updatedAt: now)
+            stoppedReason: nil, retryNotBefore: nil, createdAt: now, updatedAt: now)
         try await journal.saveSubscription(batch) // No POST before this durable write.
         return try await dispatchSubscription(&batch, client: client)
     }
@@ -362,6 +362,11 @@ actor PricingSubmissionCoordinator {
             accountScope: accountScope, productID: productID) else {
             throw PricingSubmissionFailure.invalidPlan("No saved subscription operation exists.")
         }
+        if let deadline = batch.retryNotBefore, Date() < deadline {
+            throw PricingSubmissionFailure.invalidPlan(
+                "Apple rate limit is active until \(deadline.formatted(date: .abbreviated, time: .standard))."
+            )
+        }
         // Reconcile before any possible retry. No write is allowed when an
         // uncertain operation could already have been accepted by Apple.
         try await reconcileSubscriptionEntries(&batch, client: client)
@@ -377,6 +382,7 @@ actor PricingSubmissionCoordinator {
         let error: String?
         let state: PricingSubmissionState
         let stop: Bool
+        let retryNotBefore: Date?
     }
 
     private func dispatchSubscription(
@@ -392,6 +398,7 @@ actor PricingSubmissionCoordinator {
         let scope = key(account: batch.plan.accountScope, product: batch.plan.product.id)
         paused.remove(scope) // A newly explicit Submit/Resume clears previous pause.
         batch.stoppedReason = nil
+        batch.retryNotBefore = nil
         batch.updatedAt = Date()
         try await journal.saveSubscription(batch)
         for offset in stride(from: 0, to: candidates.count, by: 3) {
@@ -464,21 +471,31 @@ actor PricingSubmissionCoordinator {
                         do {
                             let remoteID = try await client.createSubscriptionPrice(change.request)
                             return SubscriptionAttempt(id: change.id, remoteID: remoteID,
-                                                       error: nil, state: .accepted, stop: false)
+                                                       error: nil, state: .accepted,
+                                                       stop: false, retryNotBefore: nil)
                         } catch {
                             let rejected = Self.definitivelyRejected(error)
                             let stop: Bool
+                            var retryDeadline: Date?
                             if let api = error as? AppStoreConnectAPIError {
                                 switch api {
-                                case .httpStatus(let status): stop = [401, 403, 429].contains(status)
-                                case .appleResponse(let status, _, _, _, _, _):
+                                case .httpStatus(let status):
                                     stop = [401, 403, 429].contains(status)
+                                    if status == 429 { retryDeadline = Date().addingTimeInterval(60) }
+                                case .appleResponse(let status, _, _, _, _, let retryAfter):
+                                    stop = [401, 403, 429].contains(status)
+                                    if status == 429 {
+                                        let seconds = retryAfter.flatMap(Double.init) ?? 60
+                                        retryDeadline = Date().addingTimeInterval(
+                                            min(max(seconds, 1), 3600))
+                                    }
                                 default: stop = false
                                 }
                             } else { stop = false }
                             return SubscriptionAttempt(id: change.id, remoteID: nil,
                                 error: error.localizedDescription,
-                                state: rejected ? .failed : .unknown, stop: stop)
+                                state: rejected ? .failed : .unknown, stop: stop,
+                                retryNotBefore: retryDeadline)
                         }
                     }
                 }
@@ -501,8 +518,9 @@ actor PricingSubmissionCoordinator {
             }
             batch.updatedAt = Date()
             if responses.contains(where: \.stop) {
-                batch.stoppedReason = "Apple returned an authentication/permission/rate-limit error. Remaining requests were not sent. Review the error and Retry-After before resuming."
+                batch.stoppedReason = "Apple returned an authentication/permission/rate-limit error. Remaining requests were not sent. Review the error before resuming."
             }
+            batch.retryNotBefore = responses.compactMap(\.retryNotBefore).max()
             try await journal.saveSubscription(batch)
             try await reconcileSubscriptionEntries(&batch, client: client, attempts: 1)
             if batch.stoppedReason != nil ||
