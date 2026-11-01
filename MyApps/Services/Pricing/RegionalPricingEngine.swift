@@ -13,6 +13,8 @@ enum RegionalPricingEngine {
         references: RegionalPricingReferenceSet,
         existingOverrides: [RegionalPricingOverride] = [],
         exclusions: Set<String> = [],
+        subscriberPolicy: RegionalSubscriberPolicy = .preserveExistingOnIncrease,
+        acknowledgedWarnings: Set<String> = [],
         proposalID: UUID = UUID()
     ) throws -> RegionalPricingProposal {
         guard validDate(effectiveDate) else { throw RegionalPricingError.invalidDate }
@@ -20,11 +22,11 @@ enum RegionalPricingEngine {
               selectedUSPoint.territoryID == "USA",
               selectedUSPoint.productID == snapshot.product.id,
               selectedUSPoint.customerPrice > 0,
-              snapshot.usPoints.contains(where: {
-                  $0.id == selectedUSPoint.id && $0.customerPrice == selectedUSPoint.customerPrice
-              }),
+              snapshot.usPoints.contains(selectedUSPoint),
               references.sourceUSPoint.id == selectedUSPoint.id,
-              references.sourceUSPoint.productID == selectedUSPoint.productID else {
+              references.sourceUSPoint.productID == selectedUSPoint.productID,
+              references.sourceUSPoint.customerPrice == selectedUSPoint.customerPrice,
+              references.sourceUSPoint.currency == selectedUSPoint.currency else {
             throw RegionalPricingError.invalidReference("Select an existing valid Apple US price point for this product.")
         }
         _ = try mapping.validate(knownTerritories: snapshot.territories.map(\.id))
@@ -230,7 +232,9 @@ enum RegionalPricingEngine {
         let selectedExclusions = exclusions.sorted()
         let fingerprint = fingerprint(
             snapshot: snapshot, us: selectedUSPoint, preset: preset,
-            mapping: mapping, date: effectiveDate, rows: rows
+            mapping: mapping, date: effectiveDate, rows: rows,
+            subscriberPolicy: subscriberPolicy,
+            acknowledgedWarnings: acknowledgedWarnings.sorted()
         )
         return RegionalPricingProposal(
             id: proposalID, schemaVersion: 1, accountScope: snapshot.accountScope,
@@ -240,6 +244,8 @@ enum RegionalPricingEngine {
             mappingVersion: mapping.version, effectiveDate: effectiveDate,
             configuredBaseTerritory: snapshot.baseTerritoryID,
             overrides: sortedOverrides, exclusions: selectedExclusions,
+            subscriberPolicy: subscriberPolicy,
+            acknowledgedWarnings: acknowledgedWarnings.sorted(),
             rows: rows, summary: summary, fingerprint: fingerprint
         )
     }
@@ -320,7 +326,9 @@ enum RegionalPricingEngine {
 
     private static func fingerprint(
         snapshot: PricingSnapshot, us: PricingPoint, preset: RegionalPricingPreset,
-        mapping: RegionalPricingMapping, date: String, rows: [RegionalPricingRow]
+        mapping: RegionalPricingMapping, date: String, rows: [RegionalPricingRow],
+        subscriberPolicy: RegionalSubscriberPolicy,
+        acknowledgedWarnings: [String]
     ) -> String {
         func decimal(_ value: Decimal?) -> String {
             value.map { NSDecimalNumber(decimal: $0).stringValue } ?? "?"
@@ -329,7 +337,8 @@ enum RegionalPricingEngine {
             "1", snapshot.accountScope, snapshot.product.id,
             snapshot.semanticFingerprint, mapping.version, mapping.ruleVersion,
             preset.id, String(preset.version), us.id, decimal(us.customerPrice), date,
-            snapshot.baseTerritoryID ?? "-"
+            snapshot.baseTerritoryID ?? "-", subscriberPolicy.rawValue,
+            acknowledgedWarnings.sorted().joined(separator: ",")
         ]
         for row in rows.sorted(by: { $0.id < $1.id }) {
             lines.append([
