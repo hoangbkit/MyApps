@@ -340,7 +340,7 @@ actor RegionalPricingService {
         } catch {
             // Missing/CSV/ambiguous equalization is never replaced by naive FX.
             rawEqualized = []
-            issues.append("Apple US-point equalizations unavailable: \(error.localizedDescription)")
+            issues.append("GLOBAL: Apple US-point equalizations unavailable: \(error.localizedDescription)")
         }
         func typed(_ point: PricingPoint) -> PricingPoint {
             PricingPoint(id: point.id, productID: point.productID,
@@ -412,11 +412,11 @@ actor RegionalPricingService {
                             uniquingKeysWith: { first, _ in first }
                         )
                     } catch {
-                        issues.append("Configured-base equalizations unavailable: \(error.localizedDescription)")
+                        issues.append("GLOBAL: Configured-base equalizations unavailable: \(error.localizedDescription)")
                     }
                 }
             } else {
-                issues.append("Configured base price point missing; automatic consequences unknown.")
+                issues.append("GLOBAL: Configured base price point missing; automatic consequences unknown.")
             }
         }
         return RegionalPricingReferenceSet(
