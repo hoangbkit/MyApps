@@ -2,8 +2,8 @@ import AppFoundation
 import SwiftUI
 
 private enum PricingRowFilter: String, CaseIterable, Identifiable {
-    case all = "All", changes = "Changes", warnings = "Warnings",
-         overrides = "Overrides", blocked = "Blocked"
+    case all = "All", changes = "Changes", unchanged = "Unchanged",
+         warnings = "Warnings", overrides = "Overrides", blocked = "Blocked"
     var id: Self { self }
 }
 
@@ -14,6 +14,7 @@ struct RegionalPricingReviewView: View {
     let product: PricingProduct
     @State private var model: RegionalPricingViewModel?
     @State private var filter: PricingRowFilter = .all
+    @State private var tierFilter: Int = 0
     @State private var countrySearch = ""
     @State private var showingSubmission = false
     @State private var confirmingReset = false
@@ -235,6 +236,13 @@ struct RegionalPricingReviewView: View {
                     Text(option.rawValue).tag(option)
                 }
             }
+            Picker("Tier", selection: $tierFilter) {
+                Text("All tiers").tag(0)
+                ForEach(1...5, id: \.self) { tier in
+                    Text("Tier \(tier)").tag(tier)
+                }
+                Text("Unmapped").tag(6)
+            }
             let rows = displayedRows(proposal)
             if rows.isEmpty {
                 Text("No countries match your filters.")
@@ -334,11 +342,14 @@ struct RegionalPricingReviewView: View {
             case .all: matches = true
             case .changes: matches = row.diff == .increase || row.diff == .decrease ||
                 row.maintenanceChanged || row.indirectChange
+            case .unchanged: matches = row.isNoOp
             case .warnings: matches = !row.warnings.isEmpty
             case .overrides: matches = row.overridePoint != nil
             case .blocked: matches = !row.blockers.isEmpty
             }
-            return matches && (countrySearch.isEmpty ||
+            let matchesTier = tierFilter == 0 || (tierFilter == 6
+                ? row.tier == nil : row.tier == tierFilter)
+            return matches && matchesTier && (countrySearch.isEmpty ||
                 row.territoryID.localizedCaseInsensitiveContains(countrySearch) ||
                 PricingDisplay.country(row.territoryID)
                     .localizedCaseInsensitiveContains(countrySearch))
