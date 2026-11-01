@@ -165,3 +165,56 @@ Preset multipliers: tier 1 **1.00**, tier 2 **0.85**, tier 3 **0.65**, tier 4 **
 - **Not implemented in this pass:** pricing screens, a main-actor review view model, submissions, write journal, resume/reconciliation, subscription cohort writes, analytics or backend.
 
 **Handoff for Pass 3:** use the above pure models/engine and the service's `loadReferenceSet` to implement only the read-only Generate/Review experience, override picker, and stale-review UX in the existing app-detail dropdown. Do not enable Submit before Pass 4/5.
+
+
+---
+
+## Pass 3 — Read-only Pricing UI, generate/review flow
+
+**Status:** Source implementation on existing PR #9. **No Apple writes, tests, CI, build, or device run performed.** Compile/UI verification remains outstanding.
+
+### Screen flow and files
+
+1. **App Store app detail title menu:** `AppStoreAppDetailView` now has **Info / Xcode Cloud / Pricing**, including the accessibility hint. Pricing does not preload when viewing other sections. Existing Info/Xcode Cloud logic remains unchanged.
+2. **`AppStorePricingView`:** Product discovery grouped by lifetime IAP and subscription group. Native form/list patterns, a non-sticky inline filter, product name/ID/duration and current US price where verified, plus an explicit unknown/error value. Lazy US summaries with batches of at most four concurrent reads. Pull to refresh, empty state, error and retry. Unsupported IAP kinds are visible but do not navigate to the pricing engine.
+3. **`RegionalPricingReviewView`:** Native form for Apple US point, configured IAP base territory, Balanced preset, effective date, one Generate/Regenerate action, proposal summary, country filters (all/changes/warnings/overrides/blocked), and list navigation to detailed country pricing. The normal flow needs no per-country editing. The UI is read-only toward Apple.
+4. **`RegionalPriceOverrideView`:** Current/public price, scheduled baseline, reference, suggested and selected price, tier provenance, warnings and blockers, valid Apple price-point choices, single reset and explicit country exclusion. No arbitrary numeric price input. If a refreshed override is invalid, it stays visible but blocks.
+5. **`PricingSubmissionView`:** A separate exact-product/reference/date/scope/safety summary. The final **Submit Prices** action is visibly disabled and cannot send a pricing write. This is only scaffolding for Pass 4/5.
+
+### Main-actor state and refresh rules
+
+`RegionalPricingViewModel` is main-actor isolated with explicitly tracked idle/loading/ready/generating/reviewing phases. All network reads remain in the Pass 1/2 actor service. A request-identity token and cancellation checks prevent superseded responses from replacing newer state.
+
+- Loading a product selects its current Apple US point **only if** its opaque point ID matches a valid US point. Unknown US prices require explicit selection.
+- Generate loads the current selected product's complete reference/ladder data and invokes the deterministic Pass 2 engine. It does **not** mutate Apple.
+- Choosing another US point or effective date marks the existing preview as needing regeneration. A refresh that detects different remote state marks the previous draft stale rather than replacing it. The review remains inspectable until the user explicitly regenerates.
+- Valid overrides/exclusions are preserved across regeneration and local rebuild. A changed non-US base-territory override forces a new full load of dependent automatic equalizations rather than reusing stale references.
+- Draft restore is always **unverified**, requires reloading Apple state, and never submits. Changing/disconnecting accounts invalidates the in-memory pricing view; drafts are account/product scoped.
+- Country rows and warnings remain accessible with VoiceOver labels and Dynamic Type through native SwiftUI forms/lists. Small-iPhone/iPad layout and app themes still require device inspection.
+
+### Review-only scenarios (prepared; not executed)
+
+| Scenario | Expected view behavior |
+| --- | --- |
+| App with no lifetime/subscription products | Empty product list, no misleading price |
+| Product with missing US price | Explicit select-US placeholder; Generate disabled |
+| Product with 403 price read, other data available | Inline failure/unknown state, independent retry, previous proposal retained |
+| Many products | Product list fetches US summaries only; country ladders lazy per chosen product |
+| Generate | Async progress, complete country rows, no Apple write |
+| Country row | Current/target/suggested/selected values with code and currency; warnings and future schedules distinguishable |
+| Valid override/reset | Rebuild summary without new Apple write; persists draft |
+| Changed reference/effective date | Needs regeneration; no silent recalculation |
+| Remote snapshot changed | Previous proposal stays visible with stale-state notice; explicit re-review required |
+| Restored draft/account change | No auto-submit; account scope checked |
+| Blocked/country excluded | Explicit warning; excluded scope and dependent automatic effects visible |
+| Submit review | Can inspect scope; final Submit disabled |
+| Small widths, Dynamic Type, iPad, theme | Native list/form layout; **not visually verified** |
+| Info/Xcode Cloud | Previous functionality unchanged by design; **not regression-tested** |
+
+### Implementation limitations for next passes
+
+- The Apple API's CSV and adjusted subscription equalization forms are still unimplemented. Affected configurations are surfaced as unsupported rather than silently approximated.
+- This is a **read-only proposal UI**, not evidence that Apple price changes are safe to submit. Pass 4 must add preflight, complete schedule write contracts, frozen scope, durable operation journal, and unknown-outcome reconciliation before enabling lifetime submission. Pass 5 adds subscriber/cohort safeguards.
+- Source read and manual static review only. No simulator, Xcode compiler, CI workflow, on-device screenshots, live Apple pricing verification, or automated fixture run in this session.
+
+**Next pass when requested:** Pass 4, lifetime IAP write planning, explicit confirmation, and durable recovery **on the same PR #9**.
