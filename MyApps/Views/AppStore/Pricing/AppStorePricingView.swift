@@ -5,6 +5,7 @@ import SwiftUI
 /// price ladder while the user is browsing products.
 private struct PricingProductGroup: Identifiable {
     let id: String
+    let name: String
     let products: [PricingProduct]
 }
 
@@ -42,10 +43,14 @@ struct AppStorePricingView: View {
     private var subscriptionGroups: [PricingProductGroup] {
         let subscriptions = filtered.filter { $0.kind == .subscription }
         return Dictionary(grouping: subscriptions) {
-            $0.groupName ?? $0.groupID ?? "Subscriptions"
-        }.map { PricingProductGroup(id: $0.key, products:
-            $0.value.sorted { $0.name < $1.name }) }
-         .sorted { $0.id < $1.id }
+            $0.groupID ?? $0.id
+        }.map { key, group in
+            PricingProductGroup(id: key,
+                name: group.first?.groupName ?? "Subscriptions",
+                products: group.sorted { $0.name < $1.name })
+        }.sorted {
+            $0.name == $1.name ? $0.id < $1.id : $0.name < $1.name
+        }
     }
 
     var body: some View {
@@ -92,7 +97,7 @@ struct AppStorePricingView: View {
                     }
                 }
                 ForEach(subscriptionGroups) { group in
-                    Section(group.id) {
+                    Section(group.name) {
                         ForEach(group.products) { product in
                             row(product)
                         }
@@ -260,7 +265,8 @@ enum PricingDisplay {
     static func country(_ id: String) -> String {
         // Ask Foundation to localize Apple's territory code. When no localized
         // display name exists, retain the full code instead of inventing a name.
-        let localized = Locale.current.localizedString(forRegionCode: id)
-        return localized == nil || localized == id ? id : localized!
+        guard let localized = Locale.current.localizedString(forRegionCode: id),
+              localized != id else { return id }
+        return localized
     }
 }
