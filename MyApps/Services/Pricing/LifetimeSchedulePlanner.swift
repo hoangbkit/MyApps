@@ -35,9 +35,20 @@ struct LifetimeScheduleCreateRequest: Codable, Sendable {
         enum CodingKeys: String, CodingKey { case type, id, attributes, relationships }
 
         struct Attributes: Codable, Sendable {
-            // Explicit null is required for an immediate price, not omitted.
             let startDate: String?
             let endDate: String?
+
+            enum CodingKeys: String, CodingKey { case startDate, endDate }
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                if let startDate {
+                    try container.encode(startDate, forKey: .startDate)
+                } else {
+                    try container.encodeNil(forKey: .startDate)
+                }
+                if let endDate { try container.encode(endDate, forKey: .endDate) }
+            }
         }
 
         struct Relationships: Codable, Sendable {
@@ -84,7 +95,8 @@ struct LifetimeSchedulePlan: Codable, Sendable {
 enum LifetimeSchedulePlanner {
     /// Pure planning with a fresh semantic snapshot. No hidden price changes,
     /// no independent per-country requests and no automatic schedule deletion.
-    static func plan(proposal: RegionalPricingProposal, fresh: PricingSnapshot) -> LifetimeSchedulePlan {
+    static func plan(proposal: RegionalPricingProposal, fresh: PricingSnapshot,
+                     today: String) -> LifetimeSchedulePlan {
         var blockers: [String] = []
         var warnings: [String] = []
         let unchanged = proposal.matchingSnapshot(fresh)
@@ -107,14 +119,17 @@ enum LifetimeSchedulePlanner {
             return blocked(proposal, fresh, blockers, warnings)
         }
         let date = proposal.effectiveDate
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withFullDate]
-        let today = iso.string(from: Date())
+        if !Self.isValidDate(today) {
+            blockers.append("Trusted current-day reference is invalid.")
+        }
         if date < today { blockers.append("Effective date is in the past.") }
         if !Self.isValidDate(date) { blockers.append("Effective date is invalid.") }
 
         let selected = proposal.rows.filter { !$0.excluded }
         let excluded = proposal.rows.filter(\.excluded)
+        if Set(proposal.exclusions) != Set(excluded.map(\.territoryID)) {
+            blockers.append("Excluded territories do not match the frozen reviewed country rows.")
+        }
         var indirect: [String] = []
         for row in excluded {
             if row.indirectChange || row.territoryID == base && row.diff != .unchanged {
