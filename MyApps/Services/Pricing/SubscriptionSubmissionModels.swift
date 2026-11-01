@@ -17,6 +17,7 @@ struct SubscriptionSubmissionBatch: Codable, Sendable, Identifiable {
     let plan: SubscriptionWritePlan
     var entries: [SubscriptionSubmissionEntry]
     var stoppedReason: String?
+    var retryNotBefore: Date?
     let createdAt: Date
     var updatedAt: Date
 
