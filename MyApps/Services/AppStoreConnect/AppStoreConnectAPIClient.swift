@@ -626,8 +626,12 @@ struct AppStoreConnectAPIClient: Sendable {
               let first = wire.errors.first else { return .httpStatus(status) }
         func cleaned(_ value: String?) -> String? {
             guard let value else { return nil }
-            return String(value.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }
-                .prefix(300))
+            let filtered = value.filter { character in
+                !character.unicodeScalars.contains {
+                    CharacterSet.controlCharacters.contains($0)
+                }
+            }
+            return String(filtered.prefix(300))
         }
         return .appleResponse(
             status: status,
