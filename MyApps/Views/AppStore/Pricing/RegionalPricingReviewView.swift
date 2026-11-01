@@ -1,4 +1,5 @@
 import AppFoundation
+import Foundation
 import SwiftUI
 
 private enum PricingRowFilter: String, CaseIterable, Identifiable {
@@ -18,6 +19,7 @@ struct RegionalPricingReviewView: View {
     @State private var countrySearch = ""
     @State private var showingSubmission = false
     @State private var confirmingReset = false
+    @State private var showingAllUSPrices = false
 
     init(product: PricingProduct, client: AppStoreConnectAPIClient?) {
         self.product = product
@@ -157,12 +159,24 @@ struct RegionalPricingReviewView: View {
                     set: { model.changeUSPoint($0) }
                 )) {
                     Text("Select a US price").tag("")
-                    ForEach(snapshot.usPoints) { point in
+                    ForEach(usReferencePoints(snapshot, selectedID: model.selectedUSPointID)) { point in
                         Text(PricingDisplay.amount(point.customerPrice, currency: point.currency))
                             .tag(point.id)
                     }
                 }
                 .disabled(model.isWorking)
+                if snapshot.usPoints.contains(where: isCommonUSPrice),
+                   snapshot.usPoints.contains(where: { !isCommonUSPrice($0) }) {
+                    Button(showingAllUSPrices ? "Show Common Prices" : "See Additional Prices") {
+                        showingAllUSPrices.toggle()
+                    }
+                    .disabled(model.isWorking)
+                    Text(showingAllUSPrices
+                        ? "Showing all available Apple US prices."
+                        : "Showing common .99 US prices. Your selected price stays visible even if it has a different ending.")
+                        .font(.footnote)
+                        .foregroundStyle(theme.secondaryForegroundColor)
+                }
             }
             DatePicker("Effective Date", selection: Binding(
                 get: { model.effectiveDate },
@@ -219,6 +233,22 @@ struct RegionalPricingReviewView: View {
                 .disabled(model.isWorking || model.selectedUSPoint == nil)
             }
         }
+    }
+
+    private func usReferencePoints(_ snapshot: PricingSnapshot, selectedID: String) -> [PricingPoint] {
+        guard !showingAllUSPrices else { return snapshot.usPoints }
+        let commonIDs = Set(snapshot.usPoints.filter(isCommonUSPrice).map(\.id))
+        // Keep a usable picker if Apple ever supplies no common US points.
+        guard !commonIDs.isEmpty else { return snapshot.usPoints }
+        return snapshot.usPoints.filter { commonIDs.contains($0.id) || $0.id == selectedID }
+    }
+
+    private func isCommonUSPrice(_ point: PricingPoint) -> Bool {
+        guard point.currency == "USD", point.territoryID == "USA" else { return false }
+        var amount = point.customerPrice
+        var wholeDollars = Decimal()
+        NSDecimalRound(&wholeDollars, &amount, 0, .down)
+        return amount - wholeDollars == Decimal(99) / Decimal(100)
     }
 
     private func subscriberPolicySection(_ model: RegionalPricingViewModel) -> some View {
@@ -442,6 +472,7 @@ struct RegionalPricingReviewView: View {
         return pieces.joined(separator: " · ")
     }
 }
+
 
 
 
