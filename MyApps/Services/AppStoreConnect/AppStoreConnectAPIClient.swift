@@ -757,17 +757,17 @@ enum AppStoreConnectAPIError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .missingWorkflowRepository:
-            "This Xcode Cloud workflow has no connected Git repository."
+            return "This Xcode Cloud workflow has no connected Git repository."
         case .disabledWorkflow:
-            "Choose an enabled Xcode Cloud workflow."
+            return "Choose an enabled Xcode Cloud workflow."
         case .invalidSourceReference:
-            "Choose an existing Git branch or tag from this workflow's repository."
+            return "Choose an existing Git branch or tag from this workflow's repository."
         case .invalidCredentials:
-            "Enter a valid issuer ID and API key ID."
+            return "Enter a valid issuer ID and API key ID."
         case .invalidPrivateKey:
-            "The private key is not a valid App Store Connect .p8 signing key."
+            return "The private key is not a valid App Store Connect .p8 signing key."
         case .invalidResponse:
-            "App Store Connect returned an unexpected response."
+            return "App Store Connect returned an unexpected response."
         case let .appleResponse(status, code, title, detail, pointer, retryAfter):
             let description = [title, detail].compactMap { $0 }.joined(separator: ": ")
             let codeSuffix = code.map { " [\($0)]" } ?? ""
@@ -775,21 +775,21 @@ enum AppStoreConnectAPIError: LocalizedError, Equatable {
             let retrySuffix = retryAfter.map { " Retry after: \($0)." } ?? ""
             return "App Store Connect HTTP \(status)\(codeSuffix). \(description)\(fieldSuffix).\(retrySuffix)"
         case let .unsupportedPricingMediaType(type):
-            "Apple returned \(type) for this pricing resource; this response format is not supported by the read-only client."
+            return "Apple returned \(type) for this pricing resource; this response format is not supported by the read-only client."
         case .httpStatus(401):
-            "App Store Connect rejected the credentials. Check the issuer ID, key ID, and private key."
+            return "App Store Connect rejected the credentials. Check the issuer ID, key ID, and private key."
         case .httpStatus(403):
-            "Access denied. Check the API key role and app/Xcode Cloud permissions in App Store Connect."
+            return "Access denied. Check the API key role and app/Xcode Cloud permissions in App Store Connect."
         case .httpStatus(404):
-            "The requested App Store Connect resource was not found."
+            return "The requested App Store Connect resource was not found."
         case .httpStatus(409):
-            "Xcode Cloud could not start this build because of a conflict. Refresh the workflow and reference."
+            return "Xcode Cloud could not start this build because of a conflict. Refresh the workflow and reference."
         case .httpStatus(422):
-            "Xcode Cloud rejected the workflow or source reference. Refresh and try again."
+            return "Xcode Cloud rejected the workflow or source reference. Refresh and try again."
         case .httpStatus(429):
-            "App Store Connect rate limit reached. Try again later."
+            return "App Store Connect rate limit reached. Try again later."
         case let .httpStatus(status):
-            "App Store Connect returned HTTP \(status)."
+            return "App Store Connect returned HTTP \(status)."
         }
     }
 }
