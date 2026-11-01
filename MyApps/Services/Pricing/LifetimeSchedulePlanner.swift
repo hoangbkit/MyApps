@@ -192,7 +192,7 @@ enum LifetimeSchedulePlanner {
             guard row.proposedMode == .manual || row.proposedMode == .base,
                   let point = row.selectedPoint else { return nil }
             return LifetimeScheduleEntry(
-                id: "price-" + UUID().uuidString.lowercased(),
+                id: "price-" + proposal.id.uuidString.lowercased() + "-" + row.territoryID,
                 territoryID: row.territoryID, pointID: point.id,
                 startDate: date == today ? nil : date, endDate: nil, preserved: false
             )
