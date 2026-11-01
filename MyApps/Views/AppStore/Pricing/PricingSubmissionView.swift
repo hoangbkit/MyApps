@@ -180,7 +180,7 @@ struct PricingSubmissionView: View {
         guard let proposal, let plan else { return false }
         return proposal.product.kind == .lifetime && model.isReviewCurrent &&
             plan.isExecutable && !isPreparing && !isSending &&
-            (report == nil || [.failed, .verifiedLive, .verifiedScheduled].contains(report!.operation.state))
+            (report == nil || [.planned, .failed, .verifiedLive, .verifiedScheduled].contains(report!.operation.state))
     }
 
     @MainActor
