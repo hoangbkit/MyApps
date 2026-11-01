@@ -22,7 +22,7 @@ actor RegionalPricingService {
                 id: iap.id, appID: appID, productID: iap.attributes?.productId,
                 name: iap.attributes?.name ?? iap.attributes?.productId ?? iap.id,
                 kind: isLifetime ? .lifetime : .unsupported, rawType: rawType,
-                groupID: nil, groupName: nil, duration: nil,
+                groupID: nil, groupName: nil, serviceLevel: nil, duration: nil,
                 unsupportedReason: isLifetime ? nil : "Only non-consumable IAP pricing is supported."
             )
         }
@@ -34,6 +34,7 @@ actor RegionalPricingService {
                     name: sub.attributes?.name ?? sub.attributes?.productId ?? sub.id,
                     kind: .subscription, rawType: "AUTO_RENEWABLE_SUBSCRIPTION",
                     groupID: group.id, groupName: group.attributes?.referenceName,
+                    serviceLevel: sub.attributes?.groupLevel.map(String.init),
                     duration: sub.attributes?.subscriptionPeriod, unsupportedReason: nil
                 ))
             }
