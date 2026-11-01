@@ -40,7 +40,7 @@ actor PricingSubmissionCoordinator {
         let service = RegionalPricingService(client: client)
         let fresh = try await service.loadSnapshot(product: proposal.product, refresh: true)
         guard fresh.semanticFingerprint == proposal.snapshotFingerprint else {
-            return LifetimeSchedulePlanner.plan(proposal: proposal, fresh: fresh)
+            return LifetimeSchedulePlanner.plan(proposal: proposal, fresh: fresh, today: Self.today())
         }
         let point = fresh.usPoints.first { $0.id == proposal.selectedUSPoint.id &&
             $0.customerPrice == proposal.selectedUSPoint.customerPrice &&
@@ -67,7 +67,7 @@ actor PricingSubmissionCoordinator {
             throw PricingSubmissionFailure.invalidPlan(
                 "The selected points, maintenance mode or Apple equalizations changed. Review and regenerate.")
         }
-        return LifetimeSchedulePlanner.plan(proposal: regenerated, fresh: fresh)
+        return LifetimeSchedulePlanner.plan(proposal: regenerated, fresh: fresh, today: Self.today())
     }
 
     func previous(accountScope: String, productID: String) async throws -> PricingSubmissionReport? {
@@ -228,6 +228,12 @@ actor PricingSubmissionCoordinator {
         operation.updatedAt = Date()
         try await journal.save(operation)
         return .make(from: operation)
+    }
+
+    private static func today() -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        return formatter.string(from: Date())
     }
 
     private static func definitivelyRejected(_ error: Error) -> Bool {
