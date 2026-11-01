@@ -911,14 +911,14 @@
     },
     {
       "territoryID": "GGY",
-      "tier": 1,
-      "incomeGroup": null,
-      "source": "unclassified-official-crosswalk-pending",
-      "rationale": "Official FY2027 World Bank table has no classification for this ISO3 entry, or entry is non-active/legacy. No regional discount until a documented territory-specific source is available.",
+      "tier": 2,
+      "incomeGroup": "HIC",
+      "source": "world-bank-fy2027-channel-islands-crosswalk",
+      "rationale": "World Bank FY2027 lists Channel Islands as high income; ISO3 Jersey/Guernsey split is explicit. No separately verified common-year PPP for either economy; tier-2 high-income fallback.",
       "pppYear": null,
       "pppValue": null,
       "usPPPValue": null,
-      "needsReview": true
+      "needsReview": false
     },
     {
       "territoryID": "GHA",
@@ -1263,14 +1263,14 @@
     },
     {
       "territoryID": "JEY",
-      "tier": 1,
-      "incomeGroup": null,
-      "source": "unclassified-official-crosswalk-pending",
-      "rationale": "Official FY2027 World Bank table has no classification for this ISO3 entry, or entry is non-active/legacy. No regional discount until a documented territory-specific source is available.",
+      "tier": 2,
+      "incomeGroup": "HIC",
+      "source": "world-bank-fy2027-channel-islands-crosswalk",
+      "rationale": "World Bank FY2027 lists Channel Islands as high income; ISO3 Jersey/Guernsey split is explicit. No separately verified common-year PPP for either economy; tier-2 high-income fallback.",
       "pppYear": null,
       "pppValue": null,
       "usPPPValue": null,
-      "needsReview": true
+      "needsReview": false
     },
     {
       "territoryID": "JOR",
