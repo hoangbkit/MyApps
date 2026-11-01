@@ -550,6 +550,35 @@ struct AppStoreConnectAPIClient: Sendable {
         return buildRun
     }
 
+    /// One complete lifetime IAP schedule per request. A 201 means accepted,
+    /// not verified live; the coordinator must re-fetch before reporting success.
+    /// This is intentionally NOT a generic retrying POST helper.
+    func createLifetimeSchedule(_ payload: LifetimeScheduleCreateRequest) async throws -> String? {
+        let url = try apiURL(path: "/v1/inAppPurchasePriceSchedules", query: [])
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONEncoder().encode(payload)
+        request.setValue("Bearer \(try authorizationToken())", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+
+        let (body, response) = try await networkSession.data(for: request)
+        // Once a POST is dispatched, cancellation must not be interpreted as
+        // an Apple-side failure. The journal records UNKNOWN in that case.
+        guard let http = response as? HTTPURLResponse else {
+            throw AppStoreConnectAPIError.invalidResponse
+        }
+        guard http.statusCode == 201 else {
+            throw Self.apiError(status: http.statusCode, data: body,
+                                retryAfter: http.value(forHTTPHeaderField: "Retry-After"))
+        }
+        // A malformed 201 still means Apple accepted a request. The coordinator
+        // relies on fresh schedule reads to decide if it was actually applied.
+        return try? JSONDecoder().decode(PricingSingle<PricingWireResource<PricingOpaqueAttributes>>.self,
+                                         from: body).data?.id
+    }
+
     private func allPages<Item: Decodable & Sendable>(
         path: String,
         query: [URLQueryItem]
