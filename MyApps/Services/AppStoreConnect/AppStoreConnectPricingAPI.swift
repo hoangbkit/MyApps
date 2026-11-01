@@ -135,7 +135,8 @@ extension AppStoreConnectAPIClient {
         case .subscription: path = "/v1/subscriptionPricePoints/\(id)"
         case .unsupported: throw PricingReadError.unsupportedPlan("unsupported product")
         }
-        let response: PricingSingle<PricePointResource> = try await get(path: path)
+        let response: PricingSingle<PricePointResource> = try await get(
+            path: path, query: [URLQueryItem(name: "include", value: "territory")])
         guard let resource = response.data else { throw PricingReadError.missingResource(path) }
         return resource
     }
@@ -154,6 +155,26 @@ extension AppStoreConnectAPIClient {
             URLQueryItem(name: "include", value: "territory"),
             URLQueryItem(name: "limit", value: "8000")
         ])
+    }
+
+    /// JSON relationship-linkage fallback for equalization endpoints that
+    /// return CSV instead of JSON. IDs are Apple-issued; read each point to
+    /// establish price, currency and territory, never decode the opaque ID.
+    func pricingEqualizationIDs(pointID: String, kind: PricingProductKind) async throws
+        -> [PricingResourceID] {
+        let path: String
+        switch kind {
+        case .lifetime:
+            path = "/v1/inAppPurchasePricePoints/\(pointID)/relationships/equalizations"
+        case .subscription:
+            path = "/v1/subscriptionPricePoints/\(pointID)/relationships/equalizations"
+        case .unsupported:
+            throw PricingReadError.unsupportedPlan("unsupported product")
+        }
+        let page: (items: [PricingResourceID], included: [PricingIncludedResource]) =
+            try await pricingPages(path: path,
+                query: [URLQueryItem(name: "limit", value: "8000")])
+        return page.items
     }
 
     func pricingIAPAvailableTerritories(iapID: String) async throws -> [TerritoryResource] {
