@@ -180,21 +180,26 @@ actor PricingSubmissionCoordinator {
                     operation.error = "Apple's base territory changed after dispatch."
                     break
                 }
-                let intended = operation.plan.affectedTerritories.compactMap { territory in
-                    operation.plan.entries.last(where: { $0.territoryID == territory &&
-                        !$0.preserved })
+                let intended = operation.plan.entries.filter { !$0.preserved }
+                let expectedAutomatic = operation.plan.expectedAutomaticPoints
+                let intendedTerritories = Set(intended.map(\.territoryID))
+                    .union(expectedAutomatic.keys)
+                let manualVerified = intended.allSatisfy { desired in
+                    snapshot.prices.contains(where: {
+                        $0.territoryID == desired.territoryID &&
+                        $0.origin == .manualIAP &&
+                        $0.pricePointID == desired.pointID &&
+                        (($0.startDate ?? "") == (desired.startDate ?? "") ||
+                         (desired.startDate == nil &&
+                          $0.startDate.map { $0 <= operation.effectiveDate } == true))
+                    })
                 }
-                if intended.count == operation.plan.affectedTerritories.count &&
-                   intended.allSatisfy({ desired in
-                       snapshot.prices.contains(where: {
-                           $0.territoryID == desired.territoryID &&
-                           $0.origin == .manualIAP &&
-                           $0.pricePointID == desired.pointID &&
-                           (($0.startDate ?? "") == (desired.startDate ?? "") ||
-                            (desired.startDate == nil &&
-                             $0.startDate.map { $0 <= operation.effectiveDate } == true))
-                       })
-                   }) {
+                let automaticVerified = expectedAutomatic.allSatisfy { territory, pointID in
+                    snapshot.publicPrice(territoryID: territory,
+                        on: operation.effectiveDate)?.pricePointID == pointID
+                }
+                if intendedTerritories == Set(operation.plan.affectedTerritories) &&
+                   manualVerified && automaticVerified {
                     let formatter = ISO8601DateFormatter()
                     formatter.formatOptions = [.withFullDate]
                     operation.state = operation.effectiveDate > formatter.string(from: Date())
