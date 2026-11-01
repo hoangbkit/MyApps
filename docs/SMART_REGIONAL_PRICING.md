@@ -338,7 +338,7 @@ These are deliberate safety restrictions, not a claim that the API fundamentally
 - `attributes.startDate` can be `null` for immediate pricing, or a future ISO date. `attributes.planType` is **`UPFRONT`** for standard upfront-billed weekly/monthly/annual subscriptions. The subscription **period** is not the billing plan type. `MONTHLY` can mean monthly billing with a commitment and requires a different adjusted-point flow.
 - `attributes.preserveCurrentPrice` is `true` by default when increasing the current public price, preserving that price for existing subscribers. The implementation does **not** un-preserve older cohorts.
 - Apple explicitly states **decreases reach existing subscribers at renewal**, with no option to preserve a previously higher price. The UI requires explicit acknowledgment when a submitted group contains decreases. It never describes decreases as “new subscribers only.”
-- Changes to existing subscribers on increases may trigger notices or consent if preservation is not used. This version does **not** support intentionally increasing existing subscribers' current price. Individual subscriber cohort outcomes cannot be proven solely by reading the subscription pricing resource.
+- Both Apple price-increase choices are available: keep the current price (default for new proposals), or apply the increase to subscribers paying the current public price. The latter requires explicit acknowledgment of Apple's notice/consent rules. Neither choice un-preserves older subscriber groups. Individual subscriber outcomes cannot be proven solely by reading the public pricing resource.
 - A future change for the same storefront and billing plan can overwrite an earlier future change. The planner **blocks** such conflicts instead of replacing them.
 
 Source: [Apple API: Managing subscriptions](https://developer.apple.com/documentation/appstoreconnectapi/managing-auto-renewable-subscriptions), [Apple API: price changes across territories](https://developer.apple.com/documentation/appstoreconnectapi/configuring-subscription-prices-across-territories), [Apple: create attributes](https://developer.apple.com/documentation/appstoreconnectapi/subscriptionpricecreaterequest/data-data.dictionary/attributes-data.dictionary), [Apple Help: subscription price changes](https://developer.apple.com/help/app-store-connect/manage-subscriptions/manage-pricing-for-auto-renewable-subscriptions/).
@@ -371,7 +371,7 @@ The same request for an immediate price change uses `startDate: null`; for a dec
 ### Planner and submission implementation
 
 - `SubscriptionPricePlanner` is a **pure**, frozen planner keyed by product, territory and `UPFRONT` plan. It checks product/account/snapshot, actual plan availability, selected Apple point ownership, public (not preserved) price, current price ID/amount, existing scheduled changes, and effective date. Only true amount changes are sent; ambiguous same-amount/different-ID changes block.
-- An increase sets `preserveCurrentPrice=true`. A decrease sets `false`; the UI requires acknowledgment of renewal impact. Existing preserved cohorts are read for context but are **not** used as the public baseline.
+- An increase sets `preserveCurrentPrice=true` for Keep Current Prices, or `false` for Apply Increases to Existing Subscribers. A decrease sets `false` regardless of that selection; the UI requires acknowledgment of renewal impact. Existing preserved groups are read for context but are **not** used as the public baseline.
 - `SubscriptionPriceCreateRequest` and `createSubscriptionPrice` are distinct from lifetime schedule payloads. The API transport does not automatically retry a POST. A valid HTTP 201 is **accepted**, not verified.
 - `SubscriptionSubmissionBatch` stores the exact frozen plan and an operation record **per territory**, with planned/inFlight/accepted/verifiedLive/verifiedScheduled/pendingVerification/failed/unknown statuses, attempt count, remote ID when readable, last error and timestamp.
 - The existing shared `PricingSubmissionJournal` writes the complete subscription batch atomically to a **separate protected account/product-scoped file** (backup excluded) before POST dispatch. It does not persist credentials. `PricingSubmissionCoordinator.shared` serializes product submissions across both lifetime and subscription paths.
@@ -389,7 +389,7 @@ The same request for an immediate price change uses `startDate: null`; for a dec
 | --- | --- |
 | Standard upfront weekly, monthly or annual subscription, sole `UPFRONT` plan | Supported by the source-level submission implementation |
 | Valid Apple local price point, fresh public price and availability, no upcoming conflicts | Planned for one territory POST |
-| Existing subscribers during price increases | Preserve current public price by default; older preserved cohorts not changed |
+| Existing subscribers during price increases | Choose keep current price (default) or apply increases to current-public-price subscribers with acknowledgment; older preserved groups are not un-preserved |
 | Existing subscribers during price decreases | Acknowledgment required; all existing subscriptions can renew at lower price |
 | Subscription with existing future price change in same territory/plan | **Blocked**, never overwrite silently |
 | `MONTHLY` commitment billing plan, mixed `UPFRONT`/`MONTHLY`, or adjusted equalization/CSV-only case | **Blocked** until separate plan-aware support |
@@ -434,7 +434,7 @@ Scope: **PR #9 only**. The changes below correct existing Pass 1–5 pricing cod
 ### Safety restrictions retained
 
 - Lifetime requests remain one complete schedule POST. Existing ambiguous/multi-window schedule edits, uncertain automatic effects and indirect excluded-country changes block.
-- Standard `UPFRONT` subscriptions only; commitment and adjusted-plan variants block. Increasing a subscription preserves existing price by default; decreasing requires renewal-impact acknowledgment.
+- Standard `UPFRONT` subscriptions only; commitment and adjusted-plan variants block. Increasing a subscription defaults to preserving existing prices, with an explicit option to apply increases to current-public-price subscribers. Applying increases to existing subscribers and decreasing prices require their respective impact acknowledgments.
 - HTTP 201 is accepted, not live. In-flight/unknown outcomes require read-only reconciliation; there is no blind POST retry.
 - Account/product-bound protected journal, frozen preflight, explicit final confirmation, pause-before-new-group, and maximum-three subscription group concurrency remain unchanged.
 - Apple is not assumed to provide a cross-request transaction, atomic multi-territory rollback, or a documented idempotency key.
@@ -480,3 +480,25 @@ The product-scoped, territory-filtered point reader explicitly requests customer
 The US reference section shows its read/validation error and a retry action instead of an empty picker. Canceled load/generation tasks leave their busy phase so reopening or retrying does not remain disabled. Repeated record-resolution failures are summarized by issue type; unresolved baseline prices remain unknown and block their submission.
 
 Validation: source/diff review and `git diff --check`. No compiler/Xcode, fixture execution, tests, CI dispatch, authenticated Apple reads, or pricing writes were available/performed during this correction. Device verification should cover an automatically equalized lifetime schedule, US picker population, explicit zero-point filtering alongside paid points, malformed/mismatched point rejection, retry/cancellation, and preservation of the working subscription flow.
+
+## Subscription subscriber-policy choices — November 1, 2026
+
+Regional Review now exposes both choices from Apple's **Plan Subscription Price Change** flow. The increase selection applies to all included countries with increases; decreases follow Apple's mandatory renewal behavior, independently of the selection.
+
+| Choice | Default | Apple request | Effect |
+| --- | --- | --- | --- |
+| Keep Current Prices | Yes, for a new proposal | `preserveCurrentPrice: true` on increases | Current-public-price subscribers keep their price; new subscribers pay the new price |
+| Apply Increases to Existing Subscribers | No | `preserveCurrentPrice: false` on increases | Current-public-price subscribers receive the increase under Apple's notice/consent rules; public and renewal effective timing can differ |
+| Decrease | Automatic; no preservation choice | `preserveCurrentPrice: false` | Acknowledgment required for renewal impact; subscribers already paying less are not raised |
+| Remove older subscriber groups' preservation | Separate dashboard action | No MyApps write | The screen explains the distinction and links to App Store Connect with Apple's navigation steps |
+
+- Selection is stored in the proposal and fingerprint, restored from the draft, and displayed in summary, preflight, final confirmation, reports, and Resume. Existing draft/journal enum raw values remain readable; no new mandatory journal fields were added.
+- Changing policy on a current proposal rebuilds it locally using the same validated points, overrides and exclusions. It does not load ladders or send a write. A stale/restored proposal must still be regenerated before submission.
+- Applying increases to existing current-price subscribers requires a separate, initially unchecked acknowledgment. Both preflight and the final uncached submission preflight enforce it. The saved immutable plan records the policy and exact per-country preserve flag; Resume retains them.
+- Neither increase choice un-preserves older groups. The UI describes this and Apple's separate dashboard workflow instead of presenting a switch that would falsely promise to migrate all subscribers.
+- Apple decides actual notification/consent requirements. MyApps does not claim to reproduce the dashboard's per-subscriber consent indicators or independently verify subscriber billing after a public price match.
+
+Primary sources: [Apple's subscription pricing help](https://developer.apple.com/help/app-store-connect/manage-subscriptions/manage-pricing-for-auto-renewable-subscriptions/), [Apple's pricing walkthrough](https://developer.apple.com/videos/play/tech-talks/110350/?time=515), and [Apple's create-price API attributes](https://developer.apple.com/documentation/appstoreconnectapi/subscriptionpricecreaterequest/data-data.dictionary/attributes-data.dictionary).
+
+Validation: source and call-site review plus `git diff --check`. No tests, CI dispatch, compiler/Xcode build, authenticated Apple read or pricing write was run. Pending device checks: both choices before/after generation, draft restoration and policy changes, mixed increase/decrease acknowledgments, exact request booleans, unchanged/excluded countries, and partial-submission Resume retaining its original policy.
+

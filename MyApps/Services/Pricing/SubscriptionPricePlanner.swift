@@ -57,6 +57,13 @@ struct SubscriptionPriceChange: Codable, Sendable, Identifiable {
     let preserveExistingPrice: Bool
     let preservedCohortCount: Int
     let request: SubscriptionPriceCreateRequest
+
+    var subscriberImpact: String {
+        if !increase { return "Decrease applies at renewal; lower preserved prices are not raised" }
+        return preserveExistingPrice
+            ? "Current-price subscribers keep their price"
+            : "Current-price subscribers receive the increase under Apple's notice/consent rules"
+    }
 }
 
 struct SubscriptionWritePlan: Codable, Sendable {
@@ -77,6 +84,10 @@ struct SubscriptionWritePlan: Codable, Sendable {
 
     var isExecutable: Bool { !changes.isEmpty && blockers.isEmpty }
     var isNoOp: Bool { changes.isEmpty && blockers.isEmpty }
+    // Computed rather than stored so older journals remain compatible.
+    var requiresIncreaseAcknowledgment: Bool {
+        changes.contains { $0.increase && !$0.preserveExistingPrice }
+    }
 }
 
 /// Pure and deterministic with an injected current day and explicit acknowledgement.
@@ -86,7 +97,8 @@ enum SubscriptionPricePlanner {
         proposal: RegionalPricingProposal,
         fresh: PricingSnapshot,
         today: String,
-        acknowledgesRenewalDecrease: Bool
+        acknowledgesRenewalDecrease: Bool,
+        acknowledgesExistingSubscriberIncrease: Bool = false
     ) -> SubscriptionWritePlan {
         var blockers: [String] = []
         var warnings: [String] = []
@@ -109,9 +121,6 @@ enum SubscriptionPricePlanner {
         let plans = Set(fresh.planTerritories.map(\.planType))
         if plans != ["UPFRONT"] {
             blockers.append("Only standard UPFRONT billing plans are supported; commitment plans require adjusted pricing.")
-        }
-        if proposal.subscriberPolicy != .preserveExistingOnIncrease {
-            blockers.append("Increasing prices without preserving existing subscribers is not supported.")
         }
         if !validDay(today) || !validDay(proposal.effectiveDate) || proposal.effectiveDate < today {
             blockers.append("Choose a valid current or future effective date.")
@@ -165,6 +174,7 @@ enum SubscriptionPricePlanner {
                 continue
             }
             let increase = newAmount > oldAmount
+            let preserve = increase && proposal.subscriberPolicy == .preserveExistingOnIncrease
             if !increase { decreases = true }
             let cohorts = fresh.prices.filter {
                 $0.territoryID == row.territoryID && $0.planType == "UPFRONT" &&
@@ -173,22 +183,29 @@ enum SubscriptionPricePlanner {
             let request = SubscriptionPriceCreateRequest(data: .init(
                 subscriptionID: fresh.product.id, pointID: selected.id,
                 date: proposal.effectiveDate == today ? nil : proposal.effectiveDate,
-                preserve: increase
+                preserve: preserve
             ))
             changes.append(.init(territoryID: row.territoryID, planType: "UPFRONT",
                                  point: selected, previous: current,
                                  effectiveDate: proposal.effectiveDate,
-                                 increase: increase, preserveExistingPrice: increase,
+                                 increase: increase, preserveExistingPrice: preserve,
                                  preservedCohortCount: cohorts, request: request))
         }
         if decreases {
-            warnings.append("Existing subscriptions renew at the lower price; prior higher prices cannot be preserved.")
+            warnings.append(SubscriptionPricingGuidance.decreases)
             if !acknowledgesRenewalDecrease {
                 blockers.append("Acknowledge the effect of decreases on existing subscribers.")
             }
         }
         if changes.contains(where: { $0.increase }) {
-            warnings.append("Increases preserve the currently displayed price for existing subscribers. Older preserved cohorts are not un-preserved; Apple controls any required notification/consent if preservation is changed later.")
+            warnings.append(proposal.subscriberPolicy.confirmation)
+            warnings.append(SubscriptionPricingGuidance.olderGroups)
+        }
+        if changes.contains(where: { $0.increase && !$0.preserveExistingPrice }) {
+            warnings.append(SubscriptionPricingGuidance.consent)
+            if !acknowledgesExistingSubscriberIncrease {
+                blockers.append("Acknowledge that increases apply to existing current-price subscribers under Apple's notice and consent rules.")
+            }
         }
         if !changes.isEmpty {
             warnings.append("One independent subscription price request is required per changed storefront; successful changes cannot be rolled back as one transaction.")
@@ -214,4 +231,5 @@ enum SubscriptionPricePlanner {
         return formatter.date(from: date).map { formatter.string(from: $0) == date } ?? false
     }
 }
+
 

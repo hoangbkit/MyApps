@@ -266,6 +266,7 @@ actor PricingSubmissionCoordinator {
 
     func prepareSubscription(proposal: RegionalPricingProposal,
                              acknowledgesDecrease: Bool,
+                             acknowledgesIncrease: Bool = false,
                              client: AppStoreConnectAPIClient) async throws -> SubscriptionWritePlan {
         guard client.pricingAccountScope == proposal.accountScope,
               proposal.product.kind == .subscription else {
@@ -276,7 +277,8 @@ actor PricingSubmissionCoordinator {
         if fresh.semanticFingerprint != proposal.snapshotFingerprint {
             return SubscriptionPricePlanner.plan(
                 proposal: proposal, fresh: fresh, today: Self.today(),
-                acknowledgesRenewalDecrease: acknowledgesDecrease)
+                acknowledgesRenewalDecrease: acknowledgesDecrease,
+                acknowledgesExistingSubscriberIncrease: acknowledgesIncrease)
         }
         let validUS = fresh.usPoints.first {
             $0 == proposal.selectedUSPoint
@@ -304,7 +306,8 @@ actor PricingSubmissionCoordinator {
         }
         return SubscriptionPricePlanner.plan(
             proposal: regenerated, fresh: fresh, today: Self.today(),
-            acknowledgesRenewalDecrease: acknowledgesDecrease)
+            acknowledgesRenewalDecrease: acknowledgesDecrease,
+            acknowledgesExistingSubscriberIncrease: acknowledgesIncrease)
     }
 
     func previousSubscription(accountScope: String, productID: String)
@@ -318,6 +321,7 @@ actor PricingSubmissionCoordinator {
         proposal: RegionalPricingProposal,
         reviewed: SubscriptionWritePlan,
         acknowledgesDecrease: Bool,
+        acknowledgesIncrease: Bool = false,
         client: AppStoreConnectAPIClient
     ) async throws -> SubscriptionSubmissionReport {
         let scope = key(account: proposal.accountScope, product: proposal.product.id)
@@ -330,7 +334,8 @@ actor PricingSubmissionCoordinator {
             throw PricingSubmissionFailure.unresolvedPreviousOperation
         }
         let fresh = try await prepareSubscription(
-            proposal: proposal, acknowledgesDecrease: acknowledgesDecrease, client: client)
+            proposal: proposal, acknowledgesDecrease: acknowledgesDecrease,
+            acknowledgesIncrease: acknowledgesIncrease, client: client)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         guard fresh.isExecutable,
@@ -667,7 +672,7 @@ actor PricingSubmissionCoordinator {
                         entry.change.effectiveDate > Self.today() ? .verifiedScheduled : .verifiedLive
                     batch.entries[index].preservationVerified = nil
                     batch.entries[index].error = entry.change.increase
-                        ? "Public price verified. Existing-subscriber preservation cannot be independently confirmed from this API."
+                        ? "Public price verified. Individual subscriber treatment cannot be independently confirmed from this API. Requested policy: \(entry.change.subscriberImpact)."
                         : nil
                 } else if entry.state == .accepted || entry.state == .pendingVerification {
                     batch.entries[index].state = .pendingVerification
@@ -711,4 +716,5 @@ private extension PricingSubmissionOperation {
         plan.product
     }
 }
+
 

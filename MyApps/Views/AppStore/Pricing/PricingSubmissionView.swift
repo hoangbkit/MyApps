@@ -15,6 +15,7 @@ struct PricingSubmissionView: View {
     @State private var subscriptionPlan: SubscriptionWritePlan?
     @State private var subscriptionReport: SubscriptionSubmissionReport?
     @State private var acknowledgesDecrease = false
+    @State private var acknowledgesIncrease = false
     @State private var confirmingResume = false
     @State private var resumeReview: SubscriptionSubmissionBatch?
     @State private var confirmingClose = false
@@ -121,9 +122,11 @@ struct PricingSubmissionView: View {
                                         .foregroundStyle(.orange)
                                 }
                                 if proposal.product.kind == .subscription {
-                                    Text("Price increases preserve the current public price for existing subscribers. Previously preserved cohorts are not un-preserved.")
-                                    Text("Price decreases affect existing subscribers at renewal. You cannot preserve a higher price through a decrease.")
-                                    Text("Apple controls any required notifications or consent. The API cannot prove individual subscriber treatment, even when new public prices are verified.")
+                                    Text(proposal.subscriberPolicy.explanation)
+                                    Text(SubscriptionPricingGuidance.olderGroups)
+                                    Text(SubscriptionPricingGuidance.decreases)
+                                    Text(SubscriptionPricingGuidance.consent)
+                                    Text("Public price verification cannot prove individual subscriber treatment.")
                                 } else {
                                     Text("One complete lifetime price schedule will be sent only after final confirmation. Apple may adjust other automatic storefront prices; any unresolved effects block submission.")
                                     Text("Apple acceptance does not mean prices are live. Verification or read-only reconciliation may still be needed.")
@@ -218,6 +221,11 @@ struct PricingSubmissionView: View {
                     Task { await prepare() }
                 }
             }
+            .onChange(of: acknowledgesIncrease) { _, _ in
+                if proposal?.product.kind == .subscription {
+                    Task { await prepare() }
+                }
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active { pauseDispatch() }
             }
@@ -241,7 +249,7 @@ struct PricingSubmissionView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 if let subscriptionPlan, proposal?.product.kind == .subscription {
-                    Text("Send \(subscriptionPlan.changes.count) separate territory price requests. \(subscriptionPlan.excluded.count) countries are excluded. Existing subscriber prices are preserved on increases; decreases affect renewals. A partial submission cannot be rolled back together.")
+                    Text("Send \(subscriptionPlan.changes.count) separate territory price requests. \(subscriptionPlan.excluded.count) countries are excluded. \(subscriptionPlan.subscriberPolicy.confirmation) Older preserved groups are not un-preserved. Decreases affect renewals. A partial submission cannot be rolled back together.")
                 } else if let plan {
                     Text("Send 1 schedule for \(plan.affectedTerritories.count) changed storefronts, preserve \(plan.preservedEntries.count) manual entries, and keep base territory \(plan.baseTerritoryID). \(plan.excludedTerritories.count) countries are excluded. This request cannot be automatically undone.")
                 }
@@ -258,7 +266,7 @@ struct PricingSubmissionView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 if let reviewed = resumeReview {
-                    Text("Resume the saved prices for \(reviewed.plan.product.name), effective \(reviewed.plan.effectiveDate). \(reviewed.plan.excluded.count) countries remain excluded. These are the saved submission's prices shown above, not a newer proposal. Accepted or unknown requests will not be replayed.")
+                    Text("Resume the saved prices for \(reviewed.plan.product.name), effective \(reviewed.plan.effectiveDate). \(reviewed.plan.excluded.count) countries remain excluded. \(reviewed.plan.subscriberPolicy.confirmation) These are the saved submission's prices shown above, not a newer proposal. Accepted or unknown requests will not be replayed.")
                 }
             }
             .confirmationDialog("Close Saved Submission?", isPresented: $confirmingClose,
@@ -286,11 +294,21 @@ struct PricingSubmissionView: View {
                 PricingDisplay.amount($0.customerPrice, currency: $0.currency)
             } ?? "Not recorded in this older saved submission")
             LabeledContent("Billing Plan", value: "UPFRONT")
-            LabeledContent("Existing Subscribers on Increases", value: "Preserve current price")
+            LabeledContent("Existing Subscribers on Increases", value: batch.plan.subscriberPolicy.summary)
+            Text(batch.plan.subscriberPolicy.explanation)
+                .font(.footnote)
+            Text(SubscriptionPricingGuidance.olderGroups)
+                .font(.footnote)
+                .foregroundStyle(theme.secondaryForegroundColor)
             Text("Resume uses only the saved prices listed here. A newer proposal is separate and will not replace these requests.")
                 .font(.footnote)
             if batch.plan.requiresDecreaseAcknowledgment {
                 Text("The original confirmation acknowledged that decreases affect existing subscribers at renewal.")
+                    .font(.footnote)
+                    .foregroundStyle(theme.secondaryForegroundColor)
+            }
+            if batch.plan.requiresIncreaseAcknowledgment {
+                Text("The original confirmation acknowledged increases to existing current-price subscribers under Apple's notice and consent rules.")
                     .font(.footnote)
                     .foregroundStyle(theme.secondaryForegroundColor)
             }
@@ -305,6 +323,9 @@ struct PricingSubmissionView: View {
                                 currency: entry.change.point.currency))
                             .font(.caption)
                         Text(entry.state.rawValue)
+                            .font(.caption2)
+                            .foregroundStyle(theme.secondaryForegroundColor)
+                        Text(entry.change.subscriberImpact)
                             .font(.caption2)
                             .foregroundStyle(theme.secondaryForegroundColor)
                     }
@@ -326,11 +347,19 @@ struct PricingSubmissionView: View {
             LabeledContent("Price Decreases", value: String(details.changes.filter { !$0.increase }.count))
             LabeledContent("Excluded Countries", value: String(details.excluded.count))
             LabeledContent("Independent Requests", value: String(details.changes.count))
-            LabeledContent("Existing Subscribers on Increases", value: "Preserve current price")
+            LabeledContent("Existing Subscribers on Increases", value: details.subscriberPolicy.summary)
+            Text(details.subscriberPolicy.explanation)
+                .font(.footnote)
+                .foregroundStyle(theme.secondaryForegroundColor)
+            if details.requiresIncreaseAcknowledgment {
+                Toggle("I understand increases apply to existing current-price subscribers under Apple's notice and consent rules",
+                       isOn: $acknowledgesIncrease)
+                    .disabled(isSending || isPreparing)
+            }
             if details.requiresDecreaseAcknowledgment {
                 Toggle("I understand decreases affect existing subscribers at renewal",
                        isOn: $acknowledgesDecrease)
-                    .disabled(isSending)
+                    .disabled(isSending || isPreparing)
             }
             if !details.changes.isEmpty {
                 DisclosureGroup("Exact New Prices") {
@@ -346,8 +375,7 @@ struct PricingSubmissionView: View {
                                     currency: change.point.currency))
                             }
                             .font(.caption)
-                            Text(change.increase ? "Existing price preserved on increase" :
-                                "Decrease affects existing subscriptions at renewal")
+                            Text(change.subscriberImpact)
                                 .font(.caption2)
                                 .foregroundStyle(theme.secondaryForegroundColor)
                         }
@@ -379,6 +407,7 @@ struct PricingSubmissionView: View {
     @ViewBuilder
     private func subscriptionReportSection(_ summary: SubscriptionSubmissionReport) -> some View {
         Section("Subscription Submission") {
+            LabeledContent("Submitted Increase Policy", value: summary.batch.plan.subscriberPolicy.summary)
             LabeledContent("Verified", value: String(summary.verifiedCount))
             LabeledContent("Accepted, Unverified", value: String(summary.acceptedCount))
             LabeledContent("Pending Verification / Unsent", value: String(summary.pendingCount))
@@ -437,7 +466,7 @@ struct PricingSubmissionView: View {
             if summary.batch.entries.contains(where: { $0.change.increase &&
                 $0.preservationVerified != true &&
                 ($0.state == .verifiedLive || $0.state == .verifiedScheduled) }) {
-                Text("Public subscription prices were verified, but individual subscriber preservation could not be independently verified.")
+                Text("Public subscription prices were verified, but individual subscriber treatment could not be independently verified.")
                     .font(.footnote).foregroundStyle(.orange)
             }
         }
@@ -448,6 +477,7 @@ struct PricingSubmissionView: View {
               proposal.product.kind == .subscription else { return false }
         return model.isReviewCurrent && details.isExecutable &&
             (!details.requiresDecreaseAcknowledgment || acknowledgesDecrease) &&
+            (!details.requiresIncreaseAcknowledgment || acknowledgesIncrease) &&
             !isPreparing && !isSending &&
             isVisible && scenePhase == .active &&
             (subscriptionReport == nil || subscriptionReport?.batch.isClosed == true)
@@ -481,7 +511,8 @@ struct PricingSubmissionView: View {
         do {
             if proposal.product.kind == .subscription {
                 let fresh = try await PricingSubmissionCoordinator.shared.prepareSubscription(
-                    proposal: proposal, acknowledgesDecrease: acknowledgesDecrease, client: client)
+                    proposal: proposal, acknowledgesDecrease: acknowledgesDecrease,
+                    acknowledgesIncrease: acknowledgesIncrease, client: client)
                 guard !Task.isCancelled else { return }
                 subscriptionPlan = fresh
                 if fresh.blockers.contains(where: { $0.contains("changed since the review") }) {
@@ -576,7 +607,8 @@ struct PricingSubmissionView: View {
         do {
             subscriptionReport = try await PricingSubmissionCoordinator.shared.submitSubscriptionConfirmed(
                 proposal: proposal, reviewed: details,
-                acknowledgesDecrease: acknowledgesDecrease, client: client)
+                acknowledgesDecrease: acknowledgesDecrease,
+                acknowledgesIncrease: acknowledgesIncrease, client: client)
             model.markRemoteStale() // Apple state may have partially changed.
         } catch {
             errorMessage = error.localizedDescription
@@ -666,4 +698,5 @@ struct PricingSubmissionView: View {
         }
     }
 }
+
 

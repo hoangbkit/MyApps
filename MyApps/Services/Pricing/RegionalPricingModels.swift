@@ -152,10 +152,51 @@ enum RegionalPricingMode: String, Codable, Sendable {
     case base, automatic, manual, subscription, unknown
 }
 
-enum RegionalSubscriberPolicy: String, Codable, Sendable {
-    // Explicitly preserved in the draft; Pass 5 will enforce server semantics.
+enum RegionalSubscriberPolicy: String, Codable, CaseIterable, Sendable, Identifiable {
     case preserveExistingOnIncrease
-    case requireAcknowledgmentOnIncrease
+    // Keep the original wire value so existing drafts remain readable.
+    case applyToExistingOnIncrease = "requireAcknowledgmentOnIncrease"
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .preserveExistingOnIncrease: "Keep Current Prices (Default)"
+        case .applyToExistingOnIncrease: "Apply Increases to Existing Subscribers"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .preserveExistingOnIncrease: "Keep current prices"
+        case .applyToExistingOnIncrease: "Apply increases to current-price subscribers"
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .preserveExistingOnIncrease:
+            "When a country's price increases, subscribers paying its current public price keep that price. New subscribers pay the new price. This is the default."
+        case .applyToExistingOnIncrease:
+            "When a country's price increases, apply it to existing subscribers paying its current public price. Apple handles notice and any required consent; renewal timing can differ from the public price's start date."
+        }
+    }
+
+    var confirmation: String {
+        switch self {
+        case .preserveExistingOnIncrease:
+            "Existing subscribers keep their current price on increases."
+        case .applyToExistingOnIncrease:
+            "Increases also apply to subscribers paying the current public price, subject to Apple's notice and consent rules."
+        }
+    }
+}
+
+enum SubscriptionPricingGuidance {
+    static let decreases = "Price decreases apply to existing subscribers at renewal. Apple does not offer a choice to keep a higher price. Subscribers already paying a lower preserved price are not raised by this setting."
+    static let olderGroups = "Neither increase option changes older subscriber groups whose prices were already preserved. Removing their price preservation is a separate action in App Store Connect."
+    static let consent = "Apple determines whether subscribers receive a notice or must consent. If required consent is not given, the subscription expires at the end of the current billing period. MyApps cannot preview Apple's final consent decision for every subscriber."
+    static let helpURL = URL(string: "https://developer.apple.com/help/app-store-connect/manage-subscriptions/manage-pricing-for-auto-renewable-subscriptions/")!
 }
 
 enum RegionalPricingDiff: String, Codable, Sendable {
@@ -298,4 +339,5 @@ enum RegionalPricingSiblingAdvisory {
         return result.sorted()
     }
 }
+
 

@@ -23,6 +23,7 @@ final class RegionalPricingViewModel {
 
     var selectedUSPointID: String = ""
     var effectiveDate: Date = PricingDay.initialSelection()
+    private(set) var subscriberPolicy: RegionalSubscriberPolicy = .preserveExistingOnIncrease
 
     private var draftRevision: UInt64 = 0
     private var requestID = UUID()
@@ -52,7 +53,8 @@ final class RegionalPricingViewModel {
     }
 
     var isReviewCurrent: Bool {
-        proposal != nil && !isStale && !needsRegeneration && !restoredDraft
+        proposal != nil && !isStale && !needsRegeneration && !restoredDraft &&
+            (product.kind != .subscription || proposal?.subscriberPolicy == subscriberPolicy)
     }
 
     func begin(connectionRevision: Int, currentClient: AppStoreConnectAPIClient?) async {
@@ -76,6 +78,7 @@ final class RegionalPricingViewModel {
         referenceSet = nil
         proposal = nil
         selectedUSPointID = ""
+        subscriberPolicy = .preserveExistingOnIncrease
         isStale = true
         needsRegeneration = true
         restoredDraft = false
@@ -109,6 +112,7 @@ final class RegionalPricingViewModel {
             ) {
                 guard requestID == token else { return }
                 proposal = draft.proposal
+                subscriberPolicy = draft.proposal.subscriberPolicy
                 selectedUSPointID = draft.proposal.selectedUSPoint.id
                 if let date = Self.parseDay(draft.proposal.effectiveDate) {
                     effectiveDate = date
@@ -145,6 +149,27 @@ final class RegionalPricingViewModel {
         needsRegeneration = proposal != nil
     }
 
+    func changeSubscriberPolicy(_ policy: RegionalSubscriberPolicy) {
+        guard product.kind == .subscription, !isWorking, subscriberPolicy != policy else { return }
+        let wasCurrent = isReviewCurrent
+        let previousPolicy = subscriberPolicy
+        subscriberPolicy = policy
+        guard let current = proposal else { return }
+        guard wasCurrent, let snapshot, let mapping, let references = referenceSet else {
+            needsRegeneration = true
+            return
+        }
+        do {
+            // A policy change does not alter price ladders or require an Apple read.
+            // Rebuild to bind the selection into the proposal fingerprint and draft.
+            try rebuild(snapshot: snapshot, mapping: mapping, references: references,
+                prior: current, overrides: current.overrides, subscriberPolicy: policy)
+        } catch {
+            subscriberPolicy = previousPolicy
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func reviewUpdatedBaseline() async {
         // A full regeneration uses the last freshly loaded snapshot. If it
         // fails, the previous proposal and stale flags remain visible.
@@ -178,7 +203,7 @@ final class RegionalPricingViewModel {
                 mapping: mapping, effectiveDate: effectiveDateString,
                 references: references, existingOverrides: previous?.overrides ?? [],
                 exclusions: Set(previous?.exclusions ?? []),
-                subscriberPolicy: previous?.subscriberPolicy ?? .preserveExistingOnIncrease,
+                subscriberPolicy: subscriberPolicy,
                 acknowledgedWarnings: Set(previous?.acknowledgedWarnings ?? []),
                 proposalID: previous?.id ?? UUID()
             )
@@ -251,7 +276,8 @@ final class RegionalPricingViewModel {
                          references: RegionalPricingReferenceSet,
                          prior: RegionalPricingProposal,
                          overrides: [RegionalPricingOverride],
-                         exclusions: Set<String>? = nil) throws {
+                         exclusions: Set<String>? = nil,
+                         subscriberPolicy: RegionalSubscriberPolicy? = nil) throws {
         // A base-territory override can affect all automatic IAP equalizations.
         // Do not reuse the old reference snapshot in this case.
         if product.kind == .lifetime,
@@ -271,7 +297,7 @@ final class RegionalPricingViewModel {
             mapping: mapping, effectiveDate: prior.effectiveDate,
             references: references, existingOverrides: overrides,
             exclusions: exclusions ?? Set(prior.exclusions),
-            subscriberPolicy: prior.subscriberPolicy,
+            subscriberPolicy: subscriberPolicy ?? prior.subscriberPolicy,
             acknowledgedWarnings: Set(prior.acknowledgedWarnings),
             proposalID: prior.id
         )
@@ -305,5 +331,6 @@ final class RegionalPricingViewModel {
         PricingDay.parse(value)
     }
 }
+
 
 

@@ -190,6 +190,10 @@ struct RegionalPricingReviewView: View {
             Text("Uses Apple's actual US price point and equalized local references. No pricing is changed in App Store Connect.")
         }
 
+        if product.kind == .subscription {
+            subscriberPolicySection(model)
+        }
+
         if model.isStale || model.restoredDraft || model.needsRegeneration {
             Section {
                 Label {
@@ -217,6 +221,52 @@ struct RegionalPricingReviewView: View {
         }
     }
 
+    private func subscriberPolicySection(_ model: RegionalPricingViewModel) -> some View {
+        Section {
+            ForEach(RegionalSubscriberPolicy.allCases) { option in
+                Button {
+                    model.changeSubscriberPolicy(option)
+                } label: {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(option.title)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(theme.primaryForegroundColor)
+                            Text(option.explanation)
+                                .font(.footnote)
+                                .foregroundStyle(theme.secondaryForegroundColor)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: model.subscriberPolicy == option
+                            ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(model.subscriberPolicy == option
+                                ? theme.primaryForegroundColor : theme.secondaryForegroundColor)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(model.isWorking)
+                .accessibilityAddTraits(model.subscriberPolicy == option ? .isSelected : [])
+            }
+            DisclosureGroup("Decreases, Consent, and Older Preserved Prices") {
+                Text(SubscriptionPricingGuidance.decreases)
+                Text(SubscriptionPricingGuidance.consent)
+                Text(SubscriptionPricingGuidance.olderGroups)
+                Text("To remove older price preservation, open this app in App Store Connect, select the subscription, then Subscription Pricing → View all Subscription Pricing → Starting Price → Edit Price. This separate action is not submitted by MyApps.")
+                if let url = URL(string: "https://appstoreconnect.apple.com/apps/\(product.appID)") {
+                    Link("Manage Older Preserved Prices in App Store Connect", destination: url)
+                }
+                Link("Apple's Subscription Pricing Guide", destination: SubscriptionPricingGuidance.helpURL)
+            }
+            .font(.footnote)
+        } header: {
+            Text("Existing Subscribers")
+        } footer: {
+            Text("New proposals default to Keep Current Prices. Saved proposals retain their selection. The increase policy applies to every included country with an increase. Excluded countries are unchanged. Your selection is saved with the generated proposal; nothing is submitted here.")
+        }
+    }
+
     @ViewBuilder
     private func resultSection(model: RegionalPricingViewModel,
                                proposal: RegionalPricingProposal) -> some View {
@@ -236,7 +286,11 @@ struct RegionalPricingReviewView: View {
                     .font(.footnote)
                     .foregroundStyle(theme.secondaryForegroundColor)
             } else {
-                Text("Subscription prices are separate from preserved subscriber prices. Existing customers may be affected by decreases; increases require subscriber treatment review.")
+                LabeledContent("Existing Subscribers on Increases", value: proposal.subscriberPolicy.summary)
+                Text(proposal.subscriberPolicy.confirmation)
+                    .font(.footnote)
+                    .foregroundStyle(theme.secondaryForegroundColor)
+                Text(SubscriptionPricingGuidance.decreases)
                     .font(.footnote)
                     .foregroundStyle(theme.secondaryForegroundColor)
             }
@@ -388,5 +442,6 @@ struct RegionalPricingReviewView: View {
         return pieces.joined(separator: " · ")
     }
 }
+
 
 
