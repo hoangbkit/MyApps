@@ -34,7 +34,7 @@ enum RegionalPricingEngine {
                   return factor > 0 && factor <= 1
               }),
               preset.factors[1] == 1 else {
-            throw RegionalPricingError.invalidMapping("Preset requires positive factors ≤1 and an undiscouted USA.")
+            throw RegionalPricingError.invalidMapping("Preset requires positive factors ≤1 and an undiscounted USA.")
         }
         guard references.planType == nil || references.planType == "UPFRONT" else {
             throw RegionalPricingError.invalidReference("Monthly-with-commitment plans require adjusted equalizations.")
@@ -78,14 +78,23 @@ enum RegionalPricingEngine {
                     blockers.append("A verified UPFRONT subscription plan is unavailable for this country.")
                 }
             }
-            if !references.readIssues.isEmpty {
+            if references.readIssues.contains(where: { $0.hasPrefix("GLOBAL:") }) {
                 warnings.append(.incompleteSnapshot)
-                blockers.append("Price-point reference reads are incomplete; refresh from Apple.")
+                blockers.append("Required Apple equalization reads are incomplete; refresh from Apple.")
+            }
+            if snapshot.issues.contains(where: {
+                ["manualPrices", "automaticPrices", "subscriptionPrices", "schedule", "baseTerritory"].contains($0.resource)
+            }) {
+                warnings.append(.incompleteSnapshot)
+                blockers.append("Apple pricing schedule or current-price data is incomplete.")
             }
             let reference = territory.id == "USA" ? selectedUSPoint : apple
             if reference == nil {
                 warnings.append(.missingReference)
                 blockers.append("Apple equalized reference for selected US point is missing.")
+            } else if reference?.currency != territory.currency {
+                warnings.append(.missingReference)
+                blockers.append("Apple reference currency does not match this storefront.")
             }
             let target = reference.map { $0.customerPrice * factor }
             let ladder = references.laddersByTerritory[territory.id] ?? []
@@ -181,7 +190,7 @@ enum RegionalPricingEngine {
                 diff != .unchanged
             if indirect { warnings.append(.indirectAutomaticChange) }
             let isExcluded = exclusions.contains(territory.id)
-            if isExcluded && (indirect || territory.id == snapshot.baseTerritoryID) {
+            if isExcluded && (indirect || territory.id == snapshot.baseTerritoryID && diff != .unchanged) {
                 blockers.append("Excluded country can still be affected by base-price equalization.")
             }
             rows.append(RegionalPricingRow(
@@ -205,7 +214,10 @@ enum RegionalPricingEngine {
             unchanged: rows.filter { !$0.excluded && $0.isNoOp }.count,
             unknown: rows.filter { !$0.excluded && $0.diff == .unknown }.count,
             warnings: rows.reduce(0) { $0 + $1.warnings.count },
-            blocked: rows.filter { !$0.excluded && !$0.blockers.isEmpty }.count,
+            blocked: rows.filter {
+                !$0.blockers.isEmpty &&
+                (!$0.excluded || $0.blockers.contains(where: { $0.hasPrefix("Excluded country") }))
+            }.count,
             excluded: rows.filter(\.excluded).count,
             automaticToManual: rows.filter { !$0.excluded &&
                 $0.oldMode == .automatic && $0.proposedMode == .manual }.count
@@ -230,6 +242,24 @@ enum RegionalPricingEngine {
             overrides: sortedOverrides, exclusions: selectedExclusions,
             rows: rows, summary: summary, fingerprint: fingerprint
         )
+    }
+
+    static func validatedOverride(
+        _ override: RegionalPricingOverride, points: [PricingPoint],
+        productID: String, territoryID: String, planType: String?,
+        existing: [RegionalPricingOverride]
+    ) throws -> [RegionalPricingOverride] {
+        guard override.territoryID == territoryID, override.planType == planType,
+              territoryID != "USA",
+              points.contains(where: { $0.id == override.point.id &&
+                  $0.productID == productID && $0.territoryID == territoryID &&
+                  $0.planType == planType && $0.customerPrice == override.point.customerPrice &&
+                  $0.currency == override.point.currency }) else {
+            throw RegionalPricingError.invalidReference(
+                "Override must select a valid point belonging to this product, country, and plan."
+            )
+        }
+        return withOverride(override, existing: existing)
     }
 
     static func withOverride(_ override: RegionalPricingOverride,
@@ -278,7 +308,7 @@ enum RegionalPricingEngine {
     }
 
     private static func validDate(_ value: String) -> Bool {
-        guard value.range(of: #"^\\d{4}-\\d{2}-\\d{2}$"#,
+        guard value.range(of: #"^\d{4}-\d{2}-\d{2}$"#,
                           options: .regularExpression) != nil else { return false }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
