@@ -410,14 +410,14 @@ actor RegionalPricingService {
     ) -> String {
         var parts = ["schedule=\(schedule ?? "-")", "base=\(base ?? "-")"]
         for territory in territories.sorted(by: { $0.id < $1.id }) {
-            parts.append("t:\(territory.id):\(territory.currency ?? "-"):\(territory.available.map(String.init) ?? "?")")
+            parts.append("t:\(territory.id):\(territory.currency ?? "-"):\(territory.available.map { $0 ? "true" : "false" } ?? "?")")
         }
         for plan in plans.sorted(by: { $0.planType < $1.planType }) {
             parts.append("p:\(plan.planType):\(plan.territoryIDs.sorted().joined(separator: ","))")
         }
         for price in prices.sorted(by: { $0.id < $1.id }) {
             let amount = price.customerPrice.map { NSDecimalNumber(decimal: $0).stringValue } ?? "?"
-            parts.append("r:\(price.id):\(price.territoryID ?? "?"):\(price.pricePointID ?? "?"):\(amount):\(price.startDate ?? ""):\(price.endDate ?? ""):\(price.preserved.map(String.init) ?? "?"):\(price.manual.map(String.init) ?? "?"):\(price.planType ?? "?"):\(price.origin.rawValue)")
+            parts.append("r:\(price.id):\(price.territoryID ?? "?"):\(price.pricePointID ?? "?"):\(amount):\(price.startDate ?? ""):\(price.endDate ?? ""):\(price.preserved.map { $0 ? "true" : "false" } ?? "?"):\(price.manual.map { $0 ? "true" : "false" } ?? "?"):\(price.planType ?? "?"):\(price.origin.rawValue)")
         }
         return SHA256.hash(data: Data(parts.joined(separator: "\n").utf8))
             .map { String(format: "%02x", $0) }.joined()
