@@ -85,7 +85,7 @@ actor PricingSubmissionCoordinator {
         defer { active.remove(scope) }
         if let last = try await journal.load(
             accountScope: proposal.accountScope, productID: proposal.product.id),
-           [.inFlight, .unknown, .accepted, .pendingVerification, .planned].contains(last.state) {
+           [.inFlight, .unknown, .accepted, .pendingVerification].contains(last.state) {
             throw PricingSubmissionFailure.unresolvedPreviousOperation
         }
 
