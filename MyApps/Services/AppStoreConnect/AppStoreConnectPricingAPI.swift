@@ -77,15 +77,17 @@ extension AppStoreConnectAPIClient {
         }
     }
 
-    func pricingIAPPrices(scheduleID: String, manual: Bool) async throws
+    func pricingIAPPrices(scheduleID: String, manual: Bool, territory: String? = nil) async throws
         -> (items: [IAPPriceResource], included: [PricingIncludedResource]) {
         let relation = manual ? "manualPrices" : "automaticPrices"
+        var query = [
+            URLQueryItem(name: "limit", value: "200"),
+            URLQueryItem(name: "include", value: "inAppPurchasePricePoint,territory")
+        ]
+        if let territory { query.append(URLQueryItem(name: "filter[territory]", value: territory)) }
         return try await pricingPages(
             path: "/v1/inAppPurchasePriceSchedules/\(scheduleID)/\(relation)",
-            query: [
-                URLQueryItem(name: "limit", value: "200"),
-                URLQueryItem(name: "include", value: "inAppPurchasePricePoint,territory")
-            ]
+            query: query
         )
     }
 
