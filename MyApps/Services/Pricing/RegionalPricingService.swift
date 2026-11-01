@@ -139,8 +139,16 @@ actor RegionalPricingService {
                     scheduleID = schedule.id
                     baseTerritoryID = schedule.relatedID("baseTerritory")
                     if baseTerritoryID == nil {
+                        do {
+                            baseTerritoryID = try await client.pricingBaseTerritory(scheduleID: schedule.id)?.id
+                        } catch {
+                            issues.append(PricingReadIssue(resource: "baseTerritory",
+                                message: error.localizedDescription))
+                        }
+                    }
+                    if baseTerritoryID == nil {
                         issues.append(PricingReadIssue(resource: "baseTerritory",
-                            message: "Apple did not return a configured IAP base territory. Do not assume USA."))
+                            message: "The configured base territory is unknown; USA cannot be assumed."))
                     }
                     do {
                         let page = try await client.pricingIAPPrices(scheduleID: schedule.id, manual: true)
