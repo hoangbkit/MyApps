@@ -53,6 +53,25 @@ struct AppStorePricingView: View {
         }
     }
 
+    private var siblingAdvisories: [String] {
+        let comparisons: [RegionalPricingFixtureSibling] = products.compactMap { product in
+            guard product.kind == .subscription,
+                  let level = product.serviceLevel,
+                  let price = summaries[product.id]?.current,
+                  let value = price.customerPrice, let currency = price.currency else { return nil }
+            let months: Int?
+            switch product.duration {
+            case "ONE_MONTH": months = 1
+            case "ONE_YEAR": months = 12
+            default: months = nil
+            }
+            return RegionalPricingFixtureSibling(
+                product: product, explicitServiceLevelID: level,
+                currency: currency, price: value, durationMonths: months)
+        }
+        return RegionalPricingSiblingAdvisory.warnings(for: comparisons)
+    }
+
     var body: some View {
         List {
             if !hasLoaded && isLoading {
@@ -116,7 +135,7 @@ struct AppStorePricingView: View {
                     }
                 }
                 Section {
-                    Text("Pricing suggestions and review are read-only in this pass. App Store prices cannot be submitted yet.")
+                    Text("Generate and review regional prices before any changes. Lifetime and standard subscription submissions require a separate final confirmation; unsupported plans remain read-only.")
                         .font(.footnote)
                         .foregroundStyle(theme.secondaryForegroundColor)
                 }
@@ -177,6 +196,14 @@ struct AppStorePricingView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(theme.secondaryForegroundColor)
+                if let advisory = siblingAdvisories.first(where: {
+                    $0.hasPrefix(product.id + ":")
+                }) {
+                    Text(advisory.components(separatedBy: ": ").dropFirst().joined(separator: ": "))
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .lineLimit(3)
+                }
                 if let failure = summaryErrors[product.id] {
                     Text(failure)
                         .font(.caption2)
