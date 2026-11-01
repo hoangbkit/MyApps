@@ -58,6 +58,7 @@ struct LifetimeScheduleEntry: Codable, Sendable, Identifiable {
 
 struct LifetimeSchedulePlan: Codable, Sendable {
     let proposalID: UUID
+    let product: PricingProduct
     let accountScope: String
     let appID: String
     let productID: String
@@ -211,7 +212,7 @@ enum LifetimeSchedulePlanner {
             blockers.append("No valid manual entries were generated for requested changes.")
         }
         return LifetimeSchedulePlan(
-            proposalID: proposal.id, accountScope: proposal.accountScope,
+            proposalID: proposal.id, product: proposal.product, accountScope: proposal.accountScope,
             appID: proposal.product.appID, productID: proposal.product.id,
             proposalFingerprint: proposal.fingerprint,
             baselineFingerprint: fresh.semanticFingerprint, baseTerritoryID: base,
@@ -229,7 +230,7 @@ enum LifetimeSchedulePlanner {
     private static func blocked(_ proposal: RegionalPricingProposal, _ fresh: PricingSnapshot,
                                 _ blockers: [String], _ warnings: [String]) -> LifetimeSchedulePlan {
         LifetimeSchedulePlan(
-            proposalID: proposal.id, accountScope: proposal.accountScope,
+            proposalID: proposal.id, product: proposal.product, accountScope: proposal.accountScope,
             appID: proposal.product.appID, productID: proposal.product.id,
             proposalFingerprint: proposal.fingerprint, baselineFingerprint: fresh.semanticFingerprint,
             baseTerritoryID: fresh.baseTerritoryID ?? "",
