@@ -290,13 +290,17 @@ actor RegionalPricingService {
 
     func loadEqualizedPoints(product: PricingProduct, sourcePointID: String) async throws -> [PricingPoint] {
         let page = try await client.pricingEqualizations(pointID: sourcePointID, kind: product.kind)
-        let currencies = Dictionary(uniqueKeysWithValues: page.included.compactMap {
-            resource -> (String, String)? in
-            guard resource.type == "territories", let currency = resource.attributes?.currency
-            else { return nil }
-            return (resource.id, currency)
-        })
-        return page.items.compactMap { item in
+        // Apple may omit included territory resources even when a price point
+        // contains the relationship. Fall back to the separately fetched catalog.
+        let catalogue = try await territories(refresh: false)
+        var currencies: [String: String] = [:]
+        for territory in catalogue {
+            if let currency = territory.attributes?.currency { currencies[territory.id] = currency }
+        }
+        for resource in page.included where resource.type == "territories" {
+            if let currency = resource.attributes?.currency { currencies[resource.id] = currency }
+        }
+        let points: [PricingPoint] = page.items.compactMap { item in
             guard let territory = item.relatedID("territory"),
                   let amount = PricingDecimal.parse(item.attributes?.customerPrice) else { return nil }
             return PricingPoint(id: item.id, productID: product.id, territoryID: territory,
@@ -304,6 +308,12 @@ actor RegionalPricingService {
         }.sorted {
             $0.territoryID == $1.territoryID ? $0.id < $1.id : $0.territoryID < $1.territoryID
         }
+        guard points.count == page.items.count else {
+            throw PricingReadError.unsupportedRepresentation(
+                "Apple equalization returned incomplete territory or amount data."
+            )
+        }
+        return points
     }
 
     /// Prepare all network-dependent inputs before the pure Pass 2 engine runs.
