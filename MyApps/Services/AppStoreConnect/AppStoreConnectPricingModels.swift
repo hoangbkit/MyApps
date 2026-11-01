@@ -185,6 +185,27 @@ struct PricingPlanTerritories: Codable, Hashable, Sendable {
     let territoryIDs: [String]
 }
 
+struct PricingUSSummary: Codable, Sendable {
+    let product: PricingProduct
+    let prices: [PricingPriceRecord]
+    let issues: [PricingReadIssue]
+
+    var current: PricingPriceRecord? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        let date = formatter.string(from: Date())
+        return prices.filter {
+            $0.territoryID == "USA" && $0.preserved != true &&
+            ($0.startDate == nil || $0.startDate! <= date) &&
+            ($0.endDate == nil || $0.endDate! >= date)
+        }.sorted {
+            if $0.startDate != $1.startDate { return ($0.startDate ?? "") > ($1.startDate ?? "") }
+            if $0.manual != $1.manual { return $0.manual == true }
+            return $0.id < $1.id
+        }.first
+    }
+}
+
 struct PricingSnapshot: Codable, Sendable {
     let accountScope: String
     let product: PricingProduct
