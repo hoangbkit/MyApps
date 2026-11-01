@@ -22,12 +22,17 @@ actor PricingSubmissionCoordinator {
 
     private let journal: PricingSubmissionJournal
     private var active: Set<String> = []
+    private var paused: Set<String> = []
 
     init(journal: PricingSubmissionJournal = .shared) {
         self.journal = journal
     }
 
     private func key(account: String, product: String) -> String { account + ":" + product }
+
+    func pausePendingOperations(accountScope: String, productID: String) {
+        paused.insert(key(account: accountScope, product: productID))
+    }
 
     /// Preflight always performs uncached Apple reads and re-runs the pure
     /// proposal, checking every selected point. It does not write remotely.
@@ -301,7 +306,7 @@ actor PricingSubmissionCoordinator {
         defer { active.remove(scope) }
         if let previous = try await journal.loadSubscription(
             accountScope: proposal.accountScope, productID: proposal.product.id),
-           !previous.isComplete && (previous.uncertainCount > 0 || previous.pendingCount > 0) {
+           !previous.isComplete {
             throw PricingSubmissionFailure.unresolvedPreviousOperation
         }
         let fresh = try await prepareSubscription(
@@ -384,8 +389,10 @@ actor PricingSubmissionCoordinator {
             (explicitResume && batch.entries[$0].state == .failed)
         }
         guard !candidates.isEmpty else { return .init(batch: batch) }
+        let scope = key(account: batch.plan.accountScope, product: batch.plan.product.id)
+        paused.remove(scope) // A newly explicit Submit/Resume clears previous pause.
         for offset in stride(from: 0, to: candidates.count, by: 3) {
-            if Task.isCancelled {
+            if Task.isCancelled || paused.contains(scope) {
                 batch.stoppedReason = "Task canceled. Unsent entries remain planned."
                 break
             }
@@ -495,7 +502,10 @@ actor PricingSubmissionCoordinator {
             }
             try await journal.saveSubscription(batch)
             try await reconcileSubscriptionEntries(&batch, client: client, attempts: 1)
-            if batch.stoppedReason != nil || batch.uncertainCount > 0 { break }
+            if batch.stoppedReason != nil ||
+               batch.entries.contains(where: { $0.state == .unknown || $0.state == .inFlight }) {
+                break
+            }
         }
         return .init(batch: batch)
     }
