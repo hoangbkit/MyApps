@@ -114,6 +114,12 @@ enum RegionalPricingMode: String, Codable, Sendable {
     case base, automatic, manual, subscription, unknown
 }
 
+enum RegionalSubscriberPolicy: String, Codable, Sendable {
+    // Explicitly preserved in the draft; Pass 5 will enforce server semantics.
+    case preserveExistingOnIncrease
+    case requireAcknowledgmentOnIncrease
+}
+
 enum RegionalPricingDiff: String, Codable, Sendable {
     case increase, decrease, unchanged, unknown
 }
@@ -158,6 +164,7 @@ struct RegionalPricingRow: Codable, Sendable, Identifiable {
 
     var isNoOp: Bool {
         diff == .unchanged && !maintenanceChanged && !indirectChange &&
+        selectedPoint?.id == baselinePrice?.pricePointID &&
         blockers.isEmpty && baselineScheduled.isEmpty
     }
 }
@@ -189,9 +196,21 @@ struct RegionalPricingProposal: Codable, Sendable, Identifiable {
     let configuredBaseTerritory: String?
     let overrides: [RegionalPricingOverride]
     let exclusions: [String]
+    let subscriberPolicy: RegionalSubscriberPolicy
+    let acknowledgedWarnings: [String]
     let rows: [RegionalPricingRow]
     let summary: RegionalPricingSummary
     let fingerprint: String
+
+    // A draft is always treated as unverified until the current Apple snapshot
+    // and the valid Apple point ladders have been loaded again.
+    var canProceedToSubmissionPlanning: Bool {
+        !rows.isEmpty && rows.allSatisfy {
+            $0.excluded ? !$0.blockers.contains(where: {
+                $0.hasPrefix("Excluded country")
+            }) : $0.blockers.isEmpty
+        }
+    }
 
     // An existing draft must never be treated as remotely verified after launch.
     func matchingSnapshot(_ fresh: PricingSnapshot) -> Bool {
