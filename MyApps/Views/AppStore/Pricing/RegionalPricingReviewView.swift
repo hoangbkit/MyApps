@@ -135,17 +135,35 @@ struct RegionalPricingReviewView: View {
                 LabeledContent("Apple Base Territory",
                     value: snapshot.baseTerritoryID.map(PricingDisplay.country) ?? "Not configured")
             }
-            Picker("US Reference Price", selection: Binding(
-                get: { model.selectedUSPointID },
-                set: { model.changeUSPoint($0) }
-            )) {
-                Text("Select a US price").tag("")
-                ForEach(snapshot.usPoints) { point in
-                    Text(PricingDisplay.amount(point.customerPrice, currency: point.currency))
-                        .tag(point.id)
+            if snapshot.usPoints.isEmpty {
+                if model.isWorking {
+                    ProgressView("Loading US prices…")
+                } else {
+                    Label("US Prices Could Not Be Loaded", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                    Text(model.usPriceLoadingError ?? "No valid US prices are available.")
+                        .font(.footnote)
+                        .foregroundStyle(theme.secondaryForegroundColor)
+                    Button("Retry Loading Prices") {
+                        Task { await model.load(refresh: true) }
+                    }
+                    Text("Generate becomes available after a valid US price is loaded and selected.")
+                        .font(.footnote)
+                        .foregroundStyle(theme.secondaryForegroundColor)
                 }
+            } else {
+                Picker("US Reference Price", selection: Binding(
+                    get: { model.selectedUSPointID },
+                    set: { model.changeUSPoint($0) }
+                )) {
+                    Text("Select a US price").tag("")
+                    ForEach(snapshot.usPoints) { point in
+                        Text(PricingDisplay.amount(point.customerPrice, currency: point.currency))
+                            .tag(point.id)
+                    }
+                }
+                .disabled(model.isWorking)
             }
-            .disabled(model.isWorking)
             DatePicker("Effective Date", selection: Binding(
                 get: { model.effectiveDate },
                 set: { model.changeDate($0) }
@@ -324,7 +342,7 @@ struct RegionalPricingReviewView: View {
                 }
             }
             if !snapshot.issues.isEmpty {
-                DisclosureGroup("\(snapshot.issues.count) Apple data notices") {
+                DisclosureGroup("Pricing Data Issues (\(snapshot.issues.count))") {
                     ForEach(snapshot.issues.indices, id: \.self) { index in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(snapshot.issues[index].resource)
@@ -370,4 +388,5 @@ struct RegionalPricingReviewView: View {
         return pieces.joined(separator: " · ")
     }
 }
+
 

@@ -41,6 +41,12 @@ final class RegionalPricingViewModel {
         snapshot?.usPoints.first(where: { $0.id == selectedUSPointID })
     }
 
+    var usPriceLoadingError: String? {
+        guard let snapshot, snapshot.usPoints.isEmpty, !isWorking else { return nil }
+        return snapshot.issues.first(where: { $0.resource == "US price points" })?.message
+            ?? "Apple returned no selectable US prices for this product."
+    }
+
     var effectiveDateString: String {
         PricingDay.string(from: effectiveDate)
     }
@@ -82,6 +88,11 @@ final class RegionalPricingViewModel {
         requestID = token
         phase = .loading
         errorMessage = nil
+        defer {
+            if requestID == token, phase == .loading {
+                phase = proposal == nil ? (snapshot == nil ? .idle : .ready) : .reviewing
+            }
+        }
         do {
             let bundleMapping = try RegionalPricingMappingLoader.bundled()
             let fresh = try await service.loadSnapshot(product: product, refresh: refresh)
@@ -150,6 +161,11 @@ final class RegionalPricingViewModel {
         requestID = token
         phase = .generating
         errorMessage = nil
+        defer {
+            if requestID == token, phase == .generating {
+                phase = proposal == nil ? .ready : .reviewing
+            }
+        }
         do {
             let previous = proposal
             let references = try await service.loadReferenceSet(
@@ -289,4 +305,5 @@ final class RegionalPricingViewModel {
         PricingDay.parse(value)
     }
 }
+
 

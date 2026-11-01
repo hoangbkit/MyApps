@@ -422,7 +422,7 @@ Scope: **PR #9 only**. The changes below correct existing Pass 1–5 pricing cod
 
 ### Confirmed and corrected
 
-1. **Automatic IAP GET:** `GET /v1/inAppPurchasePriceSchedules/{id}/automaticPrices` no longer sends an unsupported `include=inAppPurchasePricePoint,territory`; the manual endpoint retains its documented include. Unknown related data is resolved through supported point sources or displayed as incomplete.
+1. **Automatic IAP GET (corrected after device review):** Both `manualPrices` and `automaticPrices` support `include=inAppPurchasePricePoint,territory`. The earlier removal of this include was incorrect and left automatic price relationships unresolved. Both reads now request those relationships and their required fields explicitly.
 2. **IAP inline POST relationship:** Apple's `InAppPurchasePriceInlineCreate.Relationships.InAppPurchaseV2.Data` schema specifies `type: inAppPurchases` (the property is named `inAppPurchaseV2`). Corrected the payload from `inAppPurchasesV2`.
 3. **Lifetime point amounts:** Missing IAP price-point amounts now come from the documented `GET /v2/inAppPurchases/{id}/pricePoints?filter[territory]=...` ladder, not an undocumented individual IAP point-detail GET. Point amount and territory are sourced from Apple; missing territory/point remains an explicit diagnostic, never a guessed amount.
 4. **CSV equalizations:** Apple's point equalization endpoint may return CSV. Instead of decoding unknown CSV columns or generating synthetic IDs, the read path can fetch **Apple's JSON `relationships/equalizations` identifiers**, and resolve individual price point details with a **maximum of 4 concurrent GETs**. Subscription point detail GET is documented. IAP CSV responses remain restricted if its individual point-detail resource cannot be independently verified. No heuristic FX fallback.
@@ -470,3 +470,13 @@ The following corrections address the six source-review findings and obsolete su
 
 **Checks for this correction:** source/diff review and `git diff --check`. No Swift compiler or Xcode is available in this environment. No tests, CI, authenticated Apple reads, or pricing writes were run. Runtime validation remains outstanding.
 
+
+## Lifetime read and empty-picker correction — 2026-11-01
+
+Device feedback showed paired missing-territory/missing-amount notices for lifetime price records while subscriptions worked. Automatic IAP price reads now include the related point and territory resources, with explicit sparse fields for dates, maintenance flags, customer price, territory, and currency.
+
+The product-scoped, territory-filtered point reader explicitly requests customer prices and territory data. Link-only point territory relationships can use that authoritative request scope; contradictory returned territory data, missing amounts/currencies, wrong resource types, and conflicting duplicate IDs still reject the read. A known zero point is filtered from paid suggestions without discarding valid positive points; identical repeated points are deduplicated. Missing amounts are never converted to zero.
+
+The US reference section shows its read/validation error and a retry action instead of an empty picker. Canceled load/generation tasks leave their busy phase so reopening or retrying does not remain disabled. Repeated record-resolution failures are summarized by issue type; unresolved baseline prices remain unknown and block their submission.
+
+Validation: source/diff review and `git diff --check`. No compiler/Xcode, fixture execution, tests, CI dispatch, authenticated Apple reads, or pricing writes were available/performed during this correction. Device verification should cover an automatically equalized lifetime schedule, US picker population, explicit zero-point filtering alongside paid points, malformed/mismatched point rejection, retry/cancellation, and preservation of the working subscription flow.

@@ -280,22 +280,47 @@ actor RegionalPricingService {
         }
         let fallbackCurrency = try await territories(refresh: false)
             .first(where: { $0.id == territoryID })?.attributes?.currency
-        let points: [PricingPoint] = page.items.compactMap { item in
-            guard let rawAmount = PricingDecimal.parse(item.attributes?.customerPrice),
-                  let territory = item.relatedID("territory"),
-                  territory == territoryID else { return nil }
-            return PricingPoint(
+        let expectedType = product.kind == .lifetime ? "inAppPurchasePricePoints" : "subscriptionPricePoints"
+        var pointsByID: [String: PricingPoint] = [:]
+        for item in page.items {
+            guard item.type == expectedType, !item.id.isEmpty else {
+                throw PricingReadError.unsupportedRepresentation(
+                    "Apple returned an unexpected price-point resource for \(territoryID).")
+            }
+            guard let rawAmount = PricingDecimal.parse(item.attributes?.customerPrice, allowingZero: true) else {
+                throw PricingReadError.unsupportedRepresentation(
+                    "An Apple price point for \(territoryID) has a missing or invalid amount.")
+            }
+            // The product-scoped collection is explicitly filtered to this
+            // territory. That request scope also identifies link-only rows;
+            // reject contradictory territory data instead of guessing an ID.
+            let territory = item.relatedID("territory") ?? territoryID
+            guard territory == territoryID,
+                  let currency = includedCurrencies[territory] ?? fallbackCurrency else {
+                throw PricingReadError.unsupportedRepresentation(
+                    "Apple price-point territory or currency does not match \(territoryID).")
+            }
+            // A known zero point is intentionally ineligible for this paid
+            // pricing tool, not evidence that the entire ladder is corrupt.
+            guard rawAmount > 0 else { continue }
+            let point = PricingPoint(
                 id: item.id, productID: product.id, territoryID: territory,
-                planType: planType, currency: includedCurrencies[territory] ?? fallbackCurrency,
+                planType: planType, currency: currency,
                 customerPrice: rawAmount
             )
-        }.sorted {
+            if let prior = pointsByID[item.id], prior != point {
+                throw PricingReadError.unsupportedRepresentation(
+                    "Apple returned conflicting values for a price point in \(territoryID).")
+            }
+            pointsByID[item.id] = point
+        }
+        let points = pointsByID.values.sorted {
             if $0.customerPrice != $1.customerPrice { return $0.customerPrice < $1.customerPrice }
             return $0.id < $1.id
         }
-        guard points.count == page.items.count, !points.isEmpty else {
+        guard !points.isEmpty else {
             throw PricingReadError.unsupportedRepresentation(
-                "Apple returned an empty or incomplete selectable price-point ladder for \(territoryID)."
+                "Apple returned no selectable positive price points for \(territoryID)."
             )
         }
         return points
@@ -581,9 +606,10 @@ actor RegionalPricingService {
             }
         }
         if product.kind == .lifetime {
+            var ladderFailures: [(territory: String, message: String)] = []
             let neededTerritories = Array(Set(seeds.compactMap { seed -> String? in
                 guard let point = seed.point, pointDetails[point] == nil else { return nil }
-                return seed.territory
+                return seed.territory ?? territoryByPoint[point]
             })).sorted()
             for start in stride(from: 0, to: neededTerritories.count, by: 4) {
                 let batch = Array(neededTerritories[start..<min(start + 4, neededTerritories.count)])
@@ -612,11 +638,14 @@ actor RegionalPricingService {
                             territoryByPoint[point.id] = territory
                         }
                     } else {
-                        issues.append(PricingReadIssue(
-                            resource: "price ladder \(territory)",
-                            message: failure ?? "Unable to resolve lifetime price amounts."))
+                        ladderFailures.append((territory,
+                            failure ?? "Unable to resolve lifetime price amounts."))
                     }
                 }
+            }
+            if let first = ladderFailures.sorted(by: { $0.territory < $1.territory }).first {
+                issues.append(PricingReadIssue(resource: "Lifetime price points",
+                    message: "Price-point reads failed for \(ladderFailures.count) storefronts. First failure (\(first.territory)): \(first.message)"))
             }
         } else {
             let missing = Array(Set(seeds.compactMap(\.point).filter {
@@ -651,16 +680,16 @@ actor RegionalPricingService {
                 }
             }
         }
-        return seeds.map { seed in
+        var missingTerritories = 0
+        var missingAmounts = 0
+        let records = seeds.map { seed in
             let territory = seed.territory ?? seed.point.flatMap { territoryByPoint[$0] }
             if territory == nil {
-                issues.append(PricingReadIssue(resource: "price \(seed.id)",
-                    message: "Price territory could not be resolved."))
+                missingTerritories += 1
             }
             let value = seed.point.flatMap { pointDetails[$0]?.0 }
             if value == nil {
-                issues.append(PricingReadIssue(resource: "price \(seed.id)",
-                    message: "Missing valid price amount; not treated as zero."))
+                missingAmounts += 1
             }
             return PricingPriceRecord(
                 id: seed.id, territoryID: territory, pricePointID: seed.point,
@@ -673,6 +702,15 @@ actor RegionalPricingService {
             let b = [$1.territoryID ?? "", $1.planType ?? "", $1.startDate ?? "", $1.id]
             return a.lexicographicallyPrecedes(b)
         }
+        if missingTerritories > 0 {
+            issues.append(PricingReadIssue(resource: "Price territories",
+                message: "Apple territory relationships could not be resolved for \(missingTerritories) price records. Refresh pricing to retry."))
+        }
+        if missingAmounts > 0 {
+            issues.append(PricingReadIssue(resource: "Price amounts",
+                message: "Amounts could not be resolved for \(missingAmounts) price records. These prices remain unknown and cannot be submitted."))
+        }
+        return records
     }
 
     private static func fingerprint(
@@ -694,4 +732,5 @@ actor RegionalPricingService {
             .map { String(format: "%02x", $0) }.joined()
     }
 }
+
 

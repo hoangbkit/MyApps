@@ -86,14 +86,17 @@ extension AppStoreConnectAPIClient {
     func pricingIAPPrices(scheduleID: String, manual: Bool, territory: String? = nil) async throws
         -> (items: [IAPPriceResource], included: [PricingIncludedResource]) {
         let relation = manual ? "manualPrices" : "automaticPrices"
-        var query = [URLQueryItem(name: "limit", value: "200")]
-        // Apple's automaticPrices endpoint does not advertise an include
-        // relationship. Avoid sending unsupported query parameters; resolve
-        // related point IDs explicitly when not returned as included data.
-        if manual {
-            query.append(URLQueryItem(name: "include",
-                                      value: "inAppPurchasePricePoint,territory"))
-        }
+        // Both manualPrices and automaticPrices support these includes.
+        // Without them Apple may return link-only price relationships, leaving
+        // the current country and amount unresolved for every automatic price.
+        var query = [
+            URLQueryItem(name: "limit", value: "200"),
+            URLQueryItem(name: "include", value: "inAppPurchasePricePoint,territory"),
+            URLQueryItem(name: "fields[inAppPurchasePrices]",
+                         value: "startDate,endDate,manual,inAppPurchasePricePoint,territory"),
+            URLQueryItem(name: "fields[inAppPurchasePricePoints]", value: "customerPrice,territory"),
+            URLQueryItem(name: "fields[territories]", value: "currency")
+        ]
         if let territory { query.append(URLQueryItem(name: "filter[territory]", value: territory)) }
         return try await pricingPages(
             path: "/v1/inAppPurchasePriceSchedules/\(scheduleID)/\(relation)",
@@ -121,9 +124,12 @@ extension AppStoreConnectAPIClient {
         case .subscription: path = "/v1/subscriptions/\(product.id)/pricePoints"
         case .unsupported: throw PricingReadError.unsupportedPlan(product.rawType ?? "unknown")
         }
+        let pointType = product.kind == .lifetime ? "inAppPurchasePricePoints" : "subscriptionPricePoints"
         return try await pricingPages(path: path, query: [
             URLQueryItem(name: "filter[territory]", value: territory),
             URLQueryItem(name: "include", value: "territory"),
+            URLQueryItem(name: "fields[\(pointType)]", value: "customerPrice,territory"),
+            URLQueryItem(name: "fields[territories]", value: "currency"),
             URLQueryItem(name: "limit", value: "8000")
         ])
     }
@@ -218,3 +224,4 @@ extension AppStoreConnectAPIClient {
         return result.sorted { $0.planType < $1.planType }
     }
 }
+

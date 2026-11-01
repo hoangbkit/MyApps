@@ -255,11 +255,11 @@ struct PricingSnapshot: Codable, Sendable {
 enum PricingDecimal {
     private static let posix = Locale(identifier: "en_US_POSIX")
 
-    static func parse(_ text: String?) -> Decimal? {
+    static func parse(_ text: String?, allowingZero: Bool = false) -> Decimal? {
         guard let text, !text.isEmpty,
               text.range(of: #"^[0-9]+(\.[0-9]+)?$"#, options: .regularExpression) != nil,
               let amount = Decimal(string: text, locale: posix),
-              amount > 0 else { return nil }
+              (allowingZero ? amount >= 0 : amount > 0) else { return nil }
         return amount
     }
 }
@@ -279,3 +279,4 @@ enum PricingReadError: LocalizedError, Sendable {
         }
     }
 }
+
