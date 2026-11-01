@@ -137,6 +137,12 @@ final class RegionalPricingViewModel {
         needsRegeneration = proposal != nil
     }
 
+    func reviewUpdatedBaseline() async {
+        // A full regeneration uses the last freshly loaded snapshot. If it
+        // fails, the previous proposal and stale flags remain visible.
+        await generate()
+    }
+
     func generate() async {
         guard !isWorking, let snapshot, let mapping,
               let point = selectedUSPoint else {
