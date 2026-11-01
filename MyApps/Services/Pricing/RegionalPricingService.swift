@@ -324,9 +324,11 @@ actor RegionalPricingService {
         }.sorted {
             $0.territoryID == $1.territoryID ? $0.id < $1.id : $0.territoryID < $1.territoryID
         }
-        guard points.count == page.items.count else {
+        guard !points.isEmpty, points.count == page.items.count,
+              Set(points.map(\.territoryID)).count == points.count,
+              points.allSatisfy({ $0.currency != nil }) else {
             throw PricingReadError.unsupportedRepresentation(
-                "Apple equalization returned incomplete territory or amount data."
+                "Apple equalization returned missing, duplicate, or conflicting territory/price data."
             )
         }
         return points
@@ -345,11 +347,15 @@ actor RegionalPricingService {
                 "Apple returned empty, duplicate, or unexpected equalization IDs.")
         }
         let catalogue = try await territories(refresh: false)
-        let currencies = Dictionary(uniqueKeysWithValues: catalogue.compactMap {
-            territory -> (String, String)? in
-            guard let currency = territory.attributes?.currency else { return nil }
-            return (territory.id, currency)
-        })
+        var currencies: [String: String] = [:]
+        for territory in catalogue {
+            guard let currency = territory.attributes?.currency else { continue }
+            if let existing = currencies[territory.id], existing != currency {
+                throw PricingReadError.unsupportedRepresentation(
+                    "Conflicting Apple currency for \(territory.id).")
+            }
+            currencies[territory.id] = currency
+        }
         var result: [PricingPoint] = []
         for start in stride(from: 0, to: links.count, by: 4) {
             try Task.checkCancellation()
