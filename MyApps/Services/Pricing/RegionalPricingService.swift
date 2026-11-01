@@ -46,6 +46,71 @@ actor RegionalPricingService {
         }
     }
 
+    /// Cheap per-product US listing summary. Does not fetch every territory
+    /// or every price ladder and does not mistake preserved prices for public prices.
+    func loadUSSummary(product: PricingProduct) async throws -> PricingUSSummary {
+        guard product.kind != .unsupported else {
+            throw PricingReadError.unsupportedPlan(product.unsupportedReason ?? "unsupported")
+        }
+        var issues: [PricingReadIssue] = []
+        var seeds: [PriceSeed] = []
+        var included: [PricingIncludedResource] = []
+        switch product.kind {
+        case .lifetime:
+            if let schedule = try await client.pricingIAPSchedule(iapID: product.id) {
+                for manual in [true, false] {
+                    do {
+                        let page = try await client.pricingIAPPrices(
+                            scheduleID: schedule.id, manual: manual, territory: "USA"
+                        )
+                        seeds += page.items.map {
+                            PriceSeed(id: $0.id, territory: $0.relatedID("territory"),
+                                point: $0.relatedID("inAppPurchasePricePoint"),
+                                start: $0.attributes?.startDate, end: $0.attributes?.endDate,
+                                manual: $0.attributes?.manual ?? manual, preserved: nil,
+                                plan: nil, origin: manual ? .manualIAP : .automaticIAP)
+                        }
+                        included += page.included
+                    } catch {
+                        issues.append(PricingReadIssue(resource: manual ? "US manual" : "US automatic",
+                            message: error.localizedDescription))
+                    }
+                }
+            } else {
+                issues.append(PricingReadIssue(resource: "US schedule",
+                    message: "No configured price schedule; US price is unknown."))
+            }
+        case .subscription:
+            let page = try await client.pricingSubscriptionPrices(
+                subscriptionID: product.id, territory: "USA"
+            )
+            seeds = page.items.map {
+                PriceSeed(id: $0.id, territory: $0.relatedID("territory"),
+                    point: $0.relatedID("subscriptionPricePoint"),
+                    start: $0.attributes?.startDate, end: nil, manual: nil,
+                    preserved: $0.attributes?.preserved, plan: $0.attributes?.planType,
+                    origin: .subscription)
+            }
+            included = page.included
+        case .unsupported:
+            break
+        }
+        let catalogue = try await territories(refresh: false)
+        let usa = catalogue.filter { $0.id == "USA" }.map {
+            PricingTerritory(id: $0.id, currency: $0.attributes?.currency,
+                available: nil, planType: nil)
+        }
+        let records = await resolvePrices(
+            seeds: seeds, included: included, product: product,
+            territories: usa, issues: &issues
+        )
+        if !records.contains(where: { $0.territoryID == "USA" && $0.preserved != true }) {
+            issues.append(PricingReadIssue(resource: "US price",
+                message: "No public US price found; do not infer zero."))
+        }
+        return PricingUSSummary(product: product, prices: records, issues: issues)
+    }
+
     /// Call after choosing a product; never invoked merely to list all products.
     /// Errors affecting a related pricing resource are retained as snapshot issues.
     func loadSnapshot(product: PricingProduct, refresh: Bool = false) async throws -> PricingSnapshot {
