@@ -24,6 +24,7 @@ final class RegionalPricingViewModel {
     var selectedUSPointID: String = ""
     var effectiveDate: Date = Date()
 
+    private var draftRevision: UInt64 = 0
     private var requestID = UUID()
     private var expectedAccountScope: String
     private var activeConnectionRevision: Int?
@@ -176,7 +177,8 @@ final class RegionalPricingViewModel {
             isStale = false
             needsRegeneration = false
             phase = .reviewing
-            try await drafts?.save(generated)
+            draftRevision &+= 1
+            try await drafts?.save(generated, revision: draftRevision)
         } catch {
             guard requestID == token, !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
@@ -258,7 +260,16 @@ final class RegionalPricingViewModel {
             proposalID: prior.id
         )
         proposal = generated
-        Task { [drafts] in try? await drafts?.save(generated) }
+        draftRevision &+= 1
+        let revision = draftRevision
+        Task { [weak self, drafts] in
+            do {
+                try await drafts?.save(generated, revision: revision)
+            } catch {
+                guard let self, self.draftRevision == revision else { return }
+                self.errorMessage = "Could not save pricing draft: " + error.localizedDescription
+            }
+        }
     }
 
     /// All accepted or remotely changed schedules require a fresh review.
