@@ -238,6 +238,328 @@ actor PricingSubmissionCoordinator {
         return .make(from: operation)
     }
 
+    // MARK: - Subscription pricing (independent territory requests)
+
+    func prepareSubscription(proposal: RegionalPricingProposal,
+                             acknowledgesDecrease: Bool,
+                             client: AppStoreConnectAPIClient) async throws -> SubscriptionWritePlan {
+        guard client.pricingAccountScope == proposal.accountScope,
+              proposal.product.kind == .subscription else {
+            throw PricingSubmissionFailure.invalidPlan("Subscription product/account mismatch.")
+        }
+        let service = RegionalPricingService(client: client)
+        let fresh = try await service.loadSnapshot(product: proposal.product, refresh: true)
+        if fresh.semanticFingerprint != proposal.snapshotFingerprint {
+            return SubscriptionPricePlanner.plan(
+                proposal: proposal, fresh: fresh, today: Self.today(),
+                acknowledgesRenewalDecrease: acknowledgesDecrease)
+        }
+        let validUS = fresh.usPoints.first {
+            $0 == proposal.selectedUSPoint
+        }
+        guard let point = validUS else {
+            throw PricingSubmissionFailure.invalidPlan("The selected US price point is no longer valid.")
+        }
+        let mapping = try RegionalPricingMappingLoader.bundled()
+        guard mapping.version == proposal.mappingVersion else {
+            throw PricingSubmissionFailure.invalidPlan("The pricing preset changed. Review again.")
+        }
+        let references = try await service.loadReferenceSet(
+            snapshot: fresh, selectedUSPoint: point, mapping: mapping,
+            overrides: proposal.overrides)
+        let regenerated = try RegionalPricingEngine.generate(
+            snapshot: fresh, selectedUSPoint: point, mapping: mapping,
+            effectiveDate: proposal.effectiveDate, references: references,
+            existingOverrides: proposal.overrides, exclusions: Set(proposal.exclusions),
+            subscriberPolicy: proposal.subscriberPolicy,
+            acknowledgedWarnings: Set(proposal.acknowledgedWarnings),
+            proposalID: proposal.id)
+        guard regenerated.fingerprint == proposal.fingerprint else {
+            throw PricingSubmissionFailure.invalidPlan(
+                "Apple prices, point ladders, or reviewed subscriber settings changed. Regenerate before submitting.")
+        }
+        return SubscriptionPricePlanner.plan(
+            proposal: regenerated, fresh: fresh, today: Self.today(),
+            acknowledgesRenewalDecrease: acknowledgesDecrease)
+    }
+
+    func previousSubscription(accountScope: String, productID: String)
+        async throws -> SubscriptionSubmissionReport? {
+        guard let batch = try await journal.loadSubscription(
+            accountScope: accountScope, productID: productID) else { return nil }
+        return .init(batch: batch)
+    }
+
+    func submitSubscriptionConfirmed(
+        proposal: RegionalPricingProposal,
+        reviewed: SubscriptionWritePlan,
+        acknowledgesDecrease: Bool,
+        client: AppStoreConnectAPIClient
+    ) async throws -> SubscriptionSubmissionReport {
+        let scope = key(account: proposal.accountScope, product: proposal.product.id)
+        guard active.insert(scope).inserted else { throw PricingSubmissionFailure.alreadyActive }
+        defer { active.remove(scope) }
+        if let previous = try await journal.loadSubscription(
+            accountScope: proposal.accountScope, productID: proposal.product.id),
+           !previous.isComplete && (previous.uncertainCount > 0 || previous.pendingCount > 0) {
+            throw PricingSubmissionFailure.unresolvedPreviousOperation
+        }
+        let fresh = try await prepareSubscription(
+            proposal: proposal, acknowledgesDecrease: acknowledgesDecrease, client: client)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard fresh.isExecutable,
+              try encoder.encode(fresh) == encoder.encode(reviewed) else {
+            throw PricingSubmissionFailure.invalidPlan("Remote prices or confirmed scope changed. Review again.")
+        }
+        let now = Date()
+        var batch = SubscriptionSubmissionBatch(
+            id: UUID(), schemaVersion: 1, plan: fresh,
+            entries: fresh.changes.map {
+                SubscriptionSubmissionEntry(
+                    change: $0, state: .planned, attempts: 0, remoteID: nil,
+                    error: nil, preservationVerified: nil, lastUpdated: now)
+            },
+            stoppedReason: nil, createdAt: now, updatedAt: now)
+        try await journal.saveSubscription(batch) // No POST before this durable write.
+        return try await dispatchSubscription(&batch, client: client)
+    }
+
+    /// Read-only recovery. A dropped response never results in a repeat POST.
+    func reconcileSubscription(accountScope: String, productID: String,
+                               client: AppStoreConnectAPIClient)
+        async throws -> SubscriptionSubmissionReport? {
+        guard client.pricingAccountScope == accountScope else {
+            throw RegionalPricingError.mismatchedAccount
+        }
+        let scope = key(account: accountScope, product: productID)
+        guard active.insert(scope).inserted else { throw PricingSubmissionFailure.alreadyActive }
+        defer { active.remove(scope) }
+        guard var batch = try await journal.loadSubscription(
+            accountScope: accountScope, productID: productID) else { return nil }
+        try await reconcileSubscriptionEntries(&batch, client: client)
+        return .init(batch: batch)
+    }
+
+    /// Explicit resume can dispatch only entries that never left the client
+    /// or whose prior POST received a definite failure. Unknown outcomes block.
+    /// It never replays accepted, verified, in-flight, or unknown requests.
+    func resumeSubscription(accountScope: String, productID: String,
+                            client: AppStoreConnectAPIClient) async throws
+        -> SubscriptionSubmissionReport {
+        guard client.pricingAccountScope == accountScope else {
+            throw RegionalPricingError.mismatchedAccount
+        }
+        let scope = key(account: accountScope, product: productID)
+        guard active.insert(scope).inserted else { throw PricingSubmissionFailure.alreadyActive }
+        defer { active.remove(scope) }
+        guard var batch = try await journal.loadSubscription(
+            accountScope: accountScope, productID: productID) else {
+            throw PricingSubmissionFailure.invalidPlan("No saved subscription operation exists.")
+        }
+        // Reconcile before any possible retry. No write is allowed when an
+        // uncertain operation could already have been accepted by Apple.
+        try await reconcileSubscriptionEntries(&batch, client: client)
+        if batch.uncertainCount > 0 {
+            throw PricingSubmissionFailure.unresolvedPreviousOperation
+        }
+        return try await dispatchSubscription(&batch, client: client, explicitResume: true)
+    }
+
+    private struct SubscriptionAttempt: Sendable {
+        let id: String
+        let remoteID: String?
+        let error: String?
+        let state: PricingSubmissionState
+        let stop: Bool
+    }
+
+    private func dispatchSubscription(
+        _ batch: inout SubscriptionSubmissionBatch,
+        client: AppStoreConnectAPIClient,
+        explicitResume: Bool = false
+    ) async throws -> SubscriptionSubmissionReport {
+        let candidates = batch.entries.indices.filter {
+            batch.entries[$0].state == .planned ||
+            (explicitResume && batch.entries[$0].state == .failed)
+        }
+        guard !candidates.isEmpty else { return .init(batch: batch) }
+        for offset in stride(from: 0, to: candidates.count, by: 3) {
+            if Task.isCancelled {
+                batch.stoppedReason = "Task canceled. Unsent entries remain planned."
+                break
+            }
+            let indices = Array(candidates[offset..<min(offset + 3, candidates.count)])
+            // A batch may follow earlier accepted prices, so a global snapshot
+            // fingerprint is no longer a valid precondition here. Verify the
+            // STILL-UNSENT territories and their Apple point identities instead.
+            let service = RegionalPricingService(client: client)
+            let snapshot = try await service.loadSnapshot(
+                product: batch.plan.product, refresh: true)
+            var preflightFailure: String?
+            for index in indices {
+                let change = batch.entries[index].change
+                let current = snapshot.publicPrice(
+                    territoryID: change.territoryID, planType: change.planType,
+                    on: batch.plan.effectiveDate)
+                if current?.id != change.previous.id ||
+                   current?.pricePointID != change.previous.pricePointID ||
+                   current?.customerPrice != change.previous.customerPrice {
+                    preflightFailure = "A remaining territory price changed: \(change.territoryID)."
+                    break
+                }
+                if snapshot.prices.contains(where: {
+                    $0.territoryID == change.territoryID && $0.planType == change.planType &&
+                    $0.preserved != true && ($0.startDate ?? "") > Self.today()
+                }) {
+                    preflightFailure = "A future price is already scheduled in \(change.territoryID)."
+                    break
+                }
+                do {
+                    let ladder = try await service.loadPoints(
+                        product: batch.plan.product, territoryID: change.territoryID)
+                    if !ladder.contains(where: {
+                        $0.id == change.point.id &&
+                        $0.customerPrice == change.point.customerPrice &&
+                        $0.currency == change.point.currency
+                    }) {
+                        preflightFailure = "Price point withdrawn for \(change.territoryID)."
+                        break
+                    }
+                } catch {
+                    preflightFailure = "Unable to revalidate \(change.territoryID): \(error.localizedDescription)"
+                    break
+                }
+            }
+            if let preflightFailure {
+                batch.stoppedReason = preflightFailure
+                batch.updatedAt = Date()
+                try await journal.saveSubscription(batch)
+                break
+            }
+            for index in indices {
+                batch.entries[index].state = .inFlight
+                batch.entries[index].attempts += 1
+                batch.entries[index].lastUpdated = Date()
+                batch.entries[index].error = nil
+            }
+            batch.updatedAt = Date()
+            try await journal.saveSubscription(batch) // MUST precede every POST.
+            let jobs = indices.map { batch.entries[$0].change }
+            let responses = await withTaskGroup(
+                of: SubscriptionAttempt.self, returning: [SubscriptionAttempt].self
+            ) { group in
+                for change in jobs {
+                    group.addTask {
+                        do {
+                            let remoteID = try await client.createSubscriptionPrice(change.request)
+                            return SubscriptionAttempt(id: change.id, remoteID: remoteID,
+                                                       error: nil, state: .accepted, stop: false)
+                        } catch {
+                            let rejected = Self.definitivelyRejected(error)
+                            let stop: Bool
+                            if let api = error as? AppStoreConnectAPIError {
+                                switch api {
+                                case .httpStatus(let status): stop = [401, 403, 429].contains(status)
+                                case .appleResponse(let status, _, _, _, _, _):
+                                    stop = [401, 403, 429].contains(status)
+                                default: stop = false
+                                }
+                            } else { stop = false }
+                            return SubscriptionAttempt(id: change.id, remoteID: nil,
+                                error: error.localizedDescription,
+                                state: rejected ? .failed : .unknown, stop: stop)
+                        }
+                    }
+                }
+                var items: [SubscriptionAttempt] = []
+                for await response in group { items.append(response) }
+                return items
+            }
+            let byID = Dictionary(uniqueKeysWithValues: responses.map { ($0.id, $0) })
+            for index in indices {
+                let id = batch.entries[index].id
+                guard let response = byID[id] else {
+                    batch.entries[index].state = .unknown
+                    batch.entries[index].error = "Dispatched request had no recorded response."
+                    continue
+                }
+                batch.entries[index].state = response.state
+                batch.entries[index].remoteID = response.remoteID
+                batch.entries[index].error = response.error
+                batch.entries[index].lastUpdated = Date()
+            }
+            batch.updatedAt = Date()
+            if responses.contains(where: \.stop) {
+                batch.stoppedReason = "Apple returned an authentication/permission/rate-limit error. Remaining requests were not sent. Review the error and Retry-After before resuming."
+            }
+            try await journal.saveSubscription(batch)
+            try await reconcileSubscriptionEntries(&batch, client: client, attempts: 1)
+            if batch.stoppedReason != nil || batch.uncertainCount > 0 { break }
+        }
+        return .init(batch: batch)
+    }
+
+    private func reconcileSubscriptionEntries(
+        _ batch: inout SubscriptionSubmissionBatch,
+        client: AppStoreConnectAPIClient,
+        attempts: Int = 2
+    ) async throws {
+        guard batch.plan.accountScope == client.pricingAccountScope else {
+            throw RegionalPricingError.mismatchedAccount
+        }
+        let indices = batch.entries.indices.filter {
+            [.inFlight, .unknown, .accepted, .pendingVerification].contains(batch.entries[$0].state)
+        }
+        guard !indices.isEmpty else { return }
+        for attempt in 0..<attempts {
+            if Task.isCancelled { break }
+            let snapshot: PricingSnapshot
+            do {
+                snapshot = try await RegionalPricingService(client: client)
+                    .loadSnapshot(product: batch.plan.product, refresh: true)
+            } catch {
+                batch.stoppedReason = "Read-only verification failed: \(error.localizedDescription)"
+                break
+            }
+            for index in indices {
+                if [.verifiedLive, .verifiedScheduled].contains(batch.entries[index].state) { continue }
+                let entry = batch.entries[index]
+                let matches = snapshot.prices.contains {
+                    $0.territoryID == entry.change.territoryID &&
+                    $0.planType == entry.change.planType &&
+                    $0.preserved != true &&
+                    $0.pricePointID == entry.change.point.id &&
+                    (($0.startDate ?? "") == entry.change.effectiveDate ||
+                     ($0.startDate == nil && entry.change.effectiveDate <= Self.today()))
+                }
+                if matches {
+                    batch.entries[index].state =
+                        entry.change.effectiveDate > Self.today() ? .verifiedScheduled : .verifiedLive
+                    batch.entries[index].preservationVerified = nil
+                    batch.entries[index].error = entry.change.increase
+                        ? "Public price verified. Existing-subscriber preservation cannot be independently confirmed from this API."
+                        : nil
+                } else if entry.state == .accepted || entry.state == .pendingVerification {
+                    batch.entries[index].state = .pendingVerification
+                    batch.entries[index].error = "Apple accepted the price change; public price is not yet verifiable."
+                } else {
+                    batch.entries[index].state = .unknown
+                    batch.entries[index].error = "Outcome unknown; no automatic retry. Reconcile before any resume."
+                }
+                batch.entries[index].lastUpdated = Date()
+            }
+            batch.updatedAt = Date()
+            try await journal.saveSubscription(batch)
+            if indices.allSatisfy({ [.verifiedLive, .verifiedScheduled].contains(batch.entries[$0].state) }) {
+                break
+            }
+            if attempt + 1 < attempts {
+                try? await Task.sleep(for: .seconds(attempt == 0 ? 2 : 4))
+            }
+        }
+    }
+
     private static func today() -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate]
