@@ -258,9 +258,9 @@ enum PricingDisplay {
     }
 
     static func country(_ id: String) -> String {
-        // Apple's region identifier is ISO 3166-1 alpha-3; Foundation's
-        // country lookup needs an explicit crosswalk supplied by a later pass.
-        // Do not guess a country by truncating its opaque Apple ID.
-        id == "USA" ? "United States" : id
+        // Ask Foundation to localize Apple's territory code. When no localized
+        // display name exists, retain the full code instead of inventing a name.
+        let localized = Locale.current.localizedString(forRegionCode: id)
+        return localized == nil || localized == id ? id : localized!
     }
 }
