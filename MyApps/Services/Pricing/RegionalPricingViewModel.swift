@@ -11,6 +11,7 @@ final class RegionalPricingViewModel {
     let product: PricingProduct
     private let service: RegionalPricingService
     private let drafts: PricingDraftStore?
+    private let presets = PricingPresetStore.shared
     private(set) var phase: Phase = .idle
     private(set) var snapshot: PricingSnapshot?
     private(set) var mapping: RegionalPricingMapping?
@@ -25,6 +26,16 @@ final class RegionalPricingViewModel {
     var effectiveDate: Date = PricingDay.initialSelection()
     private(set) var subscriberPolicy: RegionalSubscriberPolicy = .preserveExistingOnIncrease
     private(set) var roundingPolicy: RegionalPriceRoundingPolicy = .nearestCommon
+    private var selectedPresetID = RegionalPricingPreset.balanced.id
+
+    var selectedPreset: RegionalPricingPreset {
+        presets.preset(id: selectedPresetID) ?? .balanced
+    }
+
+    var presetNeedsRegeneration: Bool {
+        guard let proposal else { return false }
+        return proposal.effectivePreset != selectedPreset
+    }
 
     private var draftRevision: UInt64 = 0
     private var requestID = UUID()
@@ -55,6 +66,7 @@ final class RegionalPricingViewModel {
 
     var isReviewCurrent: Bool {
         proposal != nil && !isStale && !needsRegeneration && !restoredDraft &&
+            !presetNeedsRegeneration &&
             proposal?.effectiveRoundingPolicy == roundingPolicy &&
             (product.kind != .subscription || proposal?.subscriberPolicy == subscriberPolicy)
     }
@@ -82,6 +94,7 @@ final class RegionalPricingViewModel {
         selectedUSPointID = ""
         subscriberPolicy = .preserveExistingOnIncrease
         roundingPolicy = .nearestCommon
+        selectedPresetID = RegionalPricingPreset.balanced.id
         isStale = true
         needsRegeneration = true
         restoredDraft = false
@@ -117,6 +130,7 @@ final class RegionalPricingViewModel {
                 proposal = draft.proposal
                 subscriberPolicy = draft.proposal.subscriberPolicy
                 roundingPolicy = draft.proposal.effectiveRoundingPolicy
+                selectedPresetID = draft.proposal.presetID
                 selectedUSPointID = draft.proposal.selectedUSPoint.id
                 if let date = Self.parseDay(draft.proposal.effectiveDate) {
                     effectiveDate = date
@@ -159,6 +173,13 @@ final class RegionalPricingViewModel {
         needsRegeneration = proposal != nil
     }
 
+    func selectPreset(_ id: String) {
+        guard !isWorking, let preset = presets.preset(id: id), selectedPreset != preset else { return }
+        selectedPresetID = preset.id
+        referenceSet = nil
+        needsRegeneration = proposal != nil
+    }
+
     func changeRoundingPolicy(_ policy: RegionalPriceRoundingPolicy) {
         guard !isWorking, roundingPolicy != policy else { return }
         roundingPolicy = policy
@@ -195,14 +216,18 @@ final class RegionalPricingViewModel {
         }
         do {
             let previous = proposal
+            // Pin values across awaits; another window can edit global presets.
+            let preset = selectedPreset
             let references = try await service.loadReferenceSet(
                 snapshot: snapshot, selectedUSPoint: point, mapping: mapping,
+                preset: preset,
                 roundingPolicy: roundingPolicy,
                 overrides: previous?.overrides ?? []
             )
             try Task.checkCancellation()
             let generated = try RegionalPricingEngine.generate(
                 snapshot: snapshot, selectedUSPoint: point,
+                preset: preset,
                 mapping: mapping, effectiveDate: effectiveDateString,
                 references: references, existingOverrides: previous?.overrides ?? [],
                 exclusions: Set(previous?.exclusions ?? []),
@@ -216,7 +241,7 @@ final class RegionalPricingViewModel {
             proposal = generated
             restoredDraft = false
             isStale = false
-            needsRegeneration = false
+            needsRegeneration = selectedPreset != preset
             phase = .reviewing
             draftRevision &+= 1
             try await drafts?.save(generated, revision: draftRevision)
@@ -295,8 +320,12 @@ final class RegionalPricingViewModel {
             saveDraft(staged)
             return
         }
+        guard let preset = prior.effectivePreset else {
+            throw RegionalPricingError.invalidDraft("The proposal's saved preset is invalid. Generate again.")
+        }
         let generated = try RegionalPricingEngine.generate(
             snapshot: snapshot, selectedUSPoint: references.sourceUSPoint,
+            preset: preset,
             mapping: mapping, effectiveDate: prior.effectiveDate,
             references: references, existingOverrides: overrides,
             exclusions: exclusions ?? Set(prior.exclusions),
@@ -335,6 +364,7 @@ final class RegionalPricingViewModel {
         PricingDay.parse(value)
     }
 }
+
 
 
 

@@ -529,4 +529,22 @@ Apple's documentation describes multiple local pricing conventions and valid pri
 
 Validation: source/call-site/diff review and `git diff --check`; no tests, CI, Xcode/compiler build, authenticated Apple reads, or pricing writes were run. Device/fixture checks remain pending for both products, common/full switching, both subscriber policies, Decimal ties/endpoints, supported/unsupported currencies, an empty common subset, non-US lifetime base effects, exact manual overrides, legacy drafts/journals, and saved-batch recovery.
 
+## Global pricing presets — November 1, 2026
+
+**Country Strategy** in Pricing Policies pushes to a simple **Pricing Presets** list. It displays names, five tier percentages, and the selected checkmark. Tapping a row selects it and immediately pops back. The toolbar **+** presents a create sheet initialized with the selected preset's percentages and a blank name. Saving returns to the list; selection remains an explicit row tap.
+
+- **Balanced** is built-in, cannot be edited or deleted, and has no edit/delete actions. To customize its values, select it and create a new preset using **+**.
+- Custom rows support Edit/Delete through swipe actions and a context menu. Edit uses the same sheet; delete confirms removal from the shared list. The sheet contains name, five percentages, Cancel and Save. Cancel never writes; save errors retain the sheet/input.
+- Names must be unique ignoring case (including Balanced), nonempty and at most 60 characters. Tier 1 is fixed at 100%; Tiers 2–5 must be positive, ≤100%, and non-increasing. Input accepts dot or comma decimals with up to two decimal places. Decimal values are stored, not floating-point approximations.
+- `PricingPresetStore.shared` owns one app-wide list across all accounts, apps and products. Custom records have UUID identity and incrementing versions. They are atomically stored in Application Support at `PricingPresets/presets-v1.json`, independent of product drafts, and loaded on app launch/first use. The file contains no credentials. This is device-local persistence, not CloudKit synchronization.
+- Mutation occurs only after disk persistence succeeds. Invalid/unsupported/unreadable files remain untouched; the UI exposes Retry and blocks edits until storage loads. Stale editor versions cannot overwrite a newer edit or deleted preset.
+- A generated proposal stores the full immutable preset snapshot: ID, version, name and all five factors. Its fingerprint includes these values. Generation, non-US lifetime base equalizations, country override/exclusion rebuilds, and both submission preflights explicitly use that snapshot rather than a mutable global preset or hardcoded Balanced.
+- Selecting a new preset, editing the active preset or deleting it requires regeneration. Deleting the active preset falls back to Balanced. Existing proposal rows/snapshots and saved submission payloads are never rewritten by global edits/deletion. Changes to inactive presets do not invalidate an unrelated active proposal.
+- The selected product draft restores its selected preset by identity. If the global preset was deleted, Balanced is selected while the old frozen proposal remains visible and requires regeneration. Generation pins a copy across network awaits; a concurrent global edit leaves the result marked for regeneration.
+- Both frozen write plans persist the preset snapshot and show its name/factors in submission/recovery reports. Earlier production drafts and journals without this optional field retain Balanced semantics. Unknown/inconsistent legacy preset identities are not treated as valid frozen custom presets. Resume still dispatches only previously confirmed saved requests.
+- New source files are registered in the Xcode project and target Sources phase.
+
+Validation: source/call-site/diff review and `git diff --check`; no tests, CI, Xcode/compiler build, authenticated Apple reads, or pricing writes were run. Pending device checks: create/edit/cancel/delete, immutable built-in, row selection/pop, duplicate names and invalid percentages, disk failure/retry, persistence after relaunch/across products, active vs inactive preset edits, deletion fallback, custom generation for both products/non-US bases, snapshot restoration, and saved-submission recovery after global edits/deletion.
+
+
 

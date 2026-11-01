@@ -92,13 +92,8 @@ enum RegionalPricingEngine {
             throw RegionalPricingError.invalidReference("Select an existing valid Apple US price point for this product.")
         }
         _ = try mapping.validate(knownTerritories: snapshot.territories.map(\.id))
-        guard preset.factors.count == 5,
-              (1...5).allSatisfy({ tier in
-                  guard let factor = preset.factors[tier] else { return false }
-                  return factor > 0 && factor <= 1
-              }),
-              preset.factors[1] == 1 else {
-            throw RegionalPricingError.invalidMapping("Preset requires positive factors ≤1 and an undiscounted USA.")
+        guard preset.hasValidFactors else {
+            throw RegionalPricingError.invalidMapping("Preset requires five positive, non-increasing factors ≤1, with Tier 1 fixed at 100%.")
         }
         guard references.planType == nil || references.planType == "UPFRONT" else {
             throw RegionalPricingError.invalidReference("Monthly-with-commitment plans require adjusted equalizations.")
@@ -310,6 +305,7 @@ enum RegionalPricingEngine {
             product: snapshot.product, snapshotFingerprint: snapshot.semanticFingerprint,
             snapshotFetchedAt: snapshot.fetchedAt, selectedUSPoint: selectedUSPoint,
             presetID: preset.id, presetVersion: preset.version,
+            presetSnapshot: preset,
             mappingVersion: mapping.version, effectiveDate: effectiveDate,
             configuredBaseTerritory: snapshot.baseTerritoryID,
             overrides: sortedOverrides, exclusions: selectedExclusions,
@@ -422,6 +418,8 @@ enum RegionalPricingEngine {
             "1", snapshot.accountScope, snapshot.product.id,
             snapshot.semanticFingerprint, mapping.version, mapping.ruleVersion,
             preset.id, String(preset.version), us.id, decimal(us.customerPrice), date,
+            preset.displayName,
+            (1...5).map { decimal(preset.factors[$0]) }.joined(separator: ","),
             snapshot.baseTerritoryID ?? "-", subscriberPolicy.rawValue,
             roundingPolicy.rawValue, RegionalCommonPriceRules.version,
             acknowledgedWarnings.sorted().joined(separator: ",")
@@ -444,4 +442,5 @@ enum RegionalPricingEngine {
             .map { String(format: "%02x", $0) }.joined()
     }
 }
+
 

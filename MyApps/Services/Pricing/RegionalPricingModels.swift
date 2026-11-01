@@ -52,15 +52,41 @@ enum RegionalPricingTier: Int, Codable, CaseIterable, Sendable {
     }
 }
 
-struct RegionalPricingPreset: Codable, Sendable {
+struct RegionalPricingPreset: Codable, Equatable, Sendable, Identifiable {
     let id: String
     let version: Int
     let factors: [Int: Decimal]
+    let name: String?
+
+    init(id: String, version: Int, factors: [Int: Decimal], name: String? = nil) {
+        self.id = id
+        self.version = version
+        self.factors = factors
+        self.name = name
+    }
+
+    var displayName: String { name ?? (id == "balanced" ? "Balanced" : "Custom Preset") }
+    var isBuiltIn: Bool { id == Self.balanced.id }
+    var hasValidFactors: Bool {
+        guard factors.count == 5, factors[1] == 1 else { return false }
+        for tier in 1...5 {
+            guard let factor = factors[tier], factor > 0, factor <= 1 else { return false }
+            if tier > 1, factor > (factors[tier - 1] ?? 0) { return false }
+        }
+        return true
+    }
+
+    var percentageSummary: String {
+        (1...5).map { tier in
+            NSDecimalNumber(decimal: (factors[tier] ?? 0) * 100).stringValue + "%"
+        }.joined(separator: " / ")
+    }
+
     static let balanced = Self(id: "balanced", version: 1, factors: [
         1: Decimal(string: "1.00")!, 2: Decimal(string: "0.85")!,
         3: Decimal(string: "0.65")!, 4: Decimal(string: "0.45")!,
         5: Decimal(string: "0.30")!
-    ])
+    ], name: "Balanced")
 }
 
 struct RegionalPricingAssignment: Codable, Sendable {
@@ -295,6 +321,8 @@ struct RegionalPricingProposal: Codable, Sendable, Identifiable {
     let selectedUSPoint: PricingPoint
     let presetID: String
     let presetVersion: Int
+    // Frozen values are independent of later global preset edits/deletion.
+    let presetSnapshot: RegionalPricingPreset?
     let mappingVersion: String
     let effectiveDate: String
     let configuredBaseTerritory: String?
@@ -311,6 +339,17 @@ struct RegionalPricingProposal: Codable, Sendable, Identifiable {
     let fingerprint: String
 
     var effectiveRoundingPolicy: RegionalPriceRoundingPolicy { roundingPolicy ?? .nearestAvailable }
+
+    var effectivePreset: RegionalPricingPreset? {
+        if let presetSnapshot {
+            guard presetSnapshot.id == presetID, presetSnapshot.version == presetVersion,
+                  presetSnapshot.hasValidFactors else { return nil }
+            return presetSnapshot
+        }
+        // Only Balanced existed in older production drafts.
+        return presetID == RegionalPricingPreset.balanced.id &&
+            presetVersion == RegionalPricingPreset.balanced.version ? .balanced : nil
+    }
 
     // A draft is always treated as unverified until the current Apple snapshot
     // and the valid Apple point ladders have been loaded again.
@@ -368,6 +407,7 @@ enum RegionalPricingSiblingAdvisory {
         return result.sorted()
     }
 }
+
 
 
 

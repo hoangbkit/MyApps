@@ -61,12 +61,16 @@ actor PricingSubmissionCoordinator {
         guard mapping.version == proposal.mappingVersion else {
             throw PricingSubmissionFailure.invalidPlan("Country mapping changed. Review and regenerate.")
         }
+        guard let preset = proposal.effectivePreset else {
+            throw PricingSubmissionFailure.invalidPlan("The proposal's saved preset is invalid. Regenerate.")
+        }
         let references = try await service.loadReferenceSet(
             snapshot: fresh, selectedUSPoint: point, mapping: mapping,
+            preset: preset,
             roundingPolicy: proposal.effectiveRoundingPolicy,
             overrides: proposal.overrides)
         let regenerated = try RegionalPricingEngine.generate(
-            snapshot: fresh, selectedUSPoint: point, mapping: mapping,
+            snapshot: fresh, selectedUSPoint: point, preset: preset, mapping: mapping,
             effectiveDate: proposal.effectiveDate, references: references,
             existingOverrides: proposal.overrides,
             exclusions: Set(proposal.exclusions),
@@ -292,12 +296,16 @@ actor PricingSubmissionCoordinator {
         guard mapping.version == proposal.mappingVersion else {
             throw PricingSubmissionFailure.invalidPlan("The pricing preset changed. Review again.")
         }
+        guard let preset = proposal.effectivePreset else {
+            throw PricingSubmissionFailure.invalidPlan("The proposal's saved preset is invalid. Regenerate.")
+        }
         let references = try await service.loadReferenceSet(
             snapshot: fresh, selectedUSPoint: point, mapping: mapping,
+            preset: preset,
             roundingPolicy: proposal.effectiveRoundingPolicy,
             overrides: proposal.overrides)
         let regenerated = try RegionalPricingEngine.generate(
-            snapshot: fresh, selectedUSPoint: point, mapping: mapping,
+            snapshot: fresh, selectedUSPoint: point, preset: preset, mapping: mapping,
             effectiveDate: proposal.effectiveDate, references: references,
             existingOverrides: proposal.overrides, exclusions: Set(proposal.exclusions),
             subscriberPolicy: proposal.subscriberPolicy,
@@ -720,6 +728,7 @@ private extension PricingSubmissionOperation {
         plan.product
     }
 }
+
 
 
 

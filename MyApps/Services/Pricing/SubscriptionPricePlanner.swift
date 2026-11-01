@@ -77,6 +77,7 @@ struct SubscriptionWritePlan: Codable, Sendable {
     let selectedUSPoint: PricingPoint?
     let subscriberPolicy: RegionalSubscriberPolicy
     let roundingPolicy: RegionalPriceRoundingPolicy?
+    let presetSnapshot: RegionalPricingPreset?
     let excluded: [String]
     let changes: [SubscriptionPriceChange]
     let blockers: [String]
@@ -223,7 +224,8 @@ enum SubscriptionPricePlanner {
             baselineFingerprint: fresh.semanticFingerprint, effectiveDate: proposal.effectiveDate,
             selectedUSPoint: proposal.selectedUSPoint,
             subscriberPolicy: proposal.subscriberPolicy,
-            roundingPolicy: proposal.effectiveRoundingPolicy, excluded: proposal.exclusions.sorted(),
+            roundingPolicy: proposal.effectiveRoundingPolicy,
+            presetSnapshot: proposal.effectivePreset, excluded: proposal.exclusions.sorted(),
             changes: changes, blockers: Array(Set(blockers)).sorted(),
             warnings: Array(Set(warnings)).sorted(),
             requiresDecreaseAcknowledgment: decreases
@@ -239,6 +241,7 @@ enum SubscriptionPricePlanner {
         return formatter.date(from: date).map { formatter.string(from: $0) == date } ?? false
     }
 }
+
 
 
 

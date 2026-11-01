@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F6B000000000000000000001 /* PricingPresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A000000000000000000001 /* PricingPresetStore.swift */; };
+		F6B000000000000000000002 /* PricingPresetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A000000000000000000002 /* PricingPresetsView.swift */; };
 		F5B000000000000000000001 /* SubscriptionPricePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A000000000000000000001 /* SubscriptionPricePlanner.swift */; };
 		F5B000000000000000000002 /* SubscriptionSubmissionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A000000000000000000002 /* SubscriptionSubmissionModels.swift */; };
 		F4B000000000000000000001 /* LifetimeSchedulePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A000000000000000000001 /* LifetimeSchedulePlanner.swift */; };
@@ -114,6 +116,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F6A000000000000000000001 /* PricingPresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingPresetStore.swift; sourceTree = "<group>"; };
+		F6A000000000000000000002 /* PricingPresetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingPresetsView.swift; sourceTree = "<group>"; };
 		F5A000000000000000000001 /* SubscriptionPricePlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionPricePlanner.swift; sourceTree = "<group>"; };
 		F5A000000000000000000002 /* SubscriptionSubmissionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionSubmissionModels.swift; sourceTree = "<group>"; };
 		F4A000000000000000000001 /* LifetimeSchedulePlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifetimeSchedulePlanner.swift; sourceTree = "<group>"; };
@@ -235,6 +239,7 @@
 		F3C000000000000000000001 /* Pricing Views */ = {
 			isa = PBXGroup;
 			children = (
+				F6A000000000000000000002 /* PricingPresetsView.swift */,
 				F3A000000000000000000002 /* AppStorePricingView.swift */,
 				F3A000000000000000000003 /* RegionalPricingReviewView.swift */,
 				F3A000000000000000000004 /* RegionalPriceOverrideView.swift */,
@@ -392,6 +397,7 @@
 		F1C000000000000000000001 /* Pricing */ = {
 			isa = PBXGroup;
 			children = (
+				F6A000000000000000000001 /* PricingPresetStore.swift */,
 				F1A000000000000000000003 /* RegionalPricingService.swift */,
 				F2A000000000000000000001 /* RegionalPricingModels.swift */,
 				F2A000000000000000000002 /* RegionalPricingEngine.swift */,
@@ -622,6 +628,8 @@
 				F2B000000000000000000002 /* RegionalPricingEngine.swift in Sources */,
 				F2B000000000000000000003 /* PricingDraftStore.swift in Sources */,
 				F3B000000000000000000001 /* RegionalPricingViewModel.swift in Sources */,
+				F6B000000000000000000001 /* PricingPresetStore.swift in Sources */,
+				F6B000000000000000000002 /* PricingPresetsView.swift in Sources */,
 				F4B000000000000000000001 /* LifetimeSchedulePlanner.swift in Sources */,
 				F4B000000000000000000002 /* PricingSubmissionJournal.swift in Sources */,
 				F4B000000000000000000003 /* PricingSubmissionCoordinator.swift in Sources */,
@@ -960,3 +968,4 @@
 	};
 	rootObject = E2AF5CCE00EDB71222BD92BB /* Project object */;
 }
+

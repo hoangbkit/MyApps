@@ -48,6 +48,10 @@ struct PricingSubmissionView: View {
                                     PricingDisplay.amount(proposal.selectedUSPoint.customerPrice,
                                                           currency: proposal.selectedUSPoint.currency))
                                 LabeledContent("Effective Date", value: proposal.effectiveDate)
+                                LabeledContent("Preset", value: proposal.effectivePreset?.displayName ?? "Unknown — regenerate")
+                                if let preset = proposal.effectivePreset {
+                                    Text(preset.percentageSummary).font(.footnote)
+                                }
                                 LabeledContent("Price Rounding", value: proposal.effectiveRoundingPolicy.title)
                                 if proposal.product.kind == .lifetime {
                                     LabeledContent("Apple Base Territory",
@@ -139,6 +143,10 @@ struct PricingSubmissionView: View {
                         }
                         if let report {
                             Section("Submission Status") {
+                                LabeledContent("Submitted Preset", value:
+                                    (report.operation.plan.presetSnapshot ?? .balanced).displayName)
+                                Text((report.operation.plan.presetSnapshot ?? .balanced).percentageSummary)
+                                    .font(.footnote)
                                 LabeledContent("Submitted Rounding", value:
                                     (report.operation.plan.roundingPolicy ?? .nearestAvailable).title)
                                 LabeledContent("Group Status", value: report.operation.state.rawValue)
@@ -293,6 +301,8 @@ struct PricingSubmissionView: View {
             LabeledContent("Product", value: batch.plan.product.name)
             LabeledContent("Product ID", value: batch.plan.product.productID ?? batch.plan.product.id)
             LabeledContent("Effective Date", value: batch.plan.effectiveDate)
+            LabeledContent("Preset", value: (batch.plan.presetSnapshot ?? .balanced).displayName)
+            Text((batch.plan.presetSnapshot ?? .balanced).percentageSummary).font(.footnote)
             LabeledContent("Price Rounding", value: (batch.plan.roundingPolicy ?? .nearestAvailable).title)
             LabeledContent("US Reference", value: batch.plan.selectedUSPoint.map {
                 PricingDisplay.amount($0.customerPrice, currency: $0.currency)
@@ -411,6 +421,8 @@ struct PricingSubmissionView: View {
     @ViewBuilder
     private func subscriptionReportSection(_ summary: SubscriptionSubmissionReport) -> some View {
         Section("Subscription Submission") {
+            LabeledContent("Submitted Preset", value: (summary.batch.plan.presetSnapshot ?? .balanced).displayName)
+            Text((summary.batch.plan.presetSnapshot ?? .balanced).percentageSummary).font(.footnote)
             LabeledContent("Submitted Rounding", value: (summary.batch.plan.roundingPolicy ?? .nearestAvailable).title)
             LabeledContent("Submitted Increase Policy", value: summary.batch.plan.subscriberPolicy.summary)
             LabeledContent("Verified", value: String(summary.verifiedCount))
@@ -703,6 +715,7 @@ struct PricingSubmissionView: View {
         }
     }
 }
+
 
 
 

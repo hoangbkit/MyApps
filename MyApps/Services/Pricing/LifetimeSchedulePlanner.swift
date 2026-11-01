@@ -79,6 +79,7 @@ struct LifetimeSchedulePlan: Codable, Sendable {
     let effectiveDate: String
     let selectedUSPoint: PricingPoint
     let roundingPolicy: RegionalPriceRoundingPolicy?
+    let presetSnapshot: RegionalPricingPreset?
     let affectedTerritories: [String]
     let indirectTerritories: [String]
     let expectedAutomaticPoints: [String: String]
@@ -243,6 +244,7 @@ enum LifetimeSchedulePlanner {
             baselineFingerprint: fresh.semanticFingerprint, baseTerritoryID: base,
             effectiveDate: date, selectedUSPoint: proposal.selectedUSPoint,
             roundingPolicy: proposal.effectiveRoundingPolicy,
+            presetSnapshot: proposal.effectivePreset,
             affectedTerritories: changes.map(\.territoryID).sorted(),
             indirectTerritories: indirect.sorted(),
             expectedAutomaticPoints: Dictionary(uniqueKeysWithValues: changes.compactMap {
@@ -265,6 +267,7 @@ enum LifetimeSchedulePlanner {
             baseTerritoryID: fresh.baseTerritoryID ?? "",
             effectiveDate: proposal.effectiveDate, selectedUSPoint: proposal.selectedUSPoint,
             roundingPolicy: proposal.effectiveRoundingPolicy,
+            presetSnapshot: proposal.effectivePreset,
             affectedTerritories: [], indirectTerritories: [],
             expectedAutomaticPoints: [:],
             excludedTerritories: proposal.exclusions.sorted(),
@@ -303,4 +306,5 @@ enum LifetimeSchedulePlanner {
         return parser.date(from: value).map { parser.string(from: $0) == value } ?? false
     }
 }
+
 

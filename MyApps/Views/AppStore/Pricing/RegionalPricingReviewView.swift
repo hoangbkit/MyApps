@@ -193,13 +193,14 @@ struct RegionalPricingReviewView: View {
 
         policiesSection(model)
 
-        if model.isStale || model.restoredDraft || model.needsRegeneration {
+        if model.isStale || model.restoredDraft || model.needsRegeneration || model.presetNeedsRegeneration {
             Section {
                 Label {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(model.isStale ? "Remote prices changed" :
                              model.restoredDraft ? "Saved draft needs review" :
-                             "Price selections changed")
+                             model.presetNeedsRegeneration ? "Pricing preset changed" :
+                             "Pricing settings changed")
                             .font(.subheadline.weight(.semibold))
                         Text("The previous proposal remains visible. Review the refreshed Apple baseline and regenerate before submission becomes available.")
                             .font(.footnote)
@@ -238,8 +239,13 @@ struct RegionalPricingReviewView: View {
 
     private func policiesSection(_ model: RegionalPricingViewModel) -> some View {
         Section {
-            LabeledContent("Country Strategy", value: "Balanced · 5 tiers")
-            Text("Apply 100%, 85%, 65%, 45%, or 30% to Apple's local equivalent of your US reference price, according to each country's tier.")
+            NavigationLink {
+                PricingPresetsView(model: model)
+            } label: {
+                LabeledContent("Country Strategy", value: model.selectedPreset.displayName)
+            }
+            .disabled(model.isWorking)
+            Text(model.selectedPreset.percentageSummary + " · Applied by country tier to Apple's local equivalent of your US reference price.")
                 .font(.footnote)
                 .foregroundStyle(theme.secondaryForegroundColor)
             Picker("Price Rounding", selection: Binding(
@@ -307,6 +313,12 @@ struct RegionalPricingReviewView: View {
     private func resultSection(model: RegionalPricingViewModel,
                                proposal: RegionalPricingProposal) -> some View {
         Section("Proposal Summary") {
+            LabeledContent("Preset", value: proposal.effectivePreset?.displayName ?? "Unknown — regenerate")
+            if let preset = proposal.effectivePreset {
+                Text(preset.percentageSummary)
+                    .font(.footnote)
+                    .foregroundStyle(theme.secondaryForegroundColor)
+            }
             LabeledContent("Price Rounding", value: proposal.effectiveRoundingPolicy.title)
             let fallbacks = proposal.rows.filter {
                 !$0.excluded && $0.warnings.contains(.commonPriceFallback)
@@ -433,7 +445,7 @@ struct RegionalPricingReviewView: View {
         Section {
             if let mapping = model.mapping {
                 DisclosureGroup("How suggestions are calculated") {
-                    Text("Each local target is Apple's equalized price for the selected US point multiplied by 100%, 85%, 65%, 45%, or 30%. The selected rounding policy chooses the nearest valid common or available Apple price. Ties choose the lower price.")
+                    Text("Each local target is Apple's equalized price for the selected US point multiplied by that country's tier percentage in your chosen preset. The selected rounding policy chooses the nearest valid common or available Apple price. Ties choose the lower price.")
                     Text("Common-price conventions are versioned MyApps rules, not Apple's curated dashboard list. Examples: .99 in USD/EUR, multiples of 10 in JPY, and multiples of 1,000 in VND. Country details show the applied rule; unsupported currencies or empty common lists fall back with a warning.")
                     LabeledContent("Mapping Version", value: mapping.version)
                     LabeledContent("World Bank Income Edition",
@@ -489,6 +501,7 @@ struct RegionalPricingReviewView: View {
         return pieces.joined(separator: " · ")
     }
 }
+
 
 
 
