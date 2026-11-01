@@ -414,8 +414,22 @@ actor PricingSubmissionCoordinator {
             let snapshot = try await service.loadSnapshot(
                 product: batch.plan.product, refresh: true)
             var preflightFailure: String?
+            let upFront = snapshot.planTerritories.filter { $0.planType == "UPFRONT" }
+            if snapshot.planTerritories.count != 1 || upFront.count != 1 ||
+               snapshot.issues.contains(where: {
+                   ["subscriptionPrices", "planAvailability", "planType"].contains($0.resource)
+               }) {
+                preflightFailure = "Apple's subscription billing plan or prices are incomplete or changed."
+            }
             for index in indices {
+                if preflightFailure != nil { break }
                 let change = batch.entries[index].change
+                if !snapshot.territories.contains(where: {
+                    $0.id == change.territoryID && $0.available == true
+                }) || upFront.first?.territoryIDs.contains(change.territoryID) != true {
+                    preflightFailure = "Territory \(change.territoryID) is no longer confirmed available for UPFRONT billing."
+                    break
+                }
                 let current = snapshot.publicPrice(
                     territoryID: change.territoryID, planType: change.planType,
                     on: batch.plan.effectiveDate)
