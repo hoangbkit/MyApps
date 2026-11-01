@@ -85,6 +85,7 @@ struct PricingSubscriptionAttributes: Decodable, Sendable {
     let productId: String?
     let subscriptionPeriod: String?
     let state: String?
+    let groupLevel: Int?
 }
 
 struct PricingTerritoryAttributes: Decodable, Sendable {
@@ -135,6 +136,7 @@ struct PricingProduct: Codable, Hashable, Sendable, Identifiable {
     let rawType: String?
     let groupID: String?
     let groupName: String?
+    let serviceLevel: String?
     let duration: String?
     let unsupportedReason: String?
 }
