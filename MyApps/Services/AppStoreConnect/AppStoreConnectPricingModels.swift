@@ -217,7 +217,9 @@ struct PricingSnapshot: Codable, Sendable {
     }
 
     var currentUSPrice: PricingPriceRecord? {
-        let today = Date().formatted(.iso8601.year().month().day().dateSeparator(.dash))
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        let today = formatter.string(from: Date())
         return publicPrice(territoryID: "USA", on: today)
     }
 }
@@ -227,7 +229,7 @@ enum PricingDecimal {
 
     static func parse(_ text: String?) -> Decimal? {
         guard let text, !text.isEmpty,
-              text.range(of: #"^[0-9]+(\\.[0-9]+)?$"#, options: .regularExpression) != nil,
+              text.range(of: #"^[0-9]+(\.[0-9]+)?$"#, options: .regularExpression) != nil,
               let amount = Decimal(string: text, locale: posix),
               amount > 0 else { return nil }
         return amount
