@@ -77,6 +77,12 @@ extension AppStoreConnectAPIClient {
         }
     }
 
+    func pricingBaseTerritory(scheduleID: String) async throws -> TerritoryResource? {
+        let response: PricingSingle<TerritoryResource> =
+            try await get(path: "/v1/inAppPurchasePriceSchedules/\(scheduleID)/baseTerritory")
+        return response.data
+    }
+
     func pricingIAPPrices(scheduleID: String, manual: Bool, territory: String? = nil) async throws
         -> (items: [IAPPriceResource], included: [PricingIncludedResource]) {
         let relation = manual ? "manualPrices" : "automaticPrices"
