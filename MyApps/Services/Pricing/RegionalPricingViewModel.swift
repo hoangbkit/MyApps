@@ -22,7 +22,7 @@ final class RegionalPricingViewModel {
     private(set) var restoredDraft = false
 
     var selectedUSPointID: String = ""
-    var effectiveDate: Date = Date()
+    var effectiveDate: Date = PricingDay.initialSelection()
 
     private var draftRevision: UInt64 = 0
     private var requestID = UUID()
@@ -42,11 +42,7 @@ final class RegionalPricingViewModel {
     }
 
     var effectiveDateString: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)!
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: effectiveDate)
+        PricingDay.string(from: effectiveDate)
     }
 
     var isReviewCurrent: Bool {
@@ -246,8 +242,12 @@ final class RegionalPricingViewModel {
            let base = snapshot.baseTerritoryID, base != "USA",
            prior.overrides.first(where: { $0.territoryID == base })?.point.id !=
              overrides.first(where: { $0.territoryID == base })?.point.id {
+            var staged = prior
+            staged.overrides = overrides
+            proposal = staged
             needsRegeneration = true
             errorMessage = "Base-territory override changed. Generate again to reload Apple's automatic price effects."
+            saveDraft(staged)
             return
         }
         let generated = try RegionalPricingEngine.generate(
@@ -260,6 +260,10 @@ final class RegionalPricingViewModel {
             proposalID: prior.id
         )
         proposal = generated
+        saveDraft(generated)
+    }
+
+    private func saveDraft(_ generated: RegionalPricingProposal) {
         draftRevision &+= 1
         let revision = draftRevision
         Task { [weak self, drafts] in
@@ -282,11 +286,7 @@ final class RegionalPricingViewModel {
     func clearError() { errorMessage = nil }
 
     private static func parseDay(_ value: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)!
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.isLenient = false
-        return formatter.date(from: value)
+        PricingDay.parse(value)
     }
 }
+

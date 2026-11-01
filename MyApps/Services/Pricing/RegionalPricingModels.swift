@@ -1,5 +1,43 @@
 import Foundation
 
+/// A storefront day is a calendar value, never a device-timezone timestamp.
+/// The picker and wire encoder must use the same calendar and timezone.
+enum PricingDay {
+    static let timeZone = TimeZone(secondsFromGMT: 0)!
+    static var calendar: Calendar {
+        var value = Calendar(identifier: .gregorian)
+        value.timeZone = timeZone
+        return value
+    }
+
+    static func string(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = calendar
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    static func parse(_ value: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = calendar
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
+        guard let date = formatter.date(from: value), string(from: date) == value else { return nil }
+        return date
+    }
+
+    static func initialSelection(now: Date = Date(), localTimeZone: TimeZone = .current) -> Date {
+        var local = Calendar(identifier: .gregorian)
+        local.timeZone = localTimeZone
+        let components = local.dateComponents([.year, .month, .day], from: now)
+        return calendar.date(from: components) ?? now
+    }
+}
+
 enum RegionalPricingTier: Int, Codable, CaseIterable, Sendable {
     case premium = 1, developed, midMarket, priceSensitive, lowestPurchasingPower
 
@@ -194,7 +232,9 @@ struct RegionalPricingProposal: Codable, Sendable, Identifiable {
     let mappingVersion: String
     let effectiveDate: String
     let configuredBaseTerritory: String?
-    let overrides: [RegionalPricingOverride]
+    // May stage a base-country decision while the previous rows remain visible
+    // and explicitly require regeneration of dependent Apple equalizations.
+    var overrides: [RegionalPricingOverride]
     let exclusions: [String]
     let subscriberPolicy: RegionalSubscriberPolicy
     let acknowledgedWarnings: [String]
@@ -258,3 +298,4 @@ enum RegionalPricingSiblingAdvisory {
         return result.sorted()
     }
 }
+

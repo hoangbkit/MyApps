@@ -146,6 +146,8 @@ struct RegionalPricingReviewView: View {
                 get: { model.effectiveDate },
                 set: { model.changeDate($0) }
             ), displayedComponents: .date)
+                .environment(\.calendar, PricingDay.calendar)
+                .environment(\.timeZone, PricingDay.timeZone)
                 .disabled(model.isWorking)
             LabeledContent("Strategy", value: "Balanced · 5 tiers")
             if model.isWorking {
@@ -297,7 +299,7 @@ struct RegionalPricingReviewView: View {
             } label: {
                 Label("Review Submission", systemImage: "checklist")
             }
-            Text("Submission is unavailable until the lifetime and subscription write passes are implemented. This screen cannot change App Store prices.")
+            Text("Review the exact changes and confirm separately before submitting prices to App Store Connect.")
                 .font(.footnote)
                 .foregroundStyle(theme.secondaryForegroundColor)
         }
@@ -364,3 +366,4 @@ struct RegionalPricingReviewView: View {
         return pieces.joined(separator: " · ")
     }
 }
+

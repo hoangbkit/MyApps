@@ -142,6 +142,17 @@ actor PricingSubmissionJournal {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(batch)
+        // Keep the final report when a new proposal replaces closed work.
+        if let previous = try loadSubscription(accountScope: batch.plan.accountScope,
+                                               productID: batch.plan.product.id),
+           previous.id != batch.id {
+            guard previous.isClosed else {
+                throw PricingSubmissionFailure.unresolvedPreviousOperation
+            }
+            try encoder.encode(previous).write(
+                to: directory.appendingPathComponent("closed-subscription-" + previous.id.uuidString + ".json"),
+                options: [.atomic, .completeFileProtection])
+        }
         try data.write(to: subscriptionLocation(accountScope: batch.plan.accountScope,
                                                 productID: batch.plan.product.id),
                       options: [.atomic, .completeFileProtection])
@@ -160,3 +171,4 @@ actor PricingSubmissionJournal {
         return directory.appendingPathComponent(hash + ".json", isDirectory: false)
     }
 }
+

@@ -231,7 +231,12 @@ actor RegionalPricingService {
 
         var usPoints: [PricingPoint] = []
         do {
-            usPoints = try await loadPoints(product: product, territoryID: "USA")
+            // Normalize the US anchor with the same verified plan identity as
+            // references, country ladders, overrides, and submission rows.
+            let standardPlan: String? = product.kind == .subscription &&
+                Set(planTerritories.map(\.planType)) == ["UPFRONT"] ? "UPFRONT" : nil
+            usPoints = try await loadPoints(product: product, territoryID: "USA",
+                                           planType: standardPlan)
         } catch {
             issues.append(PricingReadIssue(resource: "US price points", message: error.localizedDescription))
         }
@@ -258,7 +263,8 @@ actor RegionalPricingService {
 
     // On-demand ladders: Pass 2 can prefetch territory-specific data with a
     // concurrency bound; Pass 1 does not eagerly fetch ~175 price ladders.
-    func loadPoints(product: PricingProduct, territoryID: String) async throws -> [PricingPoint] {
+    func loadPoints(product: PricingProduct, territoryID: String,
+                    planType: String? = nil) async throws -> [PricingPoint] {
         let page = try await client.pricingPoints(for: product, territory: territoryID)
         // Paginated JSON:API includes can repeat the same territory resource.
         // Never use uniqueKeysWithValues here (duplicate IDs would trap).
@@ -280,7 +286,7 @@ actor RegionalPricingService {
                   territory == territoryID else { return nil }
             return PricingPoint(
                 id: item.id, productID: product.id, territoryID: territory,
-                planType: nil, currency: includedCurrencies[territory] ?? fallbackCurrency,
+                planType: planType, currency: includedCurrencies[territory] ?? fallbackCurrency,
                 customerPrice: rawAmount
             )
         }.sorted {
@@ -688,3 +694,4 @@ actor RegionalPricingService {
             .map { String(format: "%02x", $0) }.joined()
     }
 }
+

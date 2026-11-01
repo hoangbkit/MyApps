@@ -20,6 +20,8 @@ struct SubscriptionSubmissionBatch: Codable, Sendable, Identifiable {
     var retryNotBefore: Date?
     let createdAt: Date
     var updatedAt: Date
+    // Missing in older journals means the batch is still open.
+    var closedAt: Date? = nil
 
     var pendingCount: Int {
         entries.filter { $0.state == .planned }.count
@@ -31,6 +33,10 @@ struct SubscriptionSubmissionBatch: Codable, Sendable, Identifiable {
     var isComplete: Bool {
         entries.allSatisfy { $0.state == .verifiedLive || $0.state == .verifiedScheduled }
     }
+
+    var isClosed: Bool { isComplete || closedAt != nil }
+
+    var canClose: Bool { !isClosed && uncertainCount == 0 }
 
     func outcome(for territory: String) -> SubscriptionSubmissionEntry? {
         entries.first { $0.change.territoryID == territory }
@@ -63,3 +69,4 @@ struct SubscriptionSubmissionReport: Sendable {
     var requiresReconciliation: Bool { batch.uncertainCount > 0 }
     var hasUnsent: Bool { batch.pendingCount > 0 }
 }
+

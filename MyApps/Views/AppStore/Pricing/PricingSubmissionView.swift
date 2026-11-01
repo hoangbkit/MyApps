@@ -16,105 +16,117 @@ struct PricingSubmissionView: View {
     @State private var subscriptionReport: SubscriptionSubmissionReport?
     @State private var acknowledgesDecrease = false
     @State private var confirmingResume = false
+    @State private var resumeReview: SubscriptionSubmissionBatch?
+    @State private var confirmingClose = false
+    @State private var closeReview: SubscriptionSubmissionBatch?
     @State private var errorMessage: String?
     @State private var isPreparing = false
     @State private var isSending = false
     @State private var confirmingSubmission = false
     @State private var loaded = false
+    @State private var isVisible = false
 
     private var proposal: RegionalPricingProposal? { model.proposal }
+    private var savedSubscription: SubscriptionSubmissionBatch? {
+        guard let batch = subscriptionReport?.batch, !batch.isClosed else { return nil }
+        return batch
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 if let proposal {
-                    Section("Product") {
-                        LabeledContent("Name", value: proposal.product.name)
-                        LabeledContent("Product ID", value: proposal.product.productID ?? "Unknown")
-                        LabeledContent("US Reference", value:
-                            PricingDisplay.amount(proposal.selectedUSPoint.customerPrice,
-                                                  currency: proposal.selectedUSPoint.currency))
-                        LabeledContent("Effective Date", value: proposal.effectiveDate)
-                        if proposal.product.kind == .lifetime {
-                            LabeledContent("Apple Base Territory",
-                                value: proposal.configuredBaseTerritory ?? "Unknown")
-                        } else {
-                            LabeledContent("Subscription Duration",
-                                value: proposal.product.duration ?? "Unknown")
-                            LabeledContent("Billing Plan", value: "UPFRONT")
+                    if let saved = savedSubscription {
+                        savedSubscriptionScope(saved)
+                    } else {
+                        Section("Product") {
+                            LabeledContent("Name", value: proposal.product.name)
+                            LabeledContent("Product ID", value: proposal.product.productID ?? "Unknown")
+                            LabeledContent("US Reference", value:
+                                PricingDisplay.amount(proposal.selectedUSPoint.customerPrice,
+                                                      currency: proposal.selectedUSPoint.currency))
+                            LabeledContent("Effective Date", value: proposal.effectiveDate)
+                            if proposal.product.kind == .lifetime {
+                                LabeledContent("Apple Base Territory",
+                                    value: proposal.configuredBaseTerritory ?? "Unknown")
+                            } else {
+                                LabeledContent("Subscription Duration",
+                                    value: proposal.product.duration ?? "Unknown")
+                                LabeledContent("Billing Plan", value: "UPFRONT")
+                            }
                         }
-                    }
-                    Section("Frozen Review Scope") {
-                        LabeledContent("Eligible", value: String(proposal.summary.eligible))
-                        LabeledContent("Increases", value: String(proposal.summary.increases))
-                        LabeledContent("Decreases", value: String(proposal.summary.decreases))
-                        LabeledContent("Excluded", value: String(proposal.summary.excluded))
-                        LabeledContent("Blockers", value: String(proposal.summary.blocked))
-                        if proposal.product.kind == .lifetime {
-                            LabeledContent("Automatic → Manual",
-                                value: String(proposal.summary.automaticToManual))
+                        Section("Frozen Review Scope") {
+                            LabeledContent("Eligible", value: String(proposal.summary.eligible))
+                            LabeledContent("Increases", value: String(proposal.summary.increases))
+                            LabeledContent("Decreases", value: String(proposal.summary.decreases))
+                            LabeledContent("Excluded", value: String(proposal.summary.excluded))
+                            LabeledContent("Blockers", value: String(proposal.summary.blocked))
+                            if proposal.product.kind == .lifetime {
+                                LabeledContent("Automatic → Manual",
+                                    value: String(proposal.summary.automaticToManual))
+                            }
                         }
-                    }
-                    if let subscriptionPlan {
-                        subscriptionPreflight(subscriptionPlan)
-                    }
-                    if let plan {
-                        Section("Preflight — Apple's Current State") {
-                            LabeledContent("Base Territory",
-                                value: plan.baseTerritoryID.isEmpty ? "Unknown" : plan.baseTerritoryID)
-                            LabeledContent("Schedule Groups",
-                                value: plan.request == nil ? "0" : "1")
-                            LabeledContent("Changed Storefronts",
-                                value: String(plan.affectedTerritories.count))
-                            LabeledContent("Preserved Manual Entries",
-                                value: String(plan.preservedEntries.count))
-                            LabeledContent("Indirect Automatic Changes",
-                                value: String(plan.indirectTerritories.count))
-                            if !plan.excludedTerritories.isEmpty {
-                                DisclosureGroup("Excluded Countries") {
-                                    ForEach(plan.excludedTerritories, id: \.self) {
-                                        Text(PricingDisplay.country($0) + " (" + $0 + ")")
+                        if let subscriptionPlan {
+                            subscriptionPreflight(subscriptionPlan)
+                        }
+                        if let plan {
+                            Section("Preflight — Apple's Current State") {
+                                LabeledContent("Base Territory",
+                                    value: plan.baseTerritoryID.isEmpty ? "Unknown" : plan.baseTerritoryID)
+                                LabeledContent("Schedule Groups",
+                                    value: plan.request == nil ? "0" : "1")
+                                LabeledContent("Changed Storefronts",
+                                    value: String(plan.affectedTerritories.count))
+                                LabeledContent("Preserved Manual Entries",
+                                    value: String(plan.preservedEntries.count))
+                                LabeledContent("Indirect Automatic Changes",
+                                    value: String(plan.indirectTerritories.count))
+                                if !plan.excludedTerritories.isEmpty {
+                                    DisclosureGroup("Excluded Countries") {
+                                        ForEach(plan.excludedTerritories, id: \.self) {
+                                            Text(PricingDisplay.country($0) + " (" + $0 + ")")
+                                        }
+                                    }
+                                }
+                                if !plan.affectedTerritories.isEmpty {
+                                    DisclosureGroup("Exact Changed Countries") {
+                                        ForEach(plan.affectedTerritories, id: \.self) {
+                                            Text(PricingDisplay.country($0) + " (" + $0 + ")")
+                                        }
                                     }
                                 }
                             }
-                            if !plan.affectedTerritories.isEmpty {
-                                DisclosureGroup("Exact Changed Countries") {
-                                    ForEach(plan.affectedTerritories, id: \.self) {
-                                        Text(PricingDisplay.country($0) + " (" + $0 + ")")
+                            if !plan.blockers.isEmpty || !plan.warnings.isEmpty {
+                                Section("Preflight Findings") {
+                                    ForEach(plan.blockers, id: \.self) { blocker in
+                                        Label(blocker, systemImage: "exclamationmark.triangle")
+                                            .foregroundStyle(.orange)
+                                    }
+                                    ForEach(plan.warnings, id: \.self) { warning in
+                                        Text(warning)
+                                            .foregroundStyle(theme.secondaryForegroundColor)
                                     }
                                 }
                             }
-                        }
-                        if !plan.blockers.isEmpty || !plan.warnings.isEmpty {
-                            Section("Preflight Findings") {
-                                ForEach(plan.blockers, id: \.self) { blocker in
-                                    Label(blocker, systemImage: "exclamationmark.triangle")
-                                        .foregroundStyle(.orange)
-                                }
-                                ForEach(plan.warnings, id: \.self) { warning in
-                                    Text(warning)
-                                        .foregroundStyle(theme.secondaryForegroundColor)
-                                }
+                        } else if isPreparing {
+                            Section {
+                                ProgressView("Rechecking Apple's prices and valid points…")
                             }
                         }
-                    } else if isPreparing {
-                        Section {
-                            ProgressView("Rechecking Apple's prices and valid points…")
-                        }
-                    }
-                    Section("Safety") {
-                        if !model.isReviewCurrent {
-                            Label("The reviewed proposal is stale, unverified, or needs regeneration.",
-                                  systemImage: "exclamationmark.triangle")
-                                .foregroundStyle(.orange)
-                        }
-                        if proposal.product.kind == .subscription {
-                            Text("Price increases preserve the current public price for existing subscribers. Previously preserved cohorts are not un-preserved.")
-                            Text("Price decreases affect existing subscribers at renewal. You cannot preserve a higher price through a decrease.")
-                            Text("Apple controls any required notifications or consent. The API cannot prove individual subscriber treatment, even when new public prices are verified.")
-                        } else {
-                            Text("One complete lifetime price schedule will be sent only after final confirmation. Apple may adjust other automatic storefront prices; any unresolved effects block submission.")
-                            Text("Apple acceptance does not mean prices are live. Verification or read-only reconciliation may still be needed.")
+                        Section("Safety") {
+                            if !model.isReviewCurrent {
+                                Label("The reviewed proposal is stale, unverified, or needs regeneration.",
+                                      systemImage: "exclamationmark.triangle")
+                                    .foregroundStyle(.orange)
+                            }
+                            if proposal.product.kind == .subscription {
+                                Text("Price increases preserve the current public price for existing subscribers. Previously preserved cohorts are not un-preserved.")
+                                Text("Price decreases affect existing subscribers at renewal. You cannot preserve a higher price through a decrease.")
+                                Text("Apple controls any required notifications or consent. The API cannot prove individual subscriber treatment, even when new public prices are verified.")
+                            } else {
+                                Text("One complete lifetime price schedule will be sent only after final confirmation. Apple may adjust other automatic storefront prices; any unresolved effects block submission.")
+                                Text("Apple acceptance does not mean prices are live. Verification or read-only reconciliation may still be needed.")
+                            }
                         }
                     }
                     if let subscriptionReport {
@@ -151,7 +163,11 @@ struct PricingSubmissionView: View {
                         if isSending {
                             ProgressView("Submitting or reconciling Apple prices…")
                         } else if proposal.product.kind == .subscription {
-                            if subscriptionPlan?.isNoOp == true {
+                            if savedSubscription != nil {
+                                Text("Resolve the saved submission above before submitting a new proposal.")
+                                    .font(.footnote)
+                                    .foregroundStyle(theme.secondaryForegroundColor)
+                            } else if subscriptionPlan?.isNoOp == true {
                                 Label("No subscription price changes required.", systemImage: "checkmark.circle")
                             } else {
                                 Button("Submit Subscription Prices") {
@@ -185,7 +201,10 @@ struct PricingSubmissionView: View {
                 }
             }
             .task(id: session.connectionRevision) {
-                if loaded { model.markRemoteStale() }
+                if loaded {
+                    pauseDispatch()
+                    model.markRemoteStale()
+                }
                 loaded = true
                 await loadPrevious()
                 await prepare()
@@ -198,7 +217,11 @@ struct PricingSubmissionView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active { pauseDispatch() }
             }
-            .onDisappear { pauseDispatch() }
+            .onAppear { isVisible = true }
+            .onDisappear {
+                isVisible = false
+                pauseDispatch()
+            }
             .confirmationDialog(
                 proposal?.product.kind == .subscription
                     ? "Confirm Subscription Price Changes?" : "Confirm Lifetime Price Submission?",
@@ -223,11 +246,70 @@ struct PricingSubmissionView: View {
                                 isPresented: $confirmingResume,
                                 titleVisibility: .visible) {
                 Button("Resume Verified Remaining Requests") {
-                    Task { await resumeSubscription() }
+                    if let reviewed = resumeReview {
+                        Task { await resumeSubscription(reviewed: reviewed) }
+                    }
                 }
+                .disabled(isSending || isPreparing || scenePhase != .active)
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Only planned or definitively rejected changes are eligible. The app rechecks Apple state and will not replay accepted or unknown requests.")
+                if let reviewed = resumeReview {
+                    Text("Resume the saved prices for \(reviewed.plan.product.name), effective \(reviewed.plan.effectiveDate). \(reviewed.plan.excluded.count) countries remain excluded. These are the saved submission's prices shown above, not a newer proposal. Accepted or unknown requests will not be replayed.")
+                }
+            }
+            .confirmationDialog("Close Saved Submission?", isPresented: $confirmingClose,
+                                titleVisibility: .visible) {
+                Button("Close Saved Submission", role: .destructive) {
+                    if let reviewed = closeReview {
+                        Task { await closeSubscription(reviewed: reviewed) }
+                    }
+                }
+                .disabled(isSending || isPreparing)
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Remaining unsent or rejected requests will not be sent. Verified Apple price changes stay in effect. After closing, refresh and generate a new proposal. An unknown request must be reconciled before it can be closed.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func savedSubscriptionScope(_ batch: SubscriptionSubmissionBatch) -> some View {
+        Section("Saved Submission to Resolve") {
+            LabeledContent("Product", value: batch.plan.product.name)
+            LabeledContent("Product ID", value: batch.plan.product.productID ?? batch.plan.product.id)
+            LabeledContent("Effective Date", value: batch.plan.effectiveDate)
+            LabeledContent("US Reference", value: batch.plan.selectedUSPoint.map {
+                PricingDisplay.amount($0.customerPrice, currency: $0.currency)
+            } ?? "Not recorded in this older saved submission")
+            LabeledContent("Billing Plan", value: "UPFRONT")
+            LabeledContent("Existing Subscribers on Increases", value: "Preserve current price")
+            Text("Resume uses only the saved prices listed here. A newer proposal is separate and will not replace these requests.")
+                .font(.footnote)
+            if batch.plan.requiresDecreaseAcknowledgment {
+                Text("The original confirmation acknowledged that decreases affect existing subscribers at renewal.")
+                    .font(.footnote)
+                    .foregroundStyle(theme.secondaryForegroundColor)
+            }
+            DisclosureGroup("Exact Saved Prices and Outcomes") {
+                ForEach(batch.entries) { entry in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(PricingDisplay.country(entry.change.territoryID) + " (" + entry.change.territoryID + ")")
+                            .font(.subheadline.weight(.medium))
+                        Text(PricingDisplay.amount(entry.change.previous.customerPrice,
+                            currency: entry.change.previous.currency) + " → " +
+                            PricingDisplay.amount(entry.change.point.customerPrice,
+                                currency: entry.change.point.currency))
+                            .font(.caption)
+                        Text(entry.state.rawValue)
+                            .font(.caption2)
+                            .foregroundStyle(theme.secondaryForegroundColor)
+                    }
+                }
+            }
+            DisclosureGroup("Saved Exclusions (\(batch.plan.excluded.count))") {
+                ForEach(batch.plan.excluded, id: \.self) { code in
+                    Text(PricingDisplay.country(code) + " (" + code + ")")
+                }
             }
         }
     }
@@ -308,10 +390,30 @@ struct PricingSubmissionView: View {
                 }
                 .disabled(isSending || isPreparing)
             }
-            if summary.batch.uncertainCount == 0 &&
+            if summary.batch.closedAt != nil {
+                Label("Saved submission closed. No remaining requests will be sent.",
+                      systemImage: "checkmark.circle")
+            }
+            if !summary.batch.isClosed && summary.batch.uncertainCount == 0 &&
                (summary.hasUnsent || summary.failedCount > 0) {
-                Button("Resume Remaining Countries") { confirmingResume = true }
-                    .disabled(isSending || isPreparing)
+                Button("Resume Saved Prices") {
+                    resumeReview = summary.batch
+                    confirmingResume = true
+                }
+                    .disabled(isSending || isPreparing ||
+                        summary.batch.plan.effectiveDate < PricingDay.string(from: Date()))
+                if summary.batch.plan.effectiveDate < PricingDay.string(from: Date()) {
+                    Text("The saved effective date has passed. Close this submission and generate a new proposal.")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                }
+            }
+            if summary.batch.canClose {
+                Button("Close Saved Submission", role: .destructive) {
+                    closeReview = summary.batch
+                    confirmingClose = true
+                }
+                .disabled(isSending || isPreparing)
             }
             DisclosureGroup("Per-Country Results") {
                 ForEach(summary.results) { result in
@@ -343,19 +445,27 @@ struct PricingSubmissionView: View {
         return model.isReviewCurrent && details.isExecutable &&
             (!details.requiresDecreaseAcknowledgment || acknowledgesDecrease) &&
             !isPreparing && !isSending &&
-            (subscriptionReport == nil || subscriptionReport?.batch.isComplete == true)
+            isVisible && scenePhase == .active &&
+            (subscriptionReport == nil || subscriptionReport?.batch.isClosed == true)
     }
 
     private var maySubmit: Bool {
         guard let proposal, let plan else { return false }
         return proposal.product.kind == .lifetime && model.isReviewCurrent &&
-            plan.isExecutable && !isPreparing && !isSending &&
+            plan.isExecutable && !isPreparing && !isSending && isVisible && scenePhase == .active &&
             (report == nil || [.planned, .failed, .verifiedLive, .verifiedScheduled].contains(report!.operation.state))
     }
 
     @MainActor
     private func prepare() async {
         guard !isPreparing, !isSending, let proposal else { return }
+        if savedSubscription != nil {
+            // Recovery displays the journal's immutable prices. Do not put a
+            // newer proposal's preflight above an old batch's Resume button.
+            plan = nil
+            subscriptionPlan = nil
+            return
+        }
         guard model.isReviewCurrent, let client = session.client(),
               client.pricingAccountScope == proposal.accountScope else {
             errorMessage = "Review or reconnect this proposal before preparing a submission."
@@ -430,7 +540,7 @@ struct PricingSubmissionView: View {
     private func submit() async {
         guard let proposal, let client = session.client(),
               client.pricingAccountScope == proposal.accountScope,
-              !isSending else { return }
+              !isSending, isVisible, scenePhase == .active else { return }
         if proposal.product.kind == .subscription {
             await submitSubscription(client: client, proposal: proposal)
             return
@@ -506,15 +616,17 @@ struct PricingSubmissionView: View {
     }
 
     @MainActor
-    private func resumeSubscription() async {
-        guard !isSending, let proposal,
+    private func resumeSubscription(reviewed: SubscriptionSubmissionBatch) async {
+        guard !isSending, !isPreparing, isVisible, scenePhase == .active,
+              subscriptionReport?.batch.id == reviewed.id,
               let client = session.client(),
-              client.pricingAccountScope == proposal.accountScope else { return }
+              client.pricingAccountScope == reviewed.plan.accountScope else { return }
         isSending = true
         defer { isSending = false }
         do {
             subscriptionReport = try await PricingSubmissionCoordinator.shared.resumeSubscription(
-                accountScope: proposal.accountScope, productID: proposal.product.id,
+                accountScope: reviewed.plan.accountScope, productID: reviewed.plan.product.id,
+                batchID: reviewed.id, proposalFingerprint: reviewed.plan.proposalFingerprint,
                 client: client)
             model.markRemoteStale()
         } catch {
@@ -522,11 +634,32 @@ struct PricingSubmissionView: View {
         }
     }
 
+    @MainActor
+    private func closeSubscription(reviewed: SubscriptionSubmissionBatch) async {
+        guard !isSending, !isPreparing, subscriptionReport?.batch.id == reviewed.id,
+              let client = session.client(),
+              client.pricingAccountScope == reviewed.plan.accountScope else { return }
+        isSending = true
+        defer { isSending = false }
+        do {
+            subscriptionReport = try await PricingSubmissionCoordinator.shared.closeSubscription(
+                accountScope: reviewed.plan.accountScope, productID: reviewed.plan.product.id,
+                batchID: reviewed.id, client: client)
+            subscriptionPlan = nil
+            model.markRemoteStale()
+            errorMessage = "Saved submission closed. Return to Regional Pricing, refresh Apple data, and regenerate before submitting a new proposal."
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func pauseDispatch() {
-        guard let proposal else { return }
+        guard let scope = subscriptionReport?.batch.plan.accountScope ?? proposal?.accountScope,
+              let productID = subscriptionReport?.batch.plan.product.id ?? proposal?.product.id else { return }
         Task {
             await PricingSubmissionCoordinator.shared.pausePendingOperations(
-                accountScope: proposal.accountScope, productID: proposal.product.id)
+                accountScope: scope, productID: productID)
         }
     }
 }
+

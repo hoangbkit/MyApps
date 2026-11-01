@@ -66,6 +66,8 @@ struct SubscriptionWritePlan: Codable, Sendable {
     let proposalFingerprint: String
     let baselineFingerprint: String
     let effectiveDate: String
+    // Optional so journals written before this field remain readable.
+    let selectedUSPoint: PricingPoint?
     let subscriberPolicy: RegionalSubscriberPolicy
     let excluded: [String]
     let changes: [SubscriptionPriceChange]
@@ -195,6 +197,7 @@ enum SubscriptionPricePlanner {
             proposalID: proposal.id, product: proposal.product,
             accountScope: proposal.accountScope, proposalFingerprint: proposal.fingerprint,
             baselineFingerprint: fresh.semanticFingerprint, effectiveDate: proposal.effectiveDate,
+            selectedUSPoint: proposal.selectedUSPoint,
             subscriberPolicy: proposal.subscriberPolicy, excluded: proposal.exclusions.sorted(),
             changes: changes, blockers: Array(Set(blockers)).sorted(),
             warnings: Array(Set(warnings)).sorted(),
@@ -211,3 +214,4 @@ enum SubscriptionPricePlanner {
         return formatter.date(from: date).map { formatter.string(from: $0) == date } ?? false
     }
 }
+

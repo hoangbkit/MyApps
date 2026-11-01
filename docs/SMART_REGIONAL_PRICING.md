@@ -447,3 +447,26 @@ Scope: **PR #9 only**. The changes below correct existing Pass 1–5 pricing cod
 - Apple does not expose enough information in public price reads to prove individual subscribers' preserved/cohort billing; reporting must keep this marked unverified even after public prices match.
 
 **Next recommended action:** a separately authorized compile and offline fixture validation pass, then manual QA on a supported iPhone. Keep PR #9 draft until those results are reviewed. Do not use live App Store price mutations as tests.
+
+## Review corrections — 2026-11-01
+
+The following corrections address the six source-review findings and obsolete submission copy on PR #9:
+
+- Standard subscription US points are normalized to the verified `UPFRONT` plan when the snapshot is loaded. They now retain the same identity through generation, country edits, exclusions, and submission validation. Unsupported plans remain blocked.
+- Recovery displays the saved batch's product, reference (when recorded), effective date, exact territory prices/outcomes, exclusions, and subscriber policy. A different proposal's preflight is hidden while saved work needs resolution. Resume confirms and checks the saved batch UUID and proposal fingerprint.
+- A saved batch with only verified, proven-rejected, or unsent entries may be explicitly closed locally. Unknown, in-flight, accepted-unverified, and pending-verification outcomes cannot be discarded. Closing never reverses Apple prices; it permits a refreshed, separately reviewed proposal. Replacing closed work archives its final report in the same protected, device-local journal directory. New optional journal fields preserve compatibility with earlier saved batches.
+- A pause received during preflight is retained. Lifetime dispatch checks again after journal persistence; subscription dispatch rechecks after preflight and makes an actor-owned claim immediately before each POST. A declined claim returns to planned without counting a network attempt. Already claimed requests may complete and are reconciled normally. An expired saved effective date requires closing and regenerating rather than silently shifting the date.
+- Changing or resetting a non-US base-country override stages and saves the decision before marking the proposal for regeneration. Regeneration then reloads dependent equalizations using that retained choice.
+- Picker, parsing, and serialization use the same Gregorian date-only UTC representation. The initial selection copies the user's local calendar day into this representation, avoiding a visible-date/wire-date mismatch around midnight. Submission help now describes the actual separate confirmation.
+
+### Focused validation still to perform on Xcode/device
+
+1. Standard monthly/yearly subscription: generate with USA included, override a country, exclude/reset it, and prepare the exact reviewed plan.
+2. Save batch A, create a different proposal B, and reopen submission: only A's saved scope may be resumed; changing the stored batch identity must reject the confirmation.
+3. A definitively rejected or unsent batch can be closed and replaced with a fresh proposal. A batch containing an unknown or accepted-unverified request cannot be closed. Previously verified changes remain visible and unchanged.
+4. Pause while snapshot/point reads or journal persistence are suspended: no further dispatch claims occur; unclaimed rows remain planned, already claimed rows retain their actual outcomes, and concurrency remains at most three.
+5. Set/reset a non-US base override, refresh or relaunch, and regenerate: the decision survives while dependent equalizations are reloaded.
+6. Select/restore dates around midnight in UTC+7 and a negative offset: displayed and encoded dates match; expired saved operations cannot resume with shifted dates.
+
+**Checks for this correction:** source/diff review and `git diff --check`. No Swift compiler or Xcode is available in this environment. No tests, CI, authenticated Apple reads, or pricing writes were run. Runtime validation remains outstanding.
+

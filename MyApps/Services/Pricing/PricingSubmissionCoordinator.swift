@@ -34,6 +34,10 @@ actor PricingSubmissionCoordinator {
         paused.insert(key(account: accountScope, product: productID))
     }
 
+    private func mayDispatch(_ scope: String) -> Bool {
+        !Task.isCancelled && !paused.contains(scope)
+    }
+
     /// Preflight always performs uncached Apple reads and re-runs the pure
     /// proposal, checking every selected point. It does not write remotely.
     func prepare(proposal: RegionalPricingProposal,
@@ -88,6 +92,9 @@ actor PricingSubmissionCoordinator {
         let scope = key(account: proposal.accountScope, product: proposal.product.id)
         guard active.insert(scope).inserted else { throw PricingSubmissionFailure.alreadyActive }
         defer { active.remove(scope) }
+        // Clear an earlier pause only at the START of this explicit action.
+        // A pause arriving during any subsequent awaited preflight must stick.
+        paused.remove(scope)
         if let last = try await journal.load(
             accountScope: proposal.accountScope, productID: proposal.product.id),
            [.inFlight, .unknown, .accepted, .pendingVerification].contains(last.state) {
@@ -124,11 +131,23 @@ actor PricingSubmissionCoordinator {
             remoteID: nil, error: nil, createdAt: Date(), updatedAt: Date()
         )
         try await journal.save(operation)
-        guard !Task.isCancelled else { return .make(from: operation) }
+        guard mayDispatch(scope), fresh.effectiveDate >= Self.today() else {
+            operation.error = "Paused or effective date passed before dispatch. No price request was sent."
+            try await journal.save(operation)
+            return .make(from: operation)
+        }
         operation.state = .inFlight
         operation.attempts = 1
         operation.updatedAt = Date()
         try await journal.save(operation) // Required BEFORE network dispatch.
+        guard mayDispatch(scope), fresh.effectiveDate >= Self.today() else {
+            operation.state = .planned
+            operation.attempts = 0
+            operation.error = "Paused or effective date passed before dispatch. No price request was sent."
+            operation.updatedAt = Date()
+            try await journal.save(operation)
+            return .make(from: operation)
+        }
 
         do {
             guard let request = fresh.request else {
@@ -304,9 +323,10 @@ actor PricingSubmissionCoordinator {
         let scope = key(account: proposal.accountScope, product: proposal.product.id)
         guard active.insert(scope).inserted else { throw PricingSubmissionFailure.alreadyActive }
         defer { active.remove(scope) }
+        paused.remove(scope)
         if let previous = try await journal.loadSubscription(
             accountScope: proposal.accountScope, productID: proposal.product.id),
-           !previous.isComplete {
+           !previous.isClosed {
             throw PricingSubmissionFailure.unresolvedPreviousOperation
         }
         let fresh = try await prepareSubscription(
@@ -350,6 +370,7 @@ actor PricingSubmissionCoordinator {
     /// or whose prior POST received a definite failure. Unknown outcomes block.
     /// It never replays accepted, verified, in-flight, or unknown requests.
     func resumeSubscription(accountScope: String, productID: String,
+                            batchID: UUID, proposalFingerprint: String,
                             client: AppStoreConnectAPIClient) async throws
         -> SubscriptionSubmissionReport {
         guard client.pricingAccountScope == accountScope else {
@@ -358,9 +379,14 @@ actor PricingSubmissionCoordinator {
         let scope = key(account: accountScope, product: productID)
         guard active.insert(scope).inserted else { throw PricingSubmissionFailure.alreadyActive }
         defer { active.remove(scope) }
+        paused.remove(scope)
         guard var batch = try await journal.loadSubscription(
             accountScope: accountScope, productID: productID) else {
             throw PricingSubmissionFailure.invalidPlan("No saved subscription operation exists.")
+        }
+        guard batch.id == batchID, batch.plan.proposalFingerprint == proposalFingerprint,
+              !batch.isClosed else {
+            throw PricingSubmissionFailure.invalidPlan("The saved submission changed. Reopen and review its exact prices before resuming.")
         }
         if let deadline = batch.retryNotBefore, Date() < deadline {
             throw PricingSubmissionFailure.invalidPlan(
@@ -374,6 +400,31 @@ actor PricingSubmissionCoordinator {
             throw PricingSubmissionFailure.unresolvedPreviousOperation
         }
         return try await dispatchSubscription(&batch, client: client, explicitResume: true)
+    }
+
+    /// Local closure only: never deletes an uncertain operation or reverses
+    /// verified Apple changes. It permits a fresh, independently reviewed plan.
+    func closeSubscription(accountScope: String, productID: String, batchID: UUID,
+                           client: AppStoreConnectAPIClient) async throws -> SubscriptionSubmissionReport {
+        guard client.pricingAccountScope == accountScope else {
+            throw RegionalPricingError.mismatchedAccount
+        }
+        let scope = key(account: accountScope, product: productID)
+        guard active.insert(scope).inserted else { throw PricingSubmissionFailure.alreadyActive }
+        defer { active.remove(scope) }
+        guard var batch = try await journal.loadSubscription(
+            accountScope: accountScope, productID: productID), batch.id == batchID else {
+            throw PricingSubmissionFailure.invalidPlan("The saved submission changed. Reopen it before closing.")
+        }
+        try await reconcileSubscriptionEntries(&batch, client: client)
+        guard batch.canClose else {
+            throw PricingSubmissionFailure.unresolvedPreviousOperation
+        }
+        batch.closedAt = Date()
+        batch.updatedAt = Date()
+        batch.stoppedReason = "Closed locally. Remaining unsent or rejected requests will not be sent. Verified Apple price changes remain in effect."
+        try await journal.saveSubscription(batch)
+        return .init(batch: batch)
     }
 
     private struct SubscriptionAttempt: Sendable {
@@ -390,20 +441,25 @@ actor PricingSubmissionCoordinator {
         client: AppStoreConnectAPIClient,
         explicitResume: Bool = false
     ) async throws -> SubscriptionSubmissionReport {
+        guard !batch.isClosed else { return .init(batch: batch) }
         let candidates = batch.entries.indices.filter {
             batch.entries[$0].state == .planned ||
             (explicitResume && batch.entries[$0].state == .failed)
         }
         guard !candidates.isEmpty else { return .init(batch: batch) }
         let scope = key(account: batch.plan.accountScope, product: batch.plan.product.id)
-        paused.remove(scope) // A newly explicit Submit/Resume clears previous pause.
         batch.stoppedReason = nil
         batch.retryNotBefore = nil
         batch.updatedAt = Date()
         try await journal.saveSubscription(batch)
         for offset in stride(from: 0, to: candidates.count, by: 3) {
-            if Task.isCancelled || paused.contains(scope) {
-                batch.stoppedReason = "Task canceled. Unsent entries remain planned."
+            if !mayDispatch(scope) {
+                batch.stoppedReason = "Paused. Unsent entries remain available for explicit resume."
+                break
+            }
+            if PricingDay.parse(batch.plan.effectiveDate) == nil ||
+               batch.plan.effectiveDate < Self.today() {
+                batch.stoppedReason = "The saved effective date has passed. Close this saved submission and generate a new proposal with a valid date."
                 break
             }
             let indices = Array(candidates[offset..<min(offset + 3, candidates.count)])
@@ -468,6 +524,12 @@ actor PricingSubmissionCoordinator {
                 try await journal.saveSubscription(batch)
                 break
             }
+            // Preflight contains multiple network suspension points. A pause
+            // received while reading must prevent the next dispatch group.
+            guard mayDispatch(scope) else {
+                batch.stoppedReason = "Paused during preflight. No further requests were sent."
+                break
+            }
             for index in indices {
                 batch.entries[index].state = .inFlight
                 batch.entries[index].attempts += 1
@@ -481,36 +543,8 @@ actor PricingSubmissionCoordinator {
                 of: SubscriptionAttempt.self, returning: [SubscriptionAttempt].self
             ) { group in
                 for change in jobs {
-                    group.addTask {
-                        do {
-                            let remoteID = try await client.createSubscriptionPrice(change.request)
-                            return SubscriptionAttempt(id: change.id, remoteID: remoteID,
-                                                       error: nil, state: .accepted,
-                                                       stop: false, retryNotBefore: nil)
-                        } catch {
-                            let rejected = Self.definitivelyRejected(error)
-                            let stop: Bool
-                            var retryDeadline: Date?
-                            if let api = error as? AppStoreConnectAPIError {
-                                switch api {
-                                case .httpStatus(let status):
-                                    stop = [401, 403, 429].contains(status)
-                                    if status == 429 { retryDeadline = Date().addingTimeInterval(60) }
-                                case .appleResponse(let status, _, _, _, _, let retryAfter):
-                                    stop = [401, 403, 429].contains(status)
-                                    if status == 429 {
-                                        let seconds = retryAfter.flatMap(Double.init) ?? 60
-                                        retryDeadline = Date().addingTimeInterval(
-                                            min(max(seconds, 1), 3600))
-                                    }
-                                default: stop = false
-                                }
-                            } else { stop = false }
-                            return SubscriptionAttempt(id: change.id, remoteID: nil,
-                                error: error.localizedDescription,
-                                state: rejected ? .failed : .unknown, stop: stop,
-                                retryNotBefore: retryDeadline)
-                        }
+                    group.addTask { [self] in
+                        await attemptSubscription(change, scope: scope, client: client)
                     }
                 }
                 var items: [SubscriptionAttempt] = []
@@ -526,12 +560,17 @@ actor PricingSubmissionCoordinator {
                     continue
                 }
                 batch.entries[index].state = response.state
+                if response.state == .planned {
+                    batch.entries[index].attempts -= 1 // Paused before network dispatch.
+                }
                 batch.entries[index].remoteID = response.remoteID
                 batch.entries[index].error = response.error
                 batch.entries[index].lastUpdated = Date()
             }
             batch.updatedAt = Date()
-            if responses.contains(where: \.stop) {
+            if let unsent = responses.first(where: { $0.state == .planned }) {
+                batch.stoppedReason = unsent.error ?? "Remaining requests were not sent."
+            } else if responses.contains(where: \.stop) {
                 batch.stoppedReason = "Apple returned an authentication/permission/rate-limit error. Remaining requests were not sent. Review the error before resuming."
             }
             batch.retryNotBefore = responses.compactMap(\.retryNotBefore).max()
@@ -542,7 +581,52 @@ actor PricingSubmissionCoordinator {
                 break
             }
         }
+        batch.updatedAt = Date()
+        try await journal.saveSubscription(batch)
         return .init(batch: batch)
+    }
+
+    /// Actor-owned claim after journal persistence, immediately before each POST.
+    /// Requests already claimed may finish; a pause prevents further claims.
+    private func attemptSubscription(_ change: SubscriptionPriceChange, scope: String,
+                                     client: AppStoreConnectAPIClient) async -> SubscriptionAttempt {
+        guard mayDispatch(scope) else {
+            return SubscriptionAttempt(id: change.id, remoteID: nil,
+                error: "Paused before dispatch. Request was not sent.", state: .planned,
+                stop: true, retryNotBefore: nil)
+        }
+        guard change.effectiveDate >= Self.today() else {
+            return SubscriptionAttempt(id: change.id, remoteID: nil,
+                error: "The saved effective date has passed. Close this submission and generate a new proposal.",
+                state: .planned, stop: true, retryNotBefore: nil)
+        }
+        do {
+            let remoteID = try await client.createSubscriptionPrice(change.request)
+            return SubscriptionAttempt(id: change.id, remoteID: remoteID,
+                                       error: nil, state: .accepted,
+                                       stop: false, retryNotBefore: nil)
+        } catch {
+            let rejected = Self.definitivelyRejected(error)
+            let stop: Bool
+            var retryDeadline: Date?
+            if let api = error as? AppStoreConnectAPIError {
+                switch api {
+                case .httpStatus(let status):
+                    stop = [401, 403, 429].contains(status)
+                    if status == 429 { retryDeadline = Date().addingTimeInterval(60) }
+                case .appleResponse(let status, _, _, _, _, let retryAfter):
+                    stop = [401, 403, 429].contains(status)
+                    if status == 429 {
+                        let seconds = retryAfter.flatMap(Double.init) ?? 60
+                        retryDeadline = Date().addingTimeInterval(min(max(seconds, 1), 3600))
+                    }
+                default: stop = false
+                }
+            } else { stop = false }
+            return SubscriptionAttempt(id: change.id, remoteID: nil,
+                error: error.localizedDescription, state: rejected ? .failed : .unknown,
+                stop: stop, retryNotBefore: retryDeadline)
+        }
     }
 
     private func reconcileSubscriptionEntries(
@@ -606,9 +690,7 @@ actor PricingSubmissionCoordinator {
     }
 
     private static func today() -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate]
-        return formatter.string(from: Date())
+        PricingDay.string(from: Date())
     }
 
     private static func definitivelyRejected(_ error: Error) -> Bool {
@@ -629,3 +711,4 @@ private extension PricingSubmissionOperation {
         plan.product
     }
 }
+
