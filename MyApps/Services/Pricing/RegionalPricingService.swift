@@ -260,12 +260,18 @@ actor RegionalPricingService {
     // concurrency bound; Pass 1 does not eagerly fetch ~175 price ladders.
     func loadPoints(product: PricingProduct, territoryID: String) async throws -> [PricingPoint] {
         let page = try await client.pricingPoints(for: product, territory: territoryID)
-        let includedCurrencies = Dictionary(uniqueKeysWithValues: page.included.compactMap {
-            resource -> (String, String)? in
-            guard resource.type == "territories", let currency = resource.attributes?.currency
-            else { return nil }
-            return (resource.id, currency)
-        })
+        // Paginated JSON:API includes can repeat the same territory resource.
+        // Never use uniqueKeysWithValues here (duplicate IDs would trap).
+        var includedCurrencies: [String: String] = [:]
+        for resource in page.included where resource.type == "territories" {
+            if let currency = resource.attributes?.currency {
+                if let existing = includedCurrencies[resource.id], existing != currency {
+                    throw PricingReadError.unsupportedRepresentation(
+                        "Conflicting currencies for Apple territory \(resource.id).")
+                }
+                includedCurrencies[resource.id] = currency
+            }
+        }
         let fallbackCurrency = try await territories(refresh: false)
             .first(where: { $0.id == territoryID })?.attributes?.currency
         let points: [PricingPoint] = page.items.compactMap { item in
