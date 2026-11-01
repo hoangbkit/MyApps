@@ -296,7 +296,16 @@ actor RegionalPricingService {
     }
 
     func loadEqualizedPoints(product: PricingProduct, sourcePointID: String) async throws -> [PricingPoint] {
-        let page = try await client.pricingEqualizations(pointID: sourcePointID, kind: product.kind)
+        let page: (items: [AppStoreConnectAPIClient.PricePointResource],
+                   included: [PricingIncludedResource])
+        do {
+            page = try await client.pricingEqualizations(
+                pointID: sourcePointID, kind: product.kind)
+        } catch AppStoreConnectAPIError.unsupportedPricingMediaType(let mime)
+                    where mime == "text/csv" || mime == "application/csv" {
+            return try await equalizationsFromLinkage(
+                product: product, sourcePointID: sourcePointID)
+        }
         // Apple may omit included territory resources even when a price point
         // contains the relationship. Fall back to the separately fetched catalog.
         let catalogue = try await territories(refresh: false)
@@ -321,6 +330,61 @@ actor RegionalPricingService {
             )
         }
         return points
+    }
+
+    private func equalizationsFromLinkage(
+        product: PricingProduct, sourcePointID: String
+    ) async throws -> [PricingPoint] {
+        let links = try await client.pricingEqualizationIDs(
+            pointID: sourcePointID, kind: product.kind)
+        let expected = product.kind == .lifetime
+            ? "inAppPurchasePricePoints" : "subscriptionPricePoints"
+        guard !links.isEmpty, links.allSatisfy({ $0.type == expected }),
+              Set(links.map(\.id)).count == links.count else {
+            throw PricingReadError.unsupportedRepresentation(
+                "Apple returned empty, duplicate, or unexpected equalization IDs.")
+        }
+        let catalogue = try await territories(refresh: false)
+        let currencies = Dictionary(uniqueKeysWithValues: catalogue.compactMap {
+            territory -> (String, String)? in
+            guard let currency = territory.attributes?.currency else { return nil }
+            return (territory.id, currency)
+        })
+        var result: [PricingPoint] = []
+        for start in stride(from: 0, to: links.count, by: 4) {
+            try Task.checkCancellation()
+            let slice = Array(links[start..<min(start + 4, links.count)])
+            let details = try await withThrowingTaskGroup(
+                of: AppStoreConnectAPIClient.PricePointResource.self,
+                returning: [AppStoreConnectAPIClient.PricePointResource].self
+            ) { group in
+                for id in slice {
+                    group.addTask { [client] in
+                        try await client.pricingPoint(id: id.id, kind: product.kind)
+                    }
+                }
+                var completed: [AppStoreConnectAPIClient.PricePointResource] = []
+                for try await item in group { completed.append(item) }
+                return completed
+            }
+            for detail in details {
+                guard let territoryID = detail.relatedID("territory"),
+                      let currency = currencies[territoryID],
+                      let price = PricingDecimal.parse(detail.attributes?.customerPrice) else {
+                    throw PricingReadError.unsupportedRepresentation(
+                        "Equalized Apple point has no verified territory, currency, or amount.")
+                }
+                result.append(PricingPoint(
+                    id: detail.id, productID: product.id, territoryID: territoryID,
+                    planType: nil, currency: currency, customerPrice: price))
+            }
+        }
+        guard result.count == links.count,
+              Set(result.map(\.territoryID)).count == result.count else {
+            throw PricingReadError.unsupportedRepresentation(
+                "Apple returned conflicting or incomplete territory equalizations.")
+        }
+        return result.sorted { $0.territoryID < $1.territoryID }
     }
 
     /// Prepare all network-dependent inputs before the pure Pass 2 engine runs.
