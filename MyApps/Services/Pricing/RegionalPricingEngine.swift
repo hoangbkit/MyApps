@@ -173,8 +173,11 @@ enum RegionalPricingEngine {
                 proposedMode = .automatic
             } else {
                 proposedMode = .manual
-                if references.automaticFromConfiguredBase == nil {
-                    blockers.append("Automatic price effect of configured IAP base is unverified.")
+                if oldMode == .automatic,
+                   references.automaticFromConfiguredBase?[territory.id] == nil {
+                    blockers.append(
+                        "Apple's configured-base equalization is missing for this automatic territory; manual conversion cannot be safely inferred."
+                    )
                 }
             }
             if proposedMode == .manual && oldMode == .automatic {
