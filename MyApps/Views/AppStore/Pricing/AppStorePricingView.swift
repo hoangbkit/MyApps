@@ -126,6 +126,11 @@ struct AppStorePricingView: View {
         .scrollContentBackground(.hidden)
         .myAppsPage()
         .refreshable { await load(refresh: true) }
+        .onAppear {
+            // When returning from a submitted product, refetch the current US
+            // summaries; don't reuse prices loaded before the schedule write.
+            if hasLoaded && !isLoading { Task { await load(refresh: true) } }
+        }
         .task(id: session.connectionRevision) {
             requestID = UUID()
             hasLoaded = false
