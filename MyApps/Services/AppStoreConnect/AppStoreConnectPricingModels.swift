@@ -199,7 +199,7 @@ struct PricingUSSummary: Codable, Sendable {
             ($0.startDate == nil || $0.startDate! <= date) &&
             ($0.endDate == nil || $0.endDate! >= date)
         }
-        if Set(candidates.compactMap(\\.planType)).count > 1 { return nil }
+        if Set(candidates.compactMap(\.planType)).count > 1 { return nil }
         return candidates.sorted {
             if $0.startDate != $1.startDate { return ($0.startDate ?? "") > ($1.startDate ?? "") }
             if $0.manual != $1.manual { return $0.manual == true }
@@ -231,7 +231,7 @@ struct PricingSnapshot: Codable, Sendable {
             ($0.endDate == nil || $0.endDate! >= date)
         }
         // Multiple billing plans cannot be collapsed into a single "current" price.
-        if planType == nil && Set(candidates.compactMap(\\.planType)).count > 1 { return nil }
+        if planType == nil && Set(candidates.compactMap(\.planType)).count > 1 { return nil }
         return candidates.sorted {
             if $0.startDate != $1.startDate {
                 return ($0.startDate ?? "") > ($1.startDate ?? "")
