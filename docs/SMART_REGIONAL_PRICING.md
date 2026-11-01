@@ -27,6 +27,7 @@ No Pricing UI, suggestion engine, mapping bundle, journal, product writes, or li
 | Subscription discovery | `GET /v1/subscriptionGroups/{groupID}/subscriptions` | `subscriptionPeriod` is not `planType` |
 | Territory catalog | `GET /v1/territories` | Currency supplied by territory attributes |
 | IAP schedule | `GET /v2/inAppPurchases/{iapID}/iapPriceSchedule` | Retain configured `baseTerritory`; missing schedule ≠ zero |
+| IAP base territory | `GET /v1/inAppPurchasePriceSchedules/{scheduleID}/baseTerritory` | Explicit fallback if schedule omits linked base ID |
 | IAP prices | `GET /v1/inAppPurchasePriceSchedules/{scheduleID}/manualPrices` and `/automaticPrices` | Follow all pages, including >50 entries; schedules are separate |
 | IAP availability | `GET /v2/inAppPurchases/{iapID}/inAppPurchaseAvailability`; `GET /v1/inAppPurchaseAvailabilities/{availabilityID}/availableTerritories` | Read-only, complete explicit territory collection |
 | IAP ladder | `GET /v2/inAppPurchases/{iapID}/pricePoints?filter[territory]=...` | Raw opaque points, max limit 8000 |
@@ -56,7 +57,7 @@ Source documents:
 - `PricingTerritory.available == nil` means availability could not be read. It does **not** mean the product is unavailable.
 - Currency and Apple price-point amount are independently sourced. Prices missing a point or amount retain nil with an issue, not `0`.
 - IAP manual and auto records remain distinct, as do future scheduled records.
-- Subscription `preserved=true` is a previous subscriber's price, not a new subscriber's public price.
+- Subscription `preserved=true` is a previous subscriber's price, not a new subscriber's public price. Multiple active billing plan types do not collapse into one summary price.
 - `subscriptionPeriod` (weekly/monthly/annual) is independent from billing `planType` (`MONTHLY` / `UPFRONT`); unknown plan values are explicitly flagged.
 - Effective public price selection considers all start dates relative to date, plus any end dates. A null start date is **not** the sole definition of current.
 - Account scope is a SHA-256 of issuer and key ID, not a persisted signing secret; this does not grant permission to resume any write later.
