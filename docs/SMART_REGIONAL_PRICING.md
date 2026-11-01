@@ -218,3 +218,109 @@ Preset multipliers: tier 1 **1.00**, tier 2 **0.85**, tier 3 **0.65**, tier 4 **
 - Source read and manual static review only. No simulator, Xcode compiler, CI workflow, on-device screenshots, live Apple pricing verification, or automated fixture run in this session.
 
 **Next pass when requested:** Pass 4, lifetime IAP write planning, explicit confirmation, and durable recovery **on the same PR #9**.
+
+
+---
+
+## Pass 4 — Lifetime IAP submission contract, frozen preflight, journal and reconciliation
+
+**Implementation:** Same PR #9, still targeting `develop`. Subscription writes remain disabled.
+
+### Confirmed Apple request contract
+
+The single supported write endpoint is `POST /v1/inAppPurchasePriceSchedules`, not one request per country. Apple defines `InAppPurchasePriceScheduleCreateRequest` with `data.type = inAppPurchasePriceSchedules`, relationships `inAppPurchase`, `baseTerritory`, `manualPrices`, and inline `inAppPurchasePrices` records linking to `inAppPurchaseV2` and `inAppPurchasePricePoint`. Price-point IDs are opaque identifiers returned by Apple; they must never be constructed from amounts.
+
+References:
+- [Create schedule request schema](https://developer.apple.com/documentation/appstoreconnectapi/inapppurchasepriceschedulecreaterequest)
+- [Apple's managing-IAP-prices guide with schedule examples](https://developer.apple.com/documentation/appstoreconnectapi/managing-in-app-purchases)
+- [Price inline relationships](https://developer.apple.com/documentation/appstoreconnectapi/inapppurchasepriceinlinecreate/relationships-data.dictionary)
+- [Price inline date attributes](https://developer.apple.com/documentation/appstoreconnectapi/inapppurchasepriceinlinecreate/attributes-data.dictionary)
+
+**Synthetic redacted shape — NOT a live request:**
+
+```json
+{
+  "data": {
+    "type": "inAppPurchasePriceSchedules",
+    "relationships": {
+      "inAppPurchase": { "data": { "type": "inAppPurchases", "id": "<IAP_RESOURCE_ID>" } },
+      "baseTerritory": { "data": { "type": "territories", "id": "USA" } },
+      "manualPrices": { "data": [
+        { "type": "inAppPurchasePrices", "id": "<PRESERVED_ROW_ID>" },
+        { "type": "inAppPurchasePrices", "id": "<NEW_LOCAL_ROW_ID>" }
+      ] }
+    }
+  },
+  "included": [
+    {
+      "type": "inAppPurchasePrices",
+      "id": "<PRESERVED_ROW_ID>",
+      "attributes": { "startDate": null },
+      "relationships": {
+        "inAppPurchaseV2": { "data": { "type": "inAppPurchasesV2", "id": "<IAP_RESOURCE_ID>" } },
+        "inAppPurchasePricePoint": { "data": { "type": "inAppPurchasePricePoints", "id": "<EXISTING_APPLE_POINT>" } }
+      }
+    },
+    {
+      "type": "inAppPurchasePrices",
+      "id": "<NEW_LOCAL_ROW_ID>",
+      "attributes": { "startDate": "2026-12-01" },
+      "relationships": {
+        "inAppPurchaseV2": { "data": { "type": "inAppPurchasesV2", "id": "<IAP_RESOURCE_ID>" } },
+        "inAppPurchasePricePoint": { "data": { "type": "inAppPurchasePricePoints", "id": "<NEW_APPLE_POINT>" } }
+      }
+    }
+  ]
+}
+```
+
+Only one complete schedule payload is generated. Existing current manual entries are included as preserved records. A proposed future entry is added for changed manual/base countries; untouched automatically maintained countries remain automatic. The actual configured base territory is retained even when it is not USA. Immediate start is encoded as `null`, not an omitted attribute. Historical/multiple-window schedules and ambiguous existing dates are **blocked**, not rewritten or deleted.
+
+### Conservative supported cases
+
+- Verified, unmodified Apple snapshot plus a complete selected-product read, US price point, equalizations and point ladders.
+- Same account, product and proposal fingerprints; selected local point IDs remain valid through fresh read-only preflight.
+- No unresolved price, availability, date, future-schedule, plan or maintenance blockers.
+- Existing **single unambiguous current manual price per territory** can be preserved when adding a **future-dated** change. Same-day replacement of an existing manual row is blocked pending explicit Apple schedule-replacement validation.
+- **No existing future manual/automatic schedule** or complicated historical date windows. They are not discarded; the planner blocks.
+- Changing an Apple base-territory price with excluded storefronts blocks because indirect effects may still reach those countries.
+- Existing automatic maintenance is preserved where confirmed; automatic-to-manual transitions are shown and count as writes even if the amount is unchanged.
+- No-op plans contain no POST and are displayed as such.
+
+These are deliberate safety restrictions, not a claim that the API fundamentally cannot handle more complex schedules.
+
+### Dispatch and recovery
+
+- `LifetimeSchedulePlanner` is pure and produces a deterministic frozen request, preserved rows, affected/indirect/excluded storefront sets, warnings and hard blockers. The current UTC date is injected rather than read inside the planner.
+- `PricingSubmissionCoordinator.shared` serializes product-level actions. Both the review sheet's preflight and the final confirmed action independently reload uncached state, reload valid Apple points, regenerate and compare the full sorted JSON body to the frozen review. No stale plan is dispatched.
+- `PricingSubmissionJournal.shared` saves one device-local operation per account/product in protected Application Support, atomically, with backup exclusion. The operation is stored as `planned`, then `inFlight` **before** network dispatch, including the exact request, base territory, desired point/date/mode, preconditions, attempt count, and group ID. No API keys/JWTs are stored.
+- A `201` is `accepted`, never automatically `live`. The coordinator re-reads the schedule with bounded verification attempts. It matches explicit new manual point/date rows AND dependent automatic point IDs before declaring `verifiedLive` or `verifiedScheduled` (when the start date is in the future).
+- Errors with confirmed 4xx rejection become `failed`; response loss, timeout, cancellation after dispatch, or a crash leaving `inFlight` are `unknown`. A 201 that cannot yet be read becomes `pendingVerification`. No automatic POST retry occurs.
+- Re-entry exposes prior result. **Reconcile with Apple** only executes GETs and updates the durable report. An unknown outcome will never be retried as a POST without a separate confirmed review; ambiguous results remain blocked from new submission.
+- A crash at `planned` is provably before dispatch and permits a separately confirmed fresh request. A crash at `inFlight` remains unknown even if the send may not have occurred.
+- One multi-country schedule request receives one truthful group outcome; per-territory results inherit that outcome, never fabricated partial successes.
+- The existing read-only subscription UI still has no enabled Submit action.
+
+### Fixture matrix — specified, not executed
+
+| Situation | Expected outcome |
+| --- | --- |
+| No change | No payload, no remote write |
+| Fresh snapshot fingerprint differs | Stale result blocks prior to write |
+| Required Apple price point removed | Fresh engine fingerprint differs; regenerate |
+| Non-US configured base | Preserve that base; check indirect equalizations |
+| Unaffected current manual row | Include unmodified ID/point/window in schedule |
+| Existing future schedule | Block pending explicit conflict resolution |
+| Base changes with excluded country | Block rather than hide indirect effects |
+| Confirmed 201, prices not readable yet | Accepted then pending verification; GET-only retry |
+| Future-dated 201 verified | Verified scheduled, not live |
+| Crash before in-flight journal | Planned record, separately confirmed new attempt allowed |
+| Timeout after POST dispatch | Unknown; no automatic repeat |
+| Crash during POST | Durable in-flight; GET-only re-entry reconciliation |
+| HTTP 401/403/409/422/429 | Structured diagnostic, no fabricated country successes |
+| Double tapping Confirm / two screens | Shared actor permits one active product submission |
+| Subscription proposal | Final Submit disabled |
+
+**Verification:** Apple public schema reviewed and source changes inspected. **No Xcode build, test suite, CI dispatch, request-fixture execution, account-authenticated Apple read or real pricing write was performed.** Integration correctness, strict Swift 6 compilation, actual API response variants, and on-device UI behavior remain **unverified**. This pass must be validated against redacted offline fixtures and compiled before any real pricing write is considered production-ready; do not use a live account for development smoke tests without separate explicit authorization.
+
+**Next:** Pass 5, subscription price writing, preserved-subscriber policy, shared coordinator extension and final UX integration, on this same PR only upon request.
