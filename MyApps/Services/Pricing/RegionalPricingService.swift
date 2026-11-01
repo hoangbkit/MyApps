@@ -259,7 +259,7 @@ actor RegionalPricingService {
         })
         let fallbackCurrency = try await territories(refresh: false)
             .first(where: { $0.id == territoryID })?.attributes?.currency
-        return page.items.compactMap { item in
+        let points: [PricingPoint] = page.items.compactMap { item in
             guard let rawAmount = PricingDecimal.parse(item.attributes?.customerPrice),
                   let territory = item.relatedID("territory"),
                   territory == territoryID else { return nil }
@@ -272,6 +272,12 @@ actor RegionalPricingService {
             if $0.customerPrice != $1.customerPrice { return $0.customerPrice < $1.customerPrice }
             return $0.id < $1.id
         }
+        guard points.count == page.items.count, !points.isEmpty else {
+            throw PricingReadError.unsupportedRepresentation(
+                "Apple returned an empty or incomplete selectable price-point ladder for \(territoryID)."
+            )
+        }
+        return points
     }
 
     func loadEqualizedPoints(product: PricingProduct, sourcePointID: String) async throws -> [PricingPoint] {
