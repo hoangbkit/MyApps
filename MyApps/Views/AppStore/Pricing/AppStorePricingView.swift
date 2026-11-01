@@ -3,6 +3,11 @@ import SwiftUI
 
 /// Lazy, read-only list of purchasable products. It never loads every country's
 /// price ladder while the user is browsing products.
+private struct PricingProductGroup: Identifiable {
+    let id: String
+    let products: [PricingProduct]
+}
+
 struct AppStorePricingView: View {
     @Environment(\.appFoundationTheme) private var theme
     @EnvironmentObject private var session: AppStoreConnectSession
@@ -34,12 +39,13 @@ struct AppStorePricingView: View {
     private var unsupported: [PricingProduct] {
         filtered.filter { $0.kind == .unsupported }
     }
-    private var subscriptionGroups: [(String, [PricingProduct])] {
+    private var subscriptionGroups: [PricingProductGroup] {
         let subscriptions = filtered.filter { $0.kind == .subscription }
         return Dictionary(grouping: subscriptions) {
             $0.groupName ?? $0.groupID ?? "Subscriptions"
-        }.map { ($0.key, $0.value.sorted { $0.name < $1.name }) }
-         .sorted { $0.0 < $1.0 }
+        }.map { PricingProductGroup(id: $0.key, products:
+            $0.value.sorted { $0.name < $1.name }) }
+         .sorted { $0.id < $1.id }
     }
 
     var body: some View {
@@ -85,9 +91,9 @@ struct AppStorePricingView: View {
                         }
                     }
                 }
-                ForEach(subscriptionGroups, id: \.0) { group in
-                    Section(group.0) {
-                        ForEach(group.1) { product in
+                ForEach(subscriptionGroups) { group in
+                    Section(group.id) {
+                        ForEach(group.products) { product in
                             row(product)
                         }
                     }
