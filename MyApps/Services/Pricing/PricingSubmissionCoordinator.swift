@@ -90,7 +90,12 @@ actor PricingSubmissionCoordinator {
         }
 
         let fresh = try await prepare(proposal: proposal, client: client)
-        guard fresh.isExecutable, let _ = fresh.request,
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let freshPayload = try fresh.request.map { try encoder.encode($0) }
+        let reviewedPayload = try reviewedPlan.request.map { try encoder.encode($0) }
+        guard fresh.isExecutable, freshPayload != nil,
+              freshPayload == reviewedPayload,
               fresh.proposalFingerprint == reviewedPlan.proposalFingerprint,
               fresh.baselineFingerprint == reviewedPlan.baselineFingerprint,
               fresh.affectedTerritories == reviewedPlan.affectedTerritories,
@@ -224,6 +229,9 @@ actor PricingSubmissionCoordinator {
                 operation.state = .unknown
                 operation.error = "Prior request outcome remains unknown. Reconcile again before any new submission."
             }
+        } else if original.state == .failed && operation.state == .pendingVerification {
+            operation.state = .failed
+            operation.error = "Apple rejected the request. No automatic retry was performed."
         }
         operation.updatedAt = Date()
         try await journal.save(operation)
