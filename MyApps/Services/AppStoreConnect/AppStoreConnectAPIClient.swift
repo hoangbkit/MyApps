@@ -579,6 +579,31 @@ struct AppStoreConnectAPIClient: Sendable {
                                          from: body).data?.id
     }
 
+    /// Apple: one subscriptionPrices POST per territory. No retry belongs
+    /// in this transport: the coordinator journals the in-flight operation first.
+    func createSubscriptionPrice(_ body: SubscriptionPriceCreateRequest) async throws -> String? {
+        let url = try apiURL(path: "/v1/subscriptionPrices", query: [])
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONEncoder().encode(body)
+        request.setValue("Bearer \(try authorizationToken())", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+        let (data, response) = try await networkSession.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw AppStoreConnectAPIError.invalidResponse
+        }
+        guard http.statusCode == 201 else {
+            throw Self.apiError(status: http.statusCode, data: data,
+                                retryAfter: http.value(forHTTPHeaderField: "Retry-After"))
+        }
+        // HTTP 201 is accepted even if its JSON representation is unreadable.
+        return try? JSONDecoder().decode(
+            PricingSingle<PricingWireResource<PricingSubscriptionPriceAttributes>>.self,
+            from: data).data?.id
+    }
+
     private func allPages<Item: Decodable & Sendable>(
         path: String,
         query: [URLQueryItem]
