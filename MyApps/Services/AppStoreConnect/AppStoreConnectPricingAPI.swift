@@ -86,10 +86,14 @@ extension AppStoreConnectAPIClient {
     func pricingIAPPrices(scheduleID: String, manual: Bool, territory: String? = nil) async throws
         -> (items: [IAPPriceResource], included: [PricingIncludedResource]) {
         let relation = manual ? "manualPrices" : "automaticPrices"
-        var query = [
-            URLQueryItem(name: "limit", value: "200"),
-            URLQueryItem(name: "include", value: "inAppPurchasePricePoint,territory")
-        ]
+        var query = [URLQueryItem(name: "limit", value: "200")]
+        // Apple's automaticPrices endpoint does not advertise an include
+        // relationship. Avoid sending unsupported query parameters; resolve
+        // related point IDs explicitly when not returned as included data.
+        if manual {
+            query.append(URLQueryItem(name: "include",
+                                      value: "inAppPurchasePricePoint,territory"))
+        }
         if let territory { query.append(URLQueryItem(name: "filter[territory]", value: territory)) }
         return try await pricingPages(
             path: "/v1/inAppPurchasePriceSchedules/\(scheduleID)/\(relation)",
