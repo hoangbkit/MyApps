@@ -232,6 +232,120 @@ struct PricingSubmissionView: View {
         }
     }
 
+    @ViewBuilder
+    private func subscriptionPreflight(_ details: SubscriptionWritePlan) -> some View {
+        Section("Subscription Preflight") {
+            LabeledContent("Changed Countries", value: String(details.changes.count))
+            LabeledContent("Price Increases", value: String(details.changes.filter(\.increase).count))
+            LabeledContent("Price Decreases", value: String(details.changes.filter { !$0.increase }.count))
+            LabeledContent("Excluded Countries", value: String(details.excluded.count))
+            LabeledContent("Independent Requests", value: String(details.changes.count))
+            LabeledContent("Existing Subscribers on Increases", value: "Preserve current price")
+            if details.requiresDecreaseAcknowledgment {
+                Toggle("I understand decreases affect existing subscribers at renewal",
+                       isOn: $acknowledgesDecrease)
+                    .disabled(isSending)
+            }
+            if !details.changes.isEmpty {
+                DisclosureGroup("Exact New Prices") {
+                    ForEach(details.changes) { change in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(PricingDisplay.country(change.territoryID) + " (" + change.territoryID + ")")
+                                .font(.subheadline.weight(.medium))
+                            HStack {
+                                Text(PricingDisplay.amount(change.previous.customerPrice,
+                                    currency: change.previous.currency))
+                                Image(systemName: "arrow.right")
+                                Text(PricingDisplay.amount(change.point.customerPrice,
+                                    currency: change.point.currency))
+                            }
+                            .font(.caption)
+                            Text(change.increase ? "Existing price preserved on increase" :
+                                "Decrease affects existing subscriptions at renewal")
+                                .font(.caption2)
+                                .foregroundStyle(theme.secondaryForegroundColor)
+                        }
+                    }
+                }
+            }
+            if !details.excluded.isEmpty {
+                DisclosureGroup("Explicitly Excluded Countries") {
+                    ForEach(details.excluded, id: \.self) { code in
+                        Text(PricingDisplay.country(code) + " (" + code + ")")
+                    }
+                }
+            }
+        }
+        if !details.blockers.isEmpty || !details.warnings.isEmpty {
+            Section("Subscription Warnings") {
+                ForEach(details.blockers, id: \.self) {
+                    Label($0, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                }
+                ForEach(details.warnings, id: \.self) {
+                    Text($0).font(.footnote)
+                        .foregroundStyle(theme.secondaryForegroundColor)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func subscriptionReportSection(_ summary: SubscriptionSubmissionReport) -> some View {
+        Section("Subscription Submission") {
+            LabeledContent("Verified", value: String(summary.verifiedCount))
+            LabeledContent("Accepted, Unverified", value: String(summary.acceptedCount))
+            LabeledContent("Pending Verification / Unsent", value: String(summary.pendingCount))
+            LabeledContent("Unknown", value: String(summary.unknownCount))
+            LabeledContent("Failed", value: String(summary.failedCount))
+            LabeledContent("Excluded", value: String(summary.skippedCount))
+            if let reason = summary.batch.stoppedReason {
+                Text(reason).font(.footnote).foregroundStyle(.orange)
+            }
+            if summary.requiresReconciliation {
+                Button("Reconcile with Apple (Read Only)") {
+                    Task { await reconcileSubscription() }
+                }
+                .disabled(isSending || isPreparing)
+            }
+            if summary.batch.uncertainCount == 0 &&
+               (summary.hasUnsent || summary.failedCount > 0) {
+                Button("Resume Remaining Countries") { confirmingResume = true }
+                    .disabled(isSending || isPreparing)
+            }
+            DisclosureGroup("Per-Country Results") {
+                ForEach(summary.results) { result in
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(result.id)
+                            Spacer()
+                            Text(result.state.rawValue)
+                                .foregroundStyle(theme.secondaryForegroundColor)
+                        }
+                        Text(result.detail)
+                            .font(.caption)
+                            .foregroundStyle(theme.secondaryForegroundColor)
+                    }
+                }
+            }
+            if summary.batch.entries.contains(where: { $0.change.increase &&
+                $0.preservationVerified != true &&
+                ($0.state == .verifiedLive || $0.state == .verifiedScheduled) }) {
+                Text("Public subscription prices were verified, but individual subscriber preservation could not be independently verified.")
+                    .font(.footnote).foregroundStyle(.orange)
+            }
+        }
+    }
+
+    private var maySubmitSubscription: Bool {
+        guard let proposal, let details = subscriptionPlan,
+              proposal.product.kind == .subscription else { return false }
+        return model.isReviewCurrent && details.isExecutable &&
+            (!details.requiresDecreaseAcknowledgment || acknowledgesDecrease) &&
+            !isPreparing && !isSending &&
+            (subscriptionReport == nil || subscriptionReport?.batch.isComplete == true)
+    }
+
     private var maySubmit: Bool {
         guard let proposal, let plan else { return false }
         return proposal.product.kind == .lifetime && model.isReviewCurrent &&
@@ -241,8 +355,7 @@ struct PricingSubmissionView: View {
 
     @MainActor
     private func prepare() async {
-        guard !isPreparing, !isSending, let proposal,
-              proposal.product.kind == .lifetime else { return }
+        guard !isPreparing, !isSending, let proposal else { return }
         guard model.isReviewCurrent, let client = session.client(),
               client.pricingAccountScope == proposal.accountScope else {
             errorMessage = "Review or reconnect this proposal before preparing a submission."
@@ -252,17 +365,33 @@ struct PricingSubmissionView: View {
         defer { isPreparing = false }
         errorMessage = nil
         do {
-            let fresh = try await PricingSubmissionCoordinator.shared.prepare(
-                proposal: proposal, client: client)
-            guard !Task.isCancelled else { return }
-            plan = fresh
-            if fresh.blockers.contains(where: { $0.contains("changed since review") }) {
-                model.markRemoteStale()
+            if proposal.product.kind == .subscription {
+                let fresh = try await PricingSubmissionCoordinator.shared.prepareSubscription(
+                    proposal: proposal, acknowledgesDecrease: acknowledgesDecrease, client: client)
+                guard !Task.isCancelled else { return }
+                subscriptionPlan = fresh
+                if fresh.blockers.contains(where: { $0.contains("changed since the review") }) {
+                    model.markRemoteStale()
+                }
+            } else {
+                let fresh = try await PricingSubmissionCoordinator.shared.prepare(
+                    proposal: proposal, client: client)
+                guard !Task.isCancelled else { return }
+                plan = fresh
+                if fresh.blockers.contains(where: { $0.contains("changed since review") }) {
+                    model.markRemoteStale()
+                }
             }
         } catch {
-            plan = nil
+            if proposal.product.kind == .subscription {
+                subscriptionPlan = nil
+            } else {
+                plan = nil
+            }
             errorMessage = error.localizedDescription
-            model.markRemoteStale()
+            if !error.localizedDescription.contains("Acknowledge") {
+                model.markRemoteStale()
+            }
         }
     }
 
@@ -270,8 +399,13 @@ struct PricingSubmissionView: View {
     private func loadPrevious() async {
         guard let proposal else { return }
         do {
-            report = try await PricingSubmissionCoordinator.shared.previous(
-                accountScope: proposal.accountScope, productID: proposal.product.id)
+            if proposal.product.kind == .subscription {
+                subscriptionReport = try await PricingSubmissionCoordinator.shared.previousSubscription(
+                    accountScope: proposal.accountScope, productID: proposal.product.id)
+            } else {
+                report = try await PricingSubmissionCoordinator.shared.previous(
+                    accountScope: proposal.accountScope, productID: proposal.product.id)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -279,9 +413,14 @@ struct PricingSubmissionView: View {
 
     @MainActor
     private func submit() async {
-        guard maySubmit, let proposal, let plan,
-              let client = session.client(),
-              client.pricingAccountScope == proposal.accountScope else { return }
+        guard let proposal, let client = session.client(),
+              client.pricingAccountScope == proposal.accountScope,
+              !isSending else { return }
+        if proposal.product.kind == .subscription {
+            await submitSubscription(client: client, proposal: proposal)
+            return
+        }
+        guard maySubmit, let plan else { return }
         isSending = true
         defer { isSending = false }
         errorMessage = nil
@@ -299,20 +438,80 @@ struct PricingSubmissionView: View {
     }
 
     @MainActor
+    private func submitSubscription(client: AppStoreConnectAPIClient,
+                                    proposal: RegionalPricingProposal) async {
+        guard maySubmitSubscription, let details = subscriptionPlan else { return }
+        isSending = true
+        defer { isSending = false }
+        errorMessage = nil
+        do {
+            subscriptionReport = try await PricingSubmissionCoordinator.shared.submitSubscriptionConfirmed(
+                proposal: proposal, reviewed: details,
+                acknowledgesDecrease: acknowledgesDecrease, client: client)
+            model.markRemoteStale() // Apple state may have partially changed.
+        } catch {
+            errorMessage = error.localizedDescription
+            // A preflight error alone cannot prove prices changed; the
+            // existing proposal stays visible, with a fresh review required.
+            model.markRemoteStale()
+        }
+    }
+
+    @MainActor
     private func reconcile() async {
+        guard !isSending, let proposal, let client = session.client(),
+              client.pricingAccountScope == proposal.accountScope else { return }
+        isSending = true
+        defer { isSending = false }
+        do {
+            report = try await PricingSubmissionCoordinator.shared.reconcile(
+                accountScope: proposal.accountScope, productID: proposal.product.id,
+                client: client)
+            if report?.operation.state == .verifiedLive ||
+               report?.operation.state == .verifiedScheduled {
+                model.markRemoteStale()
+            }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    @MainActor
+    private func reconcileSubscription() async {
+        guard !isSending, let proposal, let client = session.client(),
+              client.pricingAccountScope == proposal.accountScope else { return }
+        isSending = true
+        defer { isSending = false }
+        do {
+            subscriptionReport = try await PricingSubmissionCoordinator.shared.reconcileSubscription(
+                accountScope: proposal.accountScope, productID: proposal.product.id,
+                client: client)
+            if subscriptionReport?.batch.isComplete == true {
+                model.markRemoteStale()
+            }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    @MainActor
+    private func resumeSubscription() async {
         guard !isSending, let proposal,
               let client = session.client(),
               client.pricingAccountScope == proposal.accountScope else { return }
         isSending = true
         defer { isSending = false }
         do {
-            report = try await PricingSubmissionCoordinator.shared.reconcile(
-                accountScope: proposal.accountScope,
-                productID: proposal.product.id, client: client)
-            if report?.operation.state == .verifiedLive ||
-               report?.operation.state == .verifiedScheduled {
-                model.markRemoteStale()
-            }
-        } catch { errorMessage = error.localizedDescription }
+            subscriptionReport = try await PricingSubmissionCoordinator.shared.resumeSubscription(
+                accountScope: proposal.accountScope, productID: proposal.product.id,
+                client: client)
+            model.markRemoteStale()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func pauseDispatch() {
+        guard let proposal else { return }
+        Task {
+            await PricingSubmissionCoordinator.shared.pausePendingOperations(
+                accountScope: proposal.accountScope, productID: proposal.product.id)
+        }
     }
 }
