@@ -324,3 +324,91 @@ These are deliberate safety restrictions, not a claim that the API fundamentally
 **Verification:** Apple public schema reviewed and source changes inspected. **No Xcode build, test suite, CI dispatch, request-fixture execution, account-authenticated Apple read or real pricing write was performed.** Integration correctness, strict Swift 6 compilation, actual API response variants, and on-device UI behavior remain **unverified**. This pass must be validated against redacted offline fixtures and compiled before any real pricing write is considered production-ready; do not use a live account for development smoke tests without separate explicit authorization.
 
 **Next:** Pass 5, subscription price writing, preserved-subscriber policy, shared coordinator extension and final UX integration, on this same PR only upon request.
+
+
+---
+
+## Pass 5 — Standard subscription submission, subscriber consequences, per-territory recovery
+
+**Branch / PR:** `feature/smart-regional-pricing-pass1` / #9. **Target:** `develop`. Passes 1–5 are source-implemented in this draft PR; they have **not** been compiled, fixture-tested or live-verified.
+
+### Apple contract (read November 1, 2026)
+
+- `POST /v1/subscriptionPrices` creates **one** new public subscription price for **one** territory per request. Relationships are `subscription` and `subscriptionPricePoint` (the opaque point ID uniquely identifies the territory).
+- `attributes.startDate` can be `null` for immediate pricing, or a future ISO date. `attributes.planType` is **`UPFRONT`** for standard upfront-billed weekly/monthly/annual subscriptions. The subscription **period** is not the billing plan type. `MONTHLY` can mean monthly billing with a commitment and requires a different adjusted-point flow.
+- `attributes.preserveCurrentPrice` is `true` by default when increasing the current public price, preserving that price for existing subscribers. The implementation does **not** un-preserve older cohorts.
+- Apple explicitly states **decreases reach existing subscribers at renewal**, with no option to preserve a previously higher price. The UI requires explicit acknowledgment when a submitted group contains decreases. It never describes decreases as “new subscribers only.”
+- Changes to existing subscribers on increases may trigger notices or consent if preservation is not used. This version does **not** support intentionally increasing existing subscribers' current price. Individual subscriber cohort outcomes cannot be proven solely by reading the subscription pricing resource.
+- A future change for the same storefront and billing plan can overwrite an earlier future change. The planner **blocks** such conflicts instead of replacing them.
+
+Source: [Apple API: Managing subscriptions](https://developer.apple.com/documentation/appstoreconnectapi/managing-auto-renewable-subscriptions), [Apple API: price changes across territories](https://developer.apple.com/documentation/appstoreconnectapi/configuring-subscription-prices-across-territories), [Apple: create attributes](https://developer.apple.com/documentation/appstoreconnectapi/subscriptionpricecreaterequest/data-data.dictionary/attributes-data.dictionary), [Apple Help: subscription price changes](https://developer.apple.com/help/app-store-connect/manage-subscriptions/manage-pricing-for-auto-renewable-subscriptions/).
+
+**Redacted fixture payload** (invented IDs and date; not a live App Store price):
+
+```json
+{
+  "data": {
+    "type": "subscriptionPrices",
+    "attributes": {
+      "startDate": "2026-12-01",
+      "preserveCurrentPrice": true,
+      "planType": "UPFRONT"
+    },
+    "relationships": {
+      "subscription": {
+        "data": { "type": "subscriptions", "id": "<SUBSCRIPTION_RESOURCE_ID>" }
+      },
+      "subscriptionPricePoint": {
+        "data": { "type": "subscriptionPricePoints", "id": "<APPLE_POINT_FOR_TARGET_COUNTRY>" }
+      }
+    }
+  }
+}
+```
+
+The same request for an immediate price change uses `startDate: null`; for a decrease it uses `preserveCurrentPrice: false` and requires the decrease acknowledgment before dispatch.
+
+### Planner and submission implementation
+
+- `SubscriptionPricePlanner` is a **pure**, frozen planner keyed by product, territory and `UPFRONT` plan. It checks product/account/snapshot, actual plan availability, selected Apple point ownership, public (not preserved) price, current price ID/amount, existing scheduled changes, and effective date. Only true amount changes are sent; ambiguous same-amount/different-ID changes block.
+- An increase sets `preserveCurrentPrice=true`. A decrease sets `false`; the UI requires acknowledgment of renewal impact. Existing preserved cohorts are read for context but are **not** used as the public baseline.
+- `SubscriptionPriceCreateRequest` and `createSubscriptionPrice` are distinct from lifetime schedule payloads. The API transport does not automatically retry a POST. A valid HTTP 201 is **accepted**, not verified.
+- `SubscriptionSubmissionBatch` stores the exact frozen plan and an operation record **per territory**, with planned/inFlight/accepted/verifiedLive/verifiedScheduled/pendingVerification/failed/unknown statuses, attempt count, remote ID when readable, last error and timestamp.
+- The existing shared `PricingSubmissionJournal` writes the complete subscription batch atomically to a **separate protected account/product-scoped file** (backup excluded) before POST dispatch. It does not persist credentials. `PricingSubmissionCoordinator.shared` serializes product submissions across both lifetime and subscription paths.
+- `submitSubscriptionConfirmed` runs fresh uncached read-only preflight, re-generates the proposal and compares the **entire encoded plan** to what the user confirmed; any mismatch blocks before writing.
+- `dispatchSubscription` uses **up to three concurrent territory POSTs**, journals all three as in-flight **before** dispatch, then journals each returned result. It checks remaining territories' public baselines, existing schedules and Apple-selected price-point validity before launching each additional batch. An accepted price remains independent of any failed country—there is no invented global rollback.
+- 401/403/429 stop launching new batches. 429 stores a retry deadline from numeric `Retry-After` (or a conservative 60s default). The UI displays errors and requires explicit Resume. Rejected 4xx are distinguished from ambiguous network errors.
+- For each group, GET-only verification checks selected public price point, billing plan and effective date. A matching future record is **verified scheduled**, not live. The API cannot independently confirm every existing subscriber's preserved billing cohort; the report retains that uncertainty even if public price verification succeeds.
+- On relaunch, opening submission review reads the account-bound journal and performs **GET-only reconciliation** of uncertain operations. In-flight/unknown statuses are never auto-retried. “Resume Remaining Countries” requires user confirmation and dispatches only *planned* or *definitively rejected/not-applied* operations after revalidating their current Apple baseline/point/availability. Accepted or verified entries are never replayed.
+- Closing the sheet or moving inactive requests the shared coordinator to **pause before launching more groups**; it does not cancel a request already submitted to Apple. No background completion is promised.
+- Product list surfaces an annual > 12× monthly advisory **only** for explicitly matching subscription group, group service level and currency. Unknown equivalence yields no comparison. Regional Review adds tier and unchanged filters; the pricing product list no longer displays developer-preview copy.
+
+### Supported and blocked matrix
+
+| Configuration | Status |
+| --- | --- |
+| Standard upfront weekly, monthly or annual subscription, sole `UPFRONT` plan | Supported by the source-level submission implementation |
+| Valid Apple local price point, fresh public price and availability, no upcoming conflicts | Planned for one territory POST |
+| Existing subscribers during price increases | Preserve current public price by default; older preserved cohorts not changed |
+| Existing subscribers during price decreases | Acknowledgment required; all existing subscriptions can renew at lower price |
+| Subscription with existing future price change in same territory/plan | **Blocked**, never overwrite silently |
+| `MONTHLY` commitment billing plan, mixed `UPFRONT`/`MONTHLY`, or adjusted equalization/CSV-only case | **Blocked** until separate plan-aware support |
+| Unknown country, missing point, missing currency, 403/404 data gaps | Visible warning/blocker; never invent or submit point |
+| Accepted POST with delayed Apple price read | Pending verification; no repeat POST |
+| Timeout or crash after dispatch | Unknown; GET-only reconciliation before any subsequent confirmed action |
+| Partial successful batch | Per-territory report; accepted/verified entries excluded from retries |
+| Permission denied | Actionable Apple error; read-only browsing and saved proposal remain available |
+| All no-op prices | No POST |
+| Lifetime product | Existing Pass 4 single-schedule path unchanged |
+
+### Offline/manual release checklist — NOT executed
+
+1. **Compile first:** strict Swift 6 iOS target and checked-in Xcode project plus XcodeGen-generated file membership. No current build result exists.
+2. Inspect native Pricing → product → Generate → Review → Country → final confirmation on actual iPhone (Dynamic Type, VoiceOver, iPad if supported); verify subscription/lifetime separation and existing app-detail modes.
+3. With an injected URLSession and **redacted fixtures**, verify Apple request JSON (UPFRONT, date null/date string, preserve true/false), journal recovery, 201 vs delayed GET, 401/403/409/422/429, rate limit deadline, partial success/failure, crash/timeout unknown, and maximal in-flight count ≤3.
+4. Verify plan-availability and `planType` decoding from real **read-only**, separately authorized Apple API access before enabling commercial use. Confirm all Apple price points/currencies and mapping coverage against current territories.
+5. Test both existing and new pricing schedules: future conflicts, preserved subscribers, increases/decreases, and no-op. Confirm absence of POST on all preview/generation/reconciliation paths.
+6. Verify cancellation, app suspension, disconnection, relaunch and explicit Resume on a fixture session. Ensure old accounts' journals do not resume after credential rotation.
+7. Review with the account holder before any live price mutation. **No live price-changing test was authorized or performed.**
+
+**Release assessment:** Passes 1–5 are implemented as source changes, but **not production-validated**. There is no successful build/test/fixture run or verified Apple production response for this PR. Treat all write functionality as unsafe for real money-changing use until authorized validation is completed and code-review findings resolved.
