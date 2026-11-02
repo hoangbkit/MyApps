@@ -9,7 +9,7 @@ enum PricingSubmissionFailure: LocalizedError, Sendable {
         switch self {
         case .alreadyActive: "A price submission for this product is already running."
         case .unresolvedPreviousOperation:
-            "A previous price request may still be active. Reconcile its outcome before submitting again."
+            "A previous price request may still be active. Reconcile its outcome, or confirm resolution in App Store Connect, before submitting again."
         case .invalidPlan(let reason): reason
         }
     }
@@ -103,7 +103,7 @@ actor PricingSubmissionCoordinator {
         paused.remove(scope)
         if let last = try await journal.load(
             accountScope: proposal.accountScope, productID: proposal.product.id),
-           [.inFlight, .unknown, .accepted, .pendingVerification].contains(last.state) {
+           !last.isClosed && last.state.hasUncertainOutcome {
             throw PricingSubmissionFailure.unresolvedPreviousOperation
         }
 
@@ -327,6 +327,78 @@ actor PricingSubmissionCoordinator {
         guard let batch = try await journal.loadSubscription(
             accountScope: accountScope, productID: productID) else { return nil }
         return .init(batch: batch)
+    }
+
+    /// Explicit local closure after the user resolves an uncertain operation
+    /// in ASC. Fresh reads are required, but absence of a price is never used
+    /// to silently infer cancellation or to authorize an automatic retry.
+    func resolveLifetimeInASC(accountScope: String, productID: String,
+                              operationID: UUID, proposalFingerprint: String,
+                              confirmedInASC: Bool, client: AppStoreConnectAPIClient)
+        async throws -> PricingSubmissionReport {
+        guard confirmedInASC else {
+            throw PricingSubmissionFailure.invalidPlan("Confirm that you checked and resolved this submission in App Store Connect.")
+        }
+        guard client.pricingAccountScope == accountScope else {
+            throw RegionalPricingError.mismatchedAccount
+        }
+        let scope = key(account: accountScope, product: productID)
+        guard active.insert(scope).inserted else { throw PricingSubmissionFailure.alreadyActive }
+        defer { active.remove(scope) }
+        guard var operation = try await journal.load(accountScope: accountScope, productID: productID),
+              operation.id == operationID, operation.proposalFingerprint == proposalFingerprint,
+              operation.plan.product.id == productID, operation.plan.product.kind == .lifetime,
+              operation.canResolveInASC else {
+            throw PricingSubmissionFailure.invalidPlan("The saved lifetime submission changed. Reopen it before confirming resolution.")
+        }
+        let snapshot = try await refreshedResolutionSnapshot(product: operation.plan.product, client: client)
+        let now = Date()
+        operation.closedAt = now
+        operation.ascResolution = .init(confirmedAt: now,
+            refreshedSnapshotFingerprint: snapshot.semanticFingerprint)
+        operation.updatedAt = now
+        // Keep state, error, remote ID, and frozen request as recorded.
+        try await journal.save(operation)
+        return .make(from: operation)
+    }
+
+    func resolveSubscriptionInASC(accountScope: String, productID: String,
+                                  batchID: UUID, proposalFingerprint: String,
+                                  confirmedInASC: Bool, client: AppStoreConnectAPIClient)
+        async throws -> SubscriptionSubmissionReport {
+        guard confirmedInASC else {
+            throw PricingSubmissionFailure.invalidPlan("Confirm that you checked and resolved this submission in App Store Connect.")
+        }
+        guard client.pricingAccountScope == accountScope else {
+            throw RegionalPricingError.mismatchedAccount
+        }
+        let scope = key(account: accountScope, product: productID)
+        guard active.insert(scope).inserted else { throw PricingSubmissionFailure.alreadyActive }
+        defer { active.remove(scope) }
+        guard var batch = try await journal.loadSubscription(accountScope: accountScope, productID: productID),
+              batch.id == batchID, batch.plan.proposalFingerprint == proposalFingerprint,
+              batch.canResolveInASC else {
+            throw PricingSubmissionFailure.invalidPlan("The saved subscription submission changed. Reopen it before confirming resolution.")
+        }
+        let snapshot = try await refreshedResolutionSnapshot(product: batch.plan.product, client: client)
+        let now = Date()
+        batch.closedAt = now
+        batch.ascResolution = .init(confirmedAt: now,
+            refreshedSnapshotFingerprint: snapshot.semanticFingerprint)
+        batch.updatedAt = now
+        batch.stoppedReason = "Closed locally after you confirmed resolution in App Store Connect. Apple outcomes remain as recorded; no remaining requests will be sent."
+        try await journal.saveSubscription(batch)
+        return .init(batch: batch)
+    }
+
+    private func refreshedResolutionSnapshot(product: PricingProduct,
+                                             client: AppStoreConnectAPIClient) async throws -> PricingSnapshot {
+        let snapshot = try await RegionalPricingService(client: client)
+            .loadSnapshot(product: product, refresh: true)
+        guard snapshot.issues.isEmpty, !snapshot.hasIncompleteSubscriptionPriceData else {
+            throw PricingSubmissionFailure.invalidPlan("Apple's pricing could not be completely refreshed. Nothing was closed. Refresh pricing and try again after checking App Store Connect.")
+        }
+        return snapshot
     }
 
     func submitSubscriptionConfirmed(
@@ -652,6 +724,7 @@ actor PricingSubmissionCoordinator {
         client: AppStoreConnectAPIClient,
         attempts: Int = 2
     ) async throws {
+        guard !batch.isClosed else { return }
         guard batch.plan.accountScope == client.pricingAccountScope else {
             throw RegionalPricingError.mismatchedAccount
         }
@@ -729,6 +802,7 @@ private extension PricingSubmissionOperation {
         plan.product
     }
 }
+
 
 
 

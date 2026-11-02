@@ -22,12 +22,13 @@ struct SubscriptionSubmissionBatch: Codable, Sendable, Identifiable {
     var updatedAt: Date
     // Missing in older journals means the batch is still open.
     var closedAt: Date? = nil
+    var ascResolution: PricingASCResolution? = nil
 
     var pendingCount: Int {
         entries.filter { $0.state == .planned }.count
     }
     var uncertainCount: Int {
-        entries.filter { [.unknown, .inFlight, .pendingVerification, .accepted].contains($0.state) }.count
+        entries.filter { $0.state.hasUncertainOutcome }.count
     }
 
     var isComplete: Bool {
@@ -37,6 +38,7 @@ struct SubscriptionSubmissionBatch: Codable, Sendable, Identifiable {
     var isClosed: Bool { isComplete || closedAt != nil }
 
     var canClose: Bool { !isClosed && uncertainCount == 0 }
+    var canResolveInASC: Bool { !isClosed && uncertainCount > 0 }
 
     func outcome(for territory: String) -> SubscriptionSubmissionEntry? {
         entries.first { $0.change.territoryID == territory }
@@ -66,7 +68,8 @@ struct SubscriptionSubmissionReport: Sendable {
     var unknownCount: Int { count(.unknown) + count(.inFlight) }
     var failedCount: Int { count(.failed) }
     var skippedCount: Int { count(.skipped) }
-    var requiresReconciliation: Bool { batch.uncertainCount > 0 }
+    var requiresReconciliation: Bool { !batch.isClosed && batch.uncertainCount > 0 }
     var hasUnsent: Bool { batch.pendingCount > 0 }
 }
+
 

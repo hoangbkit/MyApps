@@ -20,6 +20,8 @@ struct PricingSubmissionView: View {
     @State private var resumeReview: SubscriptionSubmissionBatch?
     @State private var confirmingClose = false
     @State private var closeReview: SubscriptionSubmissionBatch?
+    @State private var confirmingASCResolution = false
+    @State private var ascResolutionReview: PricingASCResolutionReview?
     @State private var errorMessage: String?
     @State private var isPreparing = false
     @State private var isSending = false
@@ -143,13 +145,16 @@ struct PricingSubmissionView: View {
                         }
                         if let report {
                             Section("Submission Status") {
+                                LabeledContent("Saved Product", value: report.operation.plan.product.name)
+                                LabeledContent("Saved Effective Date", value: report.operation.effectiveDate)
                                 LabeledContent("Submitted Preset", value:
                                     (report.operation.plan.presetSnapshot ?? .balanced).displayName)
                                 Text((report.operation.plan.presetSnapshot ?? .balanced).percentageSummary)
                                     .font(.footnote)
                                 LabeledContent("Submitted Rounding", value:
                                     (report.operation.plan.roundingPolicy ?? .nearestAvailable).title)
-                                LabeledContent("Group Status", value: report.operation.state.rawValue)
+                                LabeledContent(report.operation.isClosed ? "Recorded Apple Outcome" : "Group Status",
+                                    value: report.operation.state.rawValue)
                                 LabeledContent("Verified", value: String(report.verified))
                                 LabeledContent("Pending Verification",
                                     value: String(report.pendingVerification))
@@ -159,9 +164,19 @@ struct PricingSubmissionView: View {
                                 if let detail = report.operation.error {
                                     Text(detail).font(.footnote).foregroundStyle(.orange)
                                 }
+                                if let resolution = report.operation.ascResolution {
+                                    ascResolutionStatus(resolution)
+                                }
                                 if report.operation.canReconcile {
                                     Button("Reconcile with Apple (Read Only)") {
                                         Task { await reconcile() }
+                                    }
+                                    .disabled(isSending || isPreparing)
+                                }
+                                if report.operation.canResolveInASC {
+                                    Button("Resolved in App Store Connect") {
+                                        ascResolutionReview = .lifetime(report.operation)
+                                        confirmingASCResolution = true
                                     }
                                     .disabled(isSending || isPreparing)
                                 }
@@ -199,7 +214,7 @@ struct PricingSubmissionView: View {
                                 .disabled(!maySubmit)
                             }
                         } footer: {
-                            Text("Only the final confirmation dispatches an App Store Connect pricing write. Recovery after interruption never auto-resubmits.")
+                            Text("Only the final price-submission confirmation dispatches an App Store Connect pricing write. Recovery after interruption never auto-resubmits.")
                         }
                     } else {
                         ContentUnavailableView("No Pricing Proposal", systemImage: "exclamationmark.triangle")
@@ -290,7 +305,22 @@ struct PricingSubmissionView: View {
                 .disabled(isSending || isPreparing)
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Remaining unsent or rejected requests will not be sent. Verified Apple price changes stay in effect. After closing, refresh and generate a new proposal. An unknown request must be reconciled before it can be closed.")
+                Text("Remaining unsent or rejected requests will not be sent. Verified Apple price changes stay in effect. After closing, refresh and generate a new proposal. For uncertain outcomes, first reconcile or confirm resolution using Resolved in App Store Connect after checking ASC.")
+            }
+            .confirmationDialog("Resolved in App Store Connect?",
+                                isPresented: $confirmingASCResolution,
+                                titleVisibility: .visible) {
+                Button("I Confirm — Close Local Record", role: .destructive) {
+                    if let reviewed = ascResolutionReview {
+                        Task { await resolveInASC(reviewed: reviewed) }
+                    }
+                }
+                .disabled(isSending || isPreparing || scenePhase != .active)
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                if let reviewed = ascResolutionReview {
+                    Text("\(reviewed.scopeDescription) Confirm only after checking and resolving this submission in App Store Connect. MyApps will refresh Apple data and archive its local record. This does not cancel, revert, or resend any prices, and unverified outcomes stay unverified. Any schedules still in Apple remain in effect. A fresh pricing review is required before another submission.")
+                }
             }
         }
     }
@@ -440,7 +470,9 @@ struct PricingSubmissionView: View {
                 }
                 .disabled(isSending || isPreparing)
             }
-            if summary.batch.closedAt != nil {
+            if let resolution = summary.batch.ascResolution {
+                ascResolutionStatus(resolution)
+            } else if summary.batch.closedAt != nil {
                 Label("Saved submission closed. No remaining requests will be sent.",
                       systemImage: "checkmark.circle")
             }
@@ -462,6 +494,13 @@ struct PricingSubmissionView: View {
                 Button("Close Saved Submission", role: .destructive) {
                     closeReview = summary.batch
                     confirmingClose = true
+                }
+                .disabled(isSending || isPreparing)
+            }
+            if summary.batch.canResolveInASC {
+                Button("Resolved in App Store Connect") {
+                    ascResolutionReview = .subscription(summary.batch)
+                    confirmingASCResolution = true
                 }
                 .disabled(isSending || isPreparing)
             }
@@ -489,6 +528,15 @@ struct PricingSubmissionView: View {
         }
     }
 
+    @ViewBuilder
+    private func ascResolutionStatus(_ resolution: PricingASCResolution) -> some View {
+        Label("Closed locally after your confirmation in App Store Connect",
+              systemImage: "checkmark.circle")
+        Text("Confirmed \(resolution.confirmedAt.formatted(date: .abbreviated, time: .shortened)). Original Apple outcomes are retained below; closure does not verify or cancel them. Return to Regional Pricing and generate again before submitting another proposal.")
+            .font(.footnote)
+            .foregroundStyle(theme.secondaryForegroundColor)
+    }
+
     private var maySubmitSubscription: Bool {
         guard let proposal, let details = subscriptionPlan,
               proposal.product.kind == .subscription else { return false }
@@ -504,7 +552,8 @@ struct PricingSubmissionView: View {
         guard let proposal, let plan else { return false }
         return proposal.product.kind == .lifetime && model.isReviewCurrent &&
             plan.isExecutable && !isPreparing && !isSending && isVisible && scenePhase == .active &&
-            (report == nil || [.planned, .failed, .verifiedLive, .verifiedScheduled].contains(report!.operation.state))
+            (report == nil || report!.operation.isClosed ||
+             [.planned, .failed, .verifiedLive, .verifiedScheduled].contains(report!.operation.state))
     }
 
     @MainActor
@@ -714,7 +763,54 @@ struct PricingSubmissionView: View {
                 accountScope: scope, productID: productID)
         }
     }
+
+    @MainActor
+    private func resolveInASC(reviewed: PricingASCResolutionReview) async {
+        guard !isSending, !isPreparing, isVisible, scenePhase == .active,
+              let client = session.client() else { return }
+        isSending = true
+        defer { isSending = false }
+        errorMessage = nil
+        do {
+            switch reviewed {
+            case .lifetime(let saved):
+                guard report?.operation.id == saved.id,
+                      client.pricingAccountScope == saved.accountScope else { return }
+                report = try await PricingSubmissionCoordinator.shared.resolveLifetimeInASC(
+                    accountScope: saved.accountScope, productID: saved.productID,
+                    operationID: saved.id, proposalFingerprint: saved.proposalFingerprint,
+                    confirmedInASC: true, client: client)
+            case .subscription(let saved):
+                guard subscriptionReport?.batch.id == saved.id,
+                      client.pricingAccountScope == saved.plan.accountScope else { return }
+                subscriptionReport = try await PricingSubmissionCoordinator.shared.resolveSubscriptionInASC(
+                    accountScope: saved.plan.accountScope, productID: saved.plan.product.id,
+                    batchID: saved.id, proposalFingerprint: saved.plan.proposalFingerprint,
+                    confirmedInASC: true, client: client)
+            }
+            plan = nil
+            subscriptionPlan = nil
+            model.markRemoteStale()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 }
+
+private enum PricingASCResolutionReview: Sendable {
+    case lifetime(PricingSubmissionOperation)
+    case subscription(SubscriptionSubmissionBatch)
+
+    var scopeDescription: String {
+        switch self {
+        case .lifetime(let operation):
+            "Saved lifetime schedule for \(operation.plan.product.name) (\(operation.plan.product.productID ?? operation.productID)), effective \(operation.effectiveDate), affecting \(operation.territories.count) countries."
+        case .subscription(let batch):
+            "Saved subscription prices for \(batch.plan.product.name) (\(batch.plan.product.productID ?? batch.plan.product.id)), effective \(batch.plan.effectiveDate), containing \(batch.entries.count) country requests."
+        }
+    }
+}
+
 
 
 

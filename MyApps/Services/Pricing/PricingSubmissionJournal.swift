@@ -5,12 +5,23 @@ enum PricingSubmissionState: String, Codable, Sendable {
     case planned, inFlight, accepted, verifiedLive, verifiedScheduled
     case pendingVerification, failed, unknown, skipped
 
+    var hasUncertainOutcome: Bool {
+        [.unknown, .inFlight, .accepted, .pendingVerification].contains(self)
+    }
+
     var isTerminal: Bool {
         switch self {
         case .verifiedLive, .verifiedScheduled, .failed, .skipped: true
         default: false
         }
     }
+}
+
+/// User-attested resolution in ASC, not proof that Apple canceled or reverted
+/// anything. Original request outcomes remain intact in the closed report.
+struct PricingASCResolution: Codable, Sendable {
+    let confirmedAt: Date
+    let refreshedSnapshotFingerprint: String
 }
 
 struct PricingSubmissionOperation: Codable, Sendable, Identifiable {
@@ -32,9 +43,15 @@ struct PricingSubmissionOperation: Codable, Sendable, Identifiable {
     var error: String?
     var createdAt: Date
     var updatedAt: Date
+    // Optional fields preserve compatibility with existing operation journals.
+    var closedAt: Date? = nil
+    var ascResolution: PricingASCResolution? = nil
+
+    var isClosed: Bool { closedAt != nil }
+    var canResolveInASC: Bool { !isClosed && state.hasUncertainOutcome }
 
     var canReconcile: Bool {
-        [.unknown, .inFlight, .accepted, .pendingVerification, .failed].contains(state)
+        !isClosed && [.unknown, .inFlight, .accepted, .pendingVerification, .failed].contains(state)
     }
 }
 
@@ -108,6 +125,20 @@ actor PricingSubmissionJournal {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(operation)
+        if let previous = try load(accountScope: operation.accountScope,
+                                   productID: operation.productID), previous.id != operation.id {
+            guard previous.isClosed || !previous.state.hasUncertainOutcome else {
+                throw PricingSubmissionFailure.unresolvedPreviousOperation
+            }
+            try encoder.encode(previous).write(
+                to: directory.appendingPathComponent("closed-lifetime-" + previous.id.uuidString + ".json"),
+                options: [.atomic, .completeFileProtection])
+        }
+        if operation.isClosed {
+            try data.write(
+                to: directory.appendingPathComponent("closed-lifetime-" + operation.id.uuidString + ".json"),
+                options: [.atomic, .completeFileProtection])
+        }
         try data.write(to: location(accountScope: operation.accountScope,
                                     productID: operation.productID),
                       options: [.atomic, .completeFileProtection])
@@ -153,6 +184,11 @@ actor PricingSubmissionJournal {
                 to: directory.appendingPathComponent("closed-subscription-" + previous.id.uuidString + ".json"),
                 options: [.atomic, .completeFileProtection])
         }
+        if batch.closedAt != nil {
+            try data.write(
+                to: directory.appendingPathComponent("closed-subscription-" + batch.id.uuidString + ".json"),
+                options: [.atomic, .completeFileProtection])
+        }
         try data.write(to: subscriptionLocation(accountScope: batch.plan.accountScope,
                                                 productID: batch.plan.product.id),
                       options: [.atomic, .completeFileProtection])
@@ -171,4 +207,5 @@ actor PricingSubmissionJournal {
         return directory.appendingPathComponent(hash + ".json", isDirectory: false)
     }
 }
+
 
