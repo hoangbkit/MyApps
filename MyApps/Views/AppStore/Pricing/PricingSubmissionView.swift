@@ -43,144 +43,16 @@ struct PricingSubmissionView: View {
                         if let saved = savedSubscription {
                             savedSubscriptionScope(saved)
                         } else {
-                            Section("Product") {
-                                LabeledContent("Name", value: proposal.product.name)
-                                LabeledContent("Product ID", value: proposal.product.productID ?? "Unknown")
-                                LabeledContent("US Reference", value:
-                                    PricingDisplay.amount(proposal.selectedUSPoint.customerPrice,
-                                                          currency: proposal.selectedUSPoint.currency))
-                                LabeledContent("Effective Date", value: proposal.effectiveDate)
-                                LabeledContent("Preset", value: proposal.effectivePreset?.displayName ?? "Unknown — regenerate")
-                                if let preset = proposal.effectivePreset {
-                                    Text(preset.percentageSummary).font(.footnote)
-                                }
-                                LabeledContent("Price Rounding", value: proposal.effectiveRoundingPolicy.title)
-                                if proposal.product.kind == .lifetime {
-                                    LabeledContent("Apple Base Territory",
-                                        value: proposal.configuredBaseTerritory ?? "Unknown")
-                                } else {
-                                    LabeledContent("Subscription Duration",
-                                        value: proposal.product.duration ?? "Unknown")
-                                    LabeledContent("Billing Plan", value: "UPFRONT")
-                                }
-                            }
-                            Section("Frozen Review Scope") {
-                                LabeledContent("Eligible", value: String(proposal.summary.eligible))
-                                LabeledContent("Increases", value: String(proposal.summary.increases))
-                                LabeledContent("Decreases", value: String(proposal.summary.decreases))
-                                LabeledContent("Excluded", value: String(proposal.summary.excluded))
-                                LabeledContent("Blockers", value: String(proposal.summary.blocked))
-                                if proposal.product.kind == .lifetime {
-                                    LabeledContent("Automatic → Manual",
-                                        value: String(proposal.summary.automaticToManual))
-                                }
-                            }
-                            if let subscriptionPlan {
-                                subscriptionPreflight(subscriptionPlan)
-                            }
-                            if let plan {
-                                Section("Preflight — Apple's Current State") {
-                                    LabeledContent("Base Territory",
-                                        value: plan.baseTerritoryID.isEmpty ? "Unknown" : plan.baseTerritoryID)
-                                    LabeledContent("Schedule Groups",
-                                        value: plan.request == nil ? "0" : "1")
-                                    LabeledContent("Changed Storefronts",
-                                        value: String(plan.affectedTerritories.count))
-                                    LabeledContent("Preserved Manual Entries",
-                                        value: String(plan.preservedEntries.count))
-                                    LabeledContent("Indirect Automatic Changes",
-                                        value: String(plan.indirectTerritories.count))
-                                    if !plan.excludedTerritories.isEmpty {
-                                        DisclosureGroup("Excluded Countries") {
-                                            ForEach(plan.excludedTerritories, id: \.self) {
-                                                Text(PricingDisplay.country($0) + " (" + $0 + ")")
-                                            }
-                                        }
-                                    }
-                                    if !plan.affectedTerritories.isEmpty {
-                                        DisclosureGroup("Exact Changed Countries") {
-                                            ForEach(plan.affectedTerritories, id: \.self) {
-                                                Text(PricingDisplay.country($0) + " (" + $0 + ")")
-                                            }
-                                        }
-                                    }
-                                }
-                                if !plan.blockers.isEmpty || !plan.warnings.isEmpty {
-                                    Section("Preflight Findings") {
-                                        ForEach(plan.blockers, id: \.self) { blocker in
-                                            Label(blocker, systemImage: "exclamationmark.triangle")
-                                                .foregroundStyle(.orange)
-                                        }
-                                        ForEach(plan.warnings, id: \.self) { warning in
-                                            Text(warning)
-                                                .foregroundStyle(theme.secondaryForegroundColor)
-                                        }
-                                    }
-                                }
-                            } else if isPreparing {
-                                Section {
-                                    ProgressView("Rechecking Apple's prices and valid points…")
-                                }
-                            }
-                            Section("Safety") {
-                                if !model.isReviewCurrent {
-                                    Label("The reviewed proposal is stale, unverified, or needs regeneration.",
-                                          systemImage: "exclamationmark.triangle")
-                                        .foregroundStyle(.orange)
-                                }
-                                if proposal.product.kind == .subscription {
-                                    Text(proposal.subscriberPolicy.explanation)
-                                    Text(SubscriptionPricingGuidance.olderGroups)
-                                    Text(SubscriptionPricingGuidance.decreases)
-                                    Text(SubscriptionPricingGuidance.consent)
-                                    Text("Public price verification cannot prove individual subscriber treatment.")
-                                } else {
-                                    Text("One complete lifetime price schedule will be sent only after final confirmation. Apple may adjust other automatic storefront prices; any unresolved effects block submission.")
-                                    Text("Apple acceptance does not mean prices are live. Verification or read-only reconciliation may still be needed.")
-                                }
-                            }
+                            productSection(proposal)
+                            reviewScopeSection(proposal)
+                            preflightSections()
+                            safetySection(proposal)
                         }
                         if let subscriptionReport {
                             subscriptionReportSection(subscriptionReport)
                         }
                         if let report {
-                            Section("Submission Status") {
-                                LabeledContent("Saved Product", value: report.operation.plan.product.name)
-                                LabeledContent("Saved Effective Date", value: report.operation.effectiveDate)
-                                LabeledContent("Submitted Preset", value:
-                                    (report.operation.plan.presetSnapshot ?? .balanced).displayName)
-                                Text((report.operation.plan.presetSnapshot ?? .balanced).percentageSummary)
-                                    .font(.footnote)
-                                LabeledContent("Submitted Rounding", value:
-                                    (report.operation.plan.roundingPolicy ?? .nearestAvailable).title)
-                                LabeledContent(report.operation.isClosed ? "Recorded Apple Outcome" : "Group Status",
-                                    value: report.operation.state.rawValue)
-                                LabeledContent("Verified", value: String(report.verified))
-                                LabeledContent("Pending Verification",
-                                    value: String(report.pendingVerification))
-                                LabeledContent("Unknown", value: String(report.unknown))
-                                LabeledContent("Failed", value: String(report.failed))
-                                LabeledContent("Skipped", value: String(report.skipped))
-                                if let detail = report.operation.error {
-                                    Text(detail).font(.footnote).foregroundStyle(.orange)
-                                }
-                                if let resolution = report.operation.ascResolution {
-                                    ascResolutionStatus(resolution)
-                                }
-                                if report.operation.canReconcile {
-                                    Button("Reconcile with Apple (Read Only)") {
-                                        Task { await reconcile() }
-                                    }
-                                    .disabled(isSending || isPreparing)
-                                }
-                                if report.operation.canResolveInASC {
-                                    Button("Resolved in App Store Connect") {
-                                        ascResolutionReview = .lifetime(report.operation)
-                                        confirmingASCResolution = true
-                                    }
-                                    .disabled(isSending || isPreparing)
-                                }
-                            }
+                            lifetimeReportSection(report)
                         }
                         if let errorMessage {
                             Section {
@@ -189,33 +61,7 @@ struct PricingSubmissionView: View {
                                     .disabled(isPreparing || isSending)
                             }
                         }
-                        Section {
-                            if isSending {
-                                ProgressView("Submitting or reconciling Apple prices…")
-                            } else if proposal.product.kind == .subscription {
-                                if savedSubscription != nil {
-                                    Text("Resolve the saved submission above before submitting a new proposal.")
-                                        .font(.footnote)
-                                        .foregroundStyle(theme.secondaryForegroundColor)
-                                } else if subscriptionPlan?.isNoOp == true {
-                                    Label("No subscription price changes required.", systemImage: "checkmark.circle")
-                                } else {
-                                    Button("Submit Subscription Prices") {
-                                        confirmingSubmission = true
-                                    }
-                                    .disabled(!maySubmitSubscription)
-                                }
-                            } else if plan?.isNoOp == true {
-                                Label("No price changes required.", systemImage: "checkmark.circle")
-                            } else {
-                                Button("Submit Lifetime Prices") {
-                                    confirmingSubmission = true
-                                }
-                                .disabled(!maySubmit)
-                            }
-                        } footer: {
-                            Text("Only the final price-submission confirmation dispatches an App Store Connect pricing write. Recovery after interruption never auto-resubmits.")
-                        }
+                        submissionActions(proposal)
                     } else {
                         ContentUnavailableView("No Pricing Proposal", systemImage: "exclamationmark.triangle")
                     }
@@ -323,6 +169,194 @@ struct PricingSubmissionView: View {
                 }
             }
         }
+    }
+
+    private func productSection(_ proposal: RegionalPricingProposal) -> some View {
+        Section("Product") {
+            LabeledContent("Name", value: proposal.product.name)
+            LabeledContent("Product ID", value: proposal.product.productID ?? "Unknown")
+            LabeledContent("US Reference", value:
+                PricingDisplay.amount(proposal.selectedUSPoint.customerPrice,
+                                      currency: proposal.selectedUSPoint.currency))
+            LabeledContent("Effective Date", value: proposal.effectiveDate)
+            LabeledContent("Preset", value: proposal.effectivePreset?.displayName ?? "Unknown — regenerate")
+            if let preset = proposal.effectivePreset {
+                Text(preset.percentageSummary).font(.footnote)
+            }
+            LabeledContent("Price Rounding", value: proposal.effectiveRoundingPolicy.title)
+            if proposal.product.kind == .lifetime {
+                LabeledContent("Apple Base Territory",
+                    value: proposal.configuredBaseTerritory ?? "Unknown")
+            } else {
+                LabeledContent("Subscription Duration",
+                    value: proposal.product.duration ?? "Unknown")
+                LabeledContent("Billing Plan", value: "UPFRONT")
+            }
+        }
+    }
+
+    private func reviewScopeSection(_ proposal: RegionalPricingProposal) -> some View {
+        Section("Frozen Review Scope") {
+            LabeledContent("Eligible", value: String(proposal.summary.eligible))
+            LabeledContent("Increases", value: String(proposal.summary.increases))
+            LabeledContent("Decreases", value: String(proposal.summary.decreases))
+            LabeledContent("Excluded", value: String(proposal.summary.excluded))
+            LabeledContent("Blockers", value: String(proposal.summary.blocked))
+            if proposal.product.kind == .lifetime {
+                LabeledContent("Automatic → Manual",
+                    value: String(proposal.summary.automaticToManual))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func lifetimePreflight(_ plan: LifetimeSchedulePlan) -> some View {
+        Section("Preflight — Apple's Current State") {
+            LabeledContent("Base Territory",
+                value: plan.baseTerritoryID.isEmpty ? "Unknown" : plan.baseTerritoryID)
+            LabeledContent("Schedule Groups",
+                value: plan.request == nil ? "0" : "1")
+            LabeledContent("Changed Storefronts",
+                value: String(plan.affectedTerritories.count))
+            LabeledContent("Preserved Manual Entries",
+                value: String(plan.preservedEntries.count))
+            LabeledContent("Indirect Automatic Changes",
+                value: String(plan.indirectTerritories.count))
+            if !plan.excludedTerritories.isEmpty {
+                DisclosureGroup("Excluded Countries") {
+                    ForEach(plan.excludedTerritories, id: \.self) {
+                        Text(countryLabel($0))
+                    }
+                }
+            }
+            if !plan.affectedTerritories.isEmpty {
+                DisclosureGroup("Exact Changed Countries") {
+                    ForEach(plan.affectedTerritories, id: \.self) {
+                        Text(countryLabel($0))
+                    }
+                }
+            }
+        }
+        if !plan.blockers.isEmpty || !plan.warnings.isEmpty {
+            Section("Preflight Findings") {
+                ForEach(plan.blockers, id: \.self) { blocker in
+                    Label(blocker, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                }
+                ForEach(plan.warnings, id: \.self) { warning in
+                    Text(warning)
+                        .foregroundStyle(theme.secondaryForegroundColor)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func preflightSections() -> some View {
+        if let subscriptionPlan {
+            subscriptionPreflight(subscriptionPlan)
+        }
+        if let plan {
+            lifetimePreflight(plan)
+        } else if isPreparing {
+            Section {
+                ProgressView("Rechecking Apple's prices and valid points…")
+            }
+        }
+    }
+
+    private func safetySection(_ proposal: RegionalPricingProposal) -> some View {
+        Section("Safety") {
+            if !model.isReviewCurrent {
+                Label("The reviewed proposal is stale, unverified, or needs regeneration.",
+                      systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+            if proposal.product.kind == .subscription {
+                Text(proposal.subscriberPolicy.explanation)
+                Text(SubscriptionPricingGuidance.olderGroups)
+                Text(SubscriptionPricingGuidance.decreases)
+                Text(SubscriptionPricingGuidance.consent)
+                Text("Public price verification cannot prove individual subscriber treatment.")
+            } else {
+                Text("One complete lifetime price schedule will be sent only after final confirmation. Apple may adjust other automatic storefront prices; any unresolved effects block submission.")
+                Text("Apple acceptance does not mean prices are live. Verification or read-only reconciliation may still be needed.")
+            }
+        }
+    }
+
+    private func lifetimeReportSection(_ report: PricingSubmissionReport) -> some View {
+        Section("Submission Status") {
+            LabeledContent("Saved Product", value: report.operation.plan.product.name)
+            LabeledContent("Saved Effective Date", value: report.operation.effectiveDate)
+            LabeledContent("Submitted Preset", value:
+                (report.operation.plan.presetSnapshot ?? .balanced).displayName)
+            Text((report.operation.plan.presetSnapshot ?? .balanced).percentageSummary)
+                .font(.footnote)
+            LabeledContent("Submitted Rounding", value:
+                (report.operation.plan.roundingPolicy ?? .nearestAvailable).title)
+            LabeledContent(report.operation.isClosed ? "Recorded Apple Outcome" : "Group Status",
+                value: report.operation.state.rawValue)
+            LabeledContent("Verified", value: String(report.verified))
+            LabeledContent("Pending Verification",
+                value: String(report.pendingVerification))
+            LabeledContent("Unknown", value: String(report.unknown))
+            LabeledContent("Failed", value: String(report.failed))
+            LabeledContent("Skipped", value: String(report.skipped))
+            if let detail = report.operation.error {
+                Text(detail).font(.footnote).foregroundStyle(.orange)
+            }
+            if let resolution = report.operation.ascResolution {
+                ascResolutionStatus(resolution)
+            }
+            if report.operation.canReconcile {
+                Button("Reconcile with Apple (Read Only)") {
+                    Task { await reconcile() }
+                }
+                .disabled(isSending || isPreparing)
+            }
+            if report.operation.canResolveInASC {
+                Button("Resolved in App Store Connect") {
+                    ascResolutionReview = .lifetime(report.operation)
+                    confirmingASCResolution = true
+                }
+                .disabled(isSending || isPreparing)
+            }
+        }
+    }
+
+    private func submissionActions(_ proposal: RegionalPricingProposal) -> some View {
+        Section {
+            if isSending {
+                ProgressView("Submitting or reconciling Apple prices…")
+            } else if proposal.product.kind == .subscription {
+                if savedSubscription != nil {
+                    Text("Resolve the saved submission above before submitting a new proposal.")
+                        .font(.footnote)
+                        .foregroundStyle(theme.secondaryForegroundColor)
+                } else if subscriptionPlan?.isNoOp == true {
+                    Label("No subscription price changes required.", systemImage: "checkmark.circle")
+                } else {
+                    Button("Submit Subscription Prices") {
+                        confirmingSubmission = true
+                    }
+                    .disabled(!maySubmitSubscription)
+                }
+            } else if plan?.isNoOp == true {
+                Label("No price changes required.", systemImage: "checkmark.circle")
+            } else {
+                Button("Submit Lifetime Prices") {
+                    confirmingSubmission = true
+                }
+                .disabled(!maySubmit)
+            }
+        } footer: {
+            Text("Only the final price-submission confirmation dispatches an App Store Connect pricing write. Recovery after interruption never auto-resubmits.")
+        }
+    }
+
+    private func countryLabel(_ code: String) -> String {
+        "\(PricingDisplay.country(code)) (\(code))"
     }
 
     @ViewBuilder
@@ -810,6 +844,7 @@ private enum PricingASCResolutionReview: Sendable {
         }
     }
 }
+
 
 
 

@@ -114,7 +114,7 @@ struct RegionalPricingReviewView: View {
             Text("Every manual country override will be removed. Suggested prices will remain.")
         }
         .sheet(isPresented: $showingSubmission) {
-            if let proposal = model.proposal {
+            if model.proposal != nil {
                 PricingSubmissionView(model: model)
             }
         }
@@ -501,6 +501,7 @@ struct RegionalPricingReviewView: View {
         return pieces.joined(separator: " · ")
     }
 }
+
 
 
 
