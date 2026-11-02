@@ -103,6 +103,7 @@ enum RegionalPricingEngine {
             uniquingKeysWith: { _, later in later }
         )
         var rows: [RegionalPricingRow] = []
+        let incompleteSubscriptionPrices = snapshot.hasIncompleteSubscriptionPriceData
         for territory in snapshot.territories.sorted(by: { $0.id < $1.id })
             where territory.available != false {
             let apple = references.equalizedByTerritory[territory.id]
@@ -141,7 +142,7 @@ enum RegionalPricingEngine {
                 warnings.append(.incompleteSnapshot)
                 blockers.append("Required Apple equalization reads are incomplete; refresh from Apple.")
             }
-            if snapshot.issues.contains(where: {
+            if incompleteSubscriptionPrices || snapshot.issues.contains(where: {
                 ["manualPrices", "automaticPrices", "subscriptionPrices", "schedule", "baseTerritory"].contains($0.resource)
             }) {
                 warnings.append(.incompleteSnapshot)
@@ -442,5 +443,6 @@ enum RegionalPricingEngine {
             .map { String(format: "%02x", $0) }.joined()
     }
 }
+
 
 

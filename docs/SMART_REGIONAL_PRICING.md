@@ -546,5 +546,15 @@ Validation: source/call-site/diff review and `git diff --check`; no tests, CI, X
 
 Validation: source/call-site/diff review and `git diff --check`; no tests, CI, Xcode/compiler build, authenticated Apple reads, or pricing writes were run. Pending device checks: create/edit/cancel/delete, immutable built-in, row selection/pop, duplicate names and invalid percentages, disk failure/retry, persistence after relaunch/across products, active vs inactive preset edits, deletion fallback, custom generation for both products/non-US bases, snapshot restoration, and saved-submission recovery after global edits/deletion.
 
+## Merge-review blockers corrected — November 2, 2026
+
+- New inline lifetime price resources use Apple's `${...}` temporary-ID syntax, consistently in `manualPrices.data` and `included`. IDs remain deterministic from proposal/territory across preflight; preserved existing rows retain their real Apple resource IDs.
+- `PricingSnapshot.hasIncompleteSubscriptionPriceData` centralizes subscription price completeness. It detects failed price collection/detail reads, unresolved territory/amount diagnostics, and records missing a known territory, point ID, positive amount, currency, or supported plan identity. It considers the entire collection, including future and preserved records, so an unassigned future schedule cannot disappear from country conflict checks.
+- Generation marks incomplete subscription snapshots blocked. Initial/final submission planning and every dispatch group, including explicit Resume, enforce the same predicate before journaling another group as in-flight or sending its requests. Failed reads remain visible for refresh/recovery; no prices are invented, and accepted or unknown requests are not replayed.
+- The predicate is computed and adds no persisted schema fields. Lifetime read behavior, presets, rounding, subscriber treatment and already-saved submission payloads are unchanged by this fix.
+
+Validation: source/call-site/diff review and `git diff --check`. The last successful manual build was [Release #34](https://github.com/hoangbkit/MyApps/actions/runs/41325399365) on `f67c303`, before these fixes. No tests, CI dispatch, compiler/Xcode build, authenticated Apple read, or pricing write was run for this correction. Pending validation: a future-dated lifetime payload's temporary-ID linkage; complete subscription snapshots; unresolved future territory/point/plan/amount data with and without diagnostics; and Resume encountering an incomplete snapshot after earlier countries succeeded.
+
+
 
 

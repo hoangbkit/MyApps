@@ -488,7 +488,8 @@ actor PricingSubmissionCoordinator {
                 product: batch.plan.product, refresh: true)
             var preflightFailure: String?
             let upFront = snapshot.planTerritories.filter { $0.planType == "UPFRONT" }
-            if snapshot.planTerritories.count != 1 || upFront.count != 1 ||
+            if snapshot.hasIncompleteSubscriptionPriceData ||
+               snapshot.planTerritories.count != 1 || upFront.count != 1 ||
                snapshot.issues.contains(where: {
                    ["subscriptionPrices", "planAvailability", "planType"].contains($0.resource)
                }) {
@@ -728,6 +729,7 @@ private extension PricingSubmissionOperation {
         plan.product
     }
 }
+
 
 
 

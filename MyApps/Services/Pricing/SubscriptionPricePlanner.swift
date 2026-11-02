@@ -121,7 +121,7 @@ enum SubscriptionPricePlanner {
         if !proposal.canProceedToSubmissionPlanning {
             blockers.append("The reviewed proposal has unresolved country blockers.")
         }
-        if fresh.issues.contains(where: {
+        if fresh.hasIncompleteSubscriptionPriceData || fresh.issues.contains(where: {
             ["subscriptionPrices", "planAvailability", "US price points", "US price", "planType"].contains($0.resource)
         }) {
             blockers.append("An Apple subscription price or plan resource is incomplete.")
@@ -241,6 +241,7 @@ enum SubscriptionPricePlanner {
         return formatter.date(from: date).map { formatter.string(from: $0) == date } ?? false
     }
 }
+
 
 
 

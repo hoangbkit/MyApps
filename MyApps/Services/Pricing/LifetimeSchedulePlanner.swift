@@ -219,7 +219,9 @@ enum LifetimeSchedulePlanner {
             guard row.proposedMode == .manual || row.proposedMode == .base,
                   let point = row.selectedPoint else { return nil }
             return LifetimeScheduleEntry(
-                id: "price-" + proposal.id.uuidString.lowercased() + "-" + row.territoryID,
+                // Apple requires ${...} to identify a new inline resource.
+                // Existing preserved rows keep their real Apple-issued IDs.
+                id: "${price-" + proposal.id.uuidString.lowercased() + "-" + row.territoryID + "}",
                 territoryID: row.territoryID, pointID: point.id,
                 startDate: date == today ? nil : date, endDate: nil, preserved: false
             )
@@ -306,5 +308,6 @@ enum LifetimeSchedulePlanner {
         return parser.date(from: value).map { parser.string(from: $0) == value } ?? false
     }
 }
+
 
 

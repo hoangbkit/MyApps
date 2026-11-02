@@ -223,6 +223,32 @@ struct PricingSnapshot: Codable, Sendable {
     let issues: [PricingReadIssue]
     let semanticFingerprint: String
 
+    /// Unknown price identities can hide an existing future schedule from
+    /// territory/plan conflict checks. Check the whole collection, including
+    /// future and preserved records, before any subscription write.
+    var hasIncompleteSubscriptionPriceData: Bool {
+        guard product.kind == .subscription else { return false }
+        let unresolvedResources: Set<String> = [
+            "subscriptionPrices", "Price territories", "Price amounts"
+        ]
+        if issues.contains(where: {
+            unresolvedResources.contains($0.resource) || $0.resource.hasPrefix("point ")
+        }) { return true }
+        let knownTerritories = Set(territories.map(\.id))
+        return prices.contains { price in
+            guard price.origin == .subscription else { return false }
+            guard let territory = price.territoryID, !territory.isEmpty,
+                  knownTerritories.contains(territory),
+                  let point = price.pricePointID, !point.isEmpty,
+                  let amount = price.customerPrice, amount > 0,
+                  let currency = price.currency, !currency.isEmpty,
+                  let plan = price.planType, ["UPFRONT", "MONTHLY"].contains(plan) else {
+                return true
+            }
+            return false
+        }
+    }
+
     // Preserved subscriber prices are NOT public new-subscriber prices.
     func publicPrice(territoryID: String, planType: String? = nil, on date: String) -> PricingPriceRecord? {
         let candidates = prices.filter {
@@ -279,4 +305,5 @@ enum PricingReadError: LocalizedError, Sendable {
         }
     }
 }
+
 
