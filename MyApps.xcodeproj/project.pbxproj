@@ -7,6 +7,25 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F6B000000000000000000001 /* PricingPresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A000000000000000000001 /* PricingPresetStore.swift */; };
+		F6B000000000000000000002 /* PricingPresetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A000000000000000000002 /* PricingPresetsView.swift */; };
+		F5B000000000000000000001 /* SubscriptionPricePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A000000000000000000001 /* SubscriptionPricePlanner.swift */; };
+		F5B000000000000000000002 /* SubscriptionSubmissionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A000000000000000000002 /* SubscriptionSubmissionModels.swift */; };
+		F4B000000000000000000001 /* LifetimeSchedulePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A000000000000000000001 /* LifetimeSchedulePlanner.swift */; };
+		F4B000000000000000000002 /* PricingSubmissionJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A000000000000000000002 /* PricingSubmissionJournal.swift */; };
+		F4B000000000000000000003 /* PricingSubmissionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A000000000000000000003 /* PricingSubmissionCoordinator.swift */; };
+		F3B000000000000000000001 /* RegionalPricingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000001 /* RegionalPricingViewModel.swift */; };
+		F3B000000000000000000002 /* AppStorePricingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000002 /* AppStorePricingView.swift */; };
+		F3B000000000000000000003 /* RegionalPricingReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000003 /* RegionalPricingReviewView.swift */; };
+		F3B000000000000000000004 /* RegionalPriceOverrideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000004 /* RegionalPriceOverrideView.swift */; };
+		F3B000000000000000000005 /* PricingSubmissionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A000000000000000000005 /* PricingSubmissionView.swift */; };
+		F2B000000000000000000001 /* RegionalPricingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A000000000000000000001 /* RegionalPricingModels.swift */; };
+		F2B000000000000000000002 /* RegionalPricingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A000000000000000000002 /* RegionalPricingEngine.swift */; };
+		F2B000000000000000000003 /* PricingDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A000000000000000000003 /* PricingDraftStore.swift */; };
+		F2B000000000000000000004 /* country-tiers-v1.json in Resources */ = {isa = PBXBuildFile; fileRef = F2A000000000000000000004 /* country-tiers-v1.json */; };
+		F1B000000000000000000001 /* AppStoreConnectPricingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A000000000000000000001 /* AppStoreConnectPricingModels.swift */; };
+		F1B000000000000000000002 /* AppStoreConnectPricingAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A000000000000000000002 /* AppStoreConnectPricingAPI.swift */; };
+		F1B000000000000000000003 /* RegionalPricingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A000000000000000000003 /* RegionalPricingService.swift */; };
 		0309A3CBA8E71FE15CA5AC98 /* GitHubBranchOperationsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8211FC9220DDF2A63E06228F /* GitHubBranchOperationsModels.swift */; };
 		0536C1F8A54066A07E2F96FD /* AppListField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64A40F7353C31320B5D7721B /* AppListField.swift */; };
 		094215092F1EBAF898038B35 /* AppIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86A5158BC102856C7EE9768C /* AppIconView.swift */; };
@@ -97,6 +116,25 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F6A000000000000000000001 /* PricingPresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingPresetStore.swift; sourceTree = "<group>"; };
+		F6A000000000000000000002 /* PricingPresetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingPresetsView.swift; sourceTree = "<group>"; };
+		F5A000000000000000000001 /* SubscriptionPricePlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionPricePlanner.swift; sourceTree = "<group>"; };
+		F5A000000000000000000002 /* SubscriptionSubmissionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionSubmissionModels.swift; sourceTree = "<group>"; };
+		F4A000000000000000000001 /* LifetimeSchedulePlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifetimeSchedulePlanner.swift; sourceTree = "<group>"; };
+		F4A000000000000000000002 /* PricingSubmissionJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingSubmissionJournal.swift; sourceTree = "<group>"; };
+		F4A000000000000000000003 /* PricingSubmissionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingSubmissionCoordinator.swift; sourceTree = "<group>"; };
+		F3A000000000000000000001 /* RegionalPricingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingViewModel.swift; sourceTree = "<group>"; };
+		F3A000000000000000000002 /* AppStorePricingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStorePricingView.swift; sourceTree = "<group>"; };
+		F3A000000000000000000003 /* RegionalPricingReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingReviewView.swift; sourceTree = "<group>"; };
+		F3A000000000000000000004 /* RegionalPriceOverrideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPriceOverrideView.swift; sourceTree = "<group>"; };
+		F3A000000000000000000005 /* PricingSubmissionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingSubmissionView.swift; sourceTree = "<group>"; };
+		F2A000000000000000000001 /* RegionalPricingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingModels.swift; sourceTree = "<group>"; };
+		F2A000000000000000000002 /* RegionalPricingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingEngine.swift; sourceTree = "<group>"; };
+		F2A000000000000000000003 /* PricingDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingDraftStore.swift; sourceTree = "<group>"; };
+		F2A000000000000000000004 /* country-tiers-v1.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = country-tiers-v1.json; sourceTree = "<group>"; };
+		F1A000000000000000000001 /* AppStoreConnectPricingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreConnectPricingModels.swift; sourceTree = "<group>"; };
+		F1A000000000000000000002 /* AppStoreConnectPricingAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreConnectPricingAPI.swift; sourceTree = "<group>"; };
+		F1A000000000000000000003 /* RegionalPricingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalPricingService.swift; sourceTree = "<group>"; };
 		039E68AF0896800CED5A73B6 /* AIWritingSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIWritingSettingsSection.swift; sourceTree = "<group>"; };
 		0557B051E3C9E9D1ED79C9E4 /* MarkdownTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTextEditor.swift; sourceTree = "<group>"; };
 		058869048884D480570177E9 /* NoteAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteAttachment.swift; sourceTree = "<group>"; };
@@ -198,10 +236,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		F3C000000000000000000001 /* Pricing Views */ = {
+			isa = PBXGroup;
+			children = (
+				F6A000000000000000000002 /* PricingPresetsView.swift */,
+				F3A000000000000000000002 /* AppStorePricingView.swift */,
+				F3A000000000000000000003 /* RegionalPricingReviewView.swift */,
+				F3A000000000000000000004 /* RegionalPriceOverrideView.swift */,
+				F3A000000000000000000005 /* PricingSubmissionView.swift */,
+			);
+			path = Pricing;
+			sourceTree = "<group>";
+		};
 		0985B771B280F37EB8BC7AD9 /* AppStore */ = {
 			isa = PBXGroup;
 			children = (
 				1A7EBC214DA814B4D0D18D2E /* AppStoreAppDetailView.swift */,
+				F3C000000000000000000001 /* Pricing Views */,
 				E82583C4E597E9D73A18CA25 /* AppStoreAppIconView.swift */,
 				CD54E144443943A2F5EBBD93 /* AppStoreAppsView.swift */,
 				ABE75EB3EB402E358F99A161 /* AppStorePlaceholderView.swift */,
@@ -343,10 +394,30 @@
 			path = MyApps;
 			sourceTree = "<group>";
 		};
+		F1C000000000000000000001 /* Pricing */ = {
+			isa = PBXGroup;
+			children = (
+				F6A000000000000000000001 /* PricingPresetStore.swift */,
+				F1A000000000000000000003 /* RegionalPricingService.swift */,
+				F2A000000000000000000001 /* RegionalPricingModels.swift */,
+				F2A000000000000000000002 /* RegionalPricingEngine.swift */,
+				F2A000000000000000000003 /* PricingDraftStore.swift */,
+				F3A000000000000000000001 /* RegionalPricingViewModel.swift */,
+				F4A000000000000000000001 /* LifetimeSchedulePlanner.swift */,
+				F4A000000000000000000002 /* PricingSubmissionJournal.swift */,
+				F4A000000000000000000003 /* PricingSubmissionCoordinator.swift */,
+				F5A000000000000000000001 /* SubscriptionPricePlanner.swift */,
+				F5A000000000000000000002 /* SubscriptionSubmissionModels.swift */,
+			);
+			path = Pricing;
+			sourceTree = "<group>";
+		};
 		B5B62813CB1C422D71839550 /* AppStoreConnect */ = {
 			isa = PBXGroup;
 			children = (
 				E9A849334D3FC80D7B1D7EF8 /* AppStoreConnectAPIClient.swift */,
+				F1A000000000000000000001 /* AppStoreConnectPricingModels.swift */,
+				F1A000000000000000000002 /* AppStoreConnectPricingAPI.swift */,
 				ABBAD8B2BE2A456F861C9ACC /* AppStoreConnectCredentialStore.swift */,
 				DB815DB94D64FD6735005417 /* AppStoreConnectSession.swift */,
 				C97B16868193DB28CD22C252 /* AppStorePublicArtworkLookup.swift */,
@@ -373,6 +444,7 @@
 			children = (
 				144EDCF00E190118C3B82E2D /* AI */,
 				B5B62813CB1C422D71839550 /* AppStoreConnect */,
+				F1C000000000000000000001 /* Pricing */,
 				270F9F8A18440F4C2B2E5F00 /* GitHub */,
 				9ACA76CCC4557187332D92E2 /* AppBackupService.swift */,
 				78842556A068DDB426E88777 /* AppValueFormatter.swift */,
@@ -425,10 +497,19 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		F2C000000000000000000001 /* Pricing Resources */ = {
+			isa = PBXGroup;
+			children = (
+				F2A000000000000000000004 /* country-tiers-v1.json */,
+			);
+			path = Pricing;
+			sourceTree = "<group>";
+		};
 		FE2E956FCFFCC156A80A5F70 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 				DEBC773D8E7ACEA7F5F514FE /* Assets.xcassets */,
+				F2C000000000000000000001 /* Pricing Resources */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -514,6 +595,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C9868DDCF59E8C264E2852E /* Assets.xcassets in Resources */,
+				F2B000000000000000000004 /* country-tiers-v1.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -539,6 +621,24 @@
 				99BC9C423557976FD7616A63 /* AppStoreAppIconView.swift in Sources */,
 				EBEC4C9E0CFF42B329D38D00 /* AppStoreAppsView.swift in Sources */,
 				11E03E6C87A2BEBBAF1AAF86 /* AppStoreConnectAPIClient.swift in Sources */,
+				F1B000000000000000000001 /* AppStoreConnectPricingModels.swift in Sources */,
+				F1B000000000000000000002 /* AppStoreConnectPricingAPI.swift in Sources */,
+				F1B000000000000000000003 /* RegionalPricingService.swift in Sources */,
+				F2B000000000000000000001 /* RegionalPricingModels.swift in Sources */,
+				F2B000000000000000000002 /* RegionalPricingEngine.swift in Sources */,
+				F2B000000000000000000003 /* PricingDraftStore.swift in Sources */,
+				F3B000000000000000000001 /* RegionalPricingViewModel.swift in Sources */,
+				F6B000000000000000000001 /* PricingPresetStore.swift in Sources */,
+				F6B000000000000000000002 /* PricingPresetsView.swift in Sources */,
+				F4B000000000000000000001 /* LifetimeSchedulePlanner.swift in Sources */,
+				F4B000000000000000000002 /* PricingSubmissionJournal.swift in Sources */,
+				F4B000000000000000000003 /* PricingSubmissionCoordinator.swift in Sources */,
+				F5B000000000000000000001 /* SubscriptionPricePlanner.swift in Sources */,
+				F5B000000000000000000002 /* SubscriptionSubmissionModels.swift in Sources */,
+				F3B000000000000000000002 /* AppStorePricingView.swift in Sources */,
+				F3B000000000000000000003 /* RegionalPricingReviewView.swift in Sources */,
+				F3B000000000000000000004 /* RegionalPriceOverrideView.swift in Sources */,
+				F3B000000000000000000005 /* PricingSubmissionView.swift in Sources */,
 				C2CFB80A8AB2BBC076513252 /* AppStoreConnectCredentialStore.swift in Sources */,
 				19C82E4D96AEAF0EA0A43E84 /* AppStoreConnectSession.swift in Sources */,
 				AD371378896ABB936F006031 /* AppStoreConnectSettingsSection.swift in Sources */,
@@ -868,3 +968,4 @@
 	};
 	rootObject = E2AF5CCE00EDB71222BD92BB /* Project object */;
 }
+

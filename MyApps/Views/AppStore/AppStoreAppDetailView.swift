@@ -7,6 +7,7 @@ struct AppStoreAppDetailView: View {
     private enum AppDetailMode: String, CaseIterable, Identifiable {
         case info = "Info"
         case xcodeCloud = "Xcode Cloud"
+        case pricing = "Pricing"
 
         var id: Self { self }
 
@@ -14,6 +15,7 @@ struct AppStoreAppDetailView: View {
             switch self {
             case .info: "info.circle"
             case .xcodeCloud: "cloud"
+            case .pricing: "globe"
             }
         }
     }
@@ -45,6 +47,8 @@ struct AppStoreAppDetailView: View {
                 infoView
             case .xcodeCloud:
                 xcodeCloudView
+            case .pricing:
+                AppStorePricingView(appID: app.id)
             }
         }
         .myAppsPage()
@@ -94,7 +98,7 @@ struct AppStoreAppDetailView: View {
                     .contentShape(Rectangle())
                 }
                 .accessibilityLabel("App sections, currently \(selectedSection.rawValue)")
-                .accessibilityHint("Choose Info or Xcode Cloud")
+                .accessibilityHint("Choose Info, Xcode Cloud, or Pricing")
             }
         }
         .sheet(isPresented: $isPresentingStartBuild) {
@@ -114,6 +118,9 @@ struct AppStoreAppDetailView: View {
             switch selectedSection {
             case .info:
                 if !hasLoadedInfo { await loadInfo() }
+            case .pricing:
+                // Pricing owns its own lazy load and account-revision refresh.
+                break
             case .xcodeCloud:
                 if !hasLoadedCloud { await loadCloud() }
                 while !Task.isCancelled && scenePhase == .active && selectedSection == .xcodeCloud {

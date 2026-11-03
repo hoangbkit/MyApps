@@ -59,6 +59,9 @@ targets:
         excludes:
           - Resources/Info.plist
           - Resources/MyApps.entitlements
+          - Resources/Pricing/country-tiers-v1.json
+      - path: MyApps/Resources/Pricing/country-tiers-v1.json
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hoangbkit.myapps
