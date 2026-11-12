@@ -20,6 +20,10 @@ final class MarkdownEditorController: ObservableObject {
         refresh()
     }
 
+    var isEditorFocused: Bool {
+        textView?.isFirstResponder == true
+    }
+
     func refresh() {
         let undoManager = textView?.undoManager
         let newCanUndo = undoManager?.canUndo == true

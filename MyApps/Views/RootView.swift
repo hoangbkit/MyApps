@@ -11,9 +11,17 @@ struct RootView: View {
     @StateObject private var gitHubSession = GitHubSession()
     @StateObject private var appStoreSession = AppStoreConnectSession()
     @StateObject private var aiWritingSession = AIWritingSession()
-    @State private var selectedTab: RootTab = .repos
+    @State private var selectedTab: RootTab = .notes
     var body: some View {
         TabView(selection: $selectedTab) {
+            NavigationStack {
+                NotesInboxView()
+            }
+            .tabItem {
+                Label("Notes", systemImage: "note.text")
+            }
+            .tag(RootTab.notes)
+
             NavigationStack {
                 RepositoriesView {
                     selectedTab = .settings
@@ -43,14 +51,6 @@ struct RootView: View {
                 Label("Projects", systemImage: "square.grid.2x2")
             }
             .tag(RootTab.apps)
-
-            NavigationStack {
-                NotesInboxView()
-            }
-            .tabItem {
-                Label("Notes", systemImage: "note.text")
-            }
-            .tag(RootTab.notes)
 
             NavigationStack {
                 SettingsView()
