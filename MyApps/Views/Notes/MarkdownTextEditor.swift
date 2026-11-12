@@ -21,7 +21,7 @@ final class MarkdownEditorController: ObservableObject {
     }
 
     var isEditorFocused: Bool {
-        textView?.isFirstResponder == true
+        textView?.isEditing == true
     }
 
     func refresh() {
