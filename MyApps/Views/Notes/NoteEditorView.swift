@@ -51,6 +51,7 @@ struct NoteEditorView: View {
             }
         }
         .myAppsPage()
+        .toolbarVisibility(.hidden, for: .tabBar)
         .navigationTitle("Note")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -159,10 +160,16 @@ struct NoteEditorView: View {
             if mode == .edit {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
-                        dismissKeyboard()
+                        if editorController.isEditorFocused {
+                            dismissKeyboard()
+                        } else {
+                            dismiss()
+                        }
                     }
                     .fontWeight(.semibold)
-                    .accessibilityHint("Dismisses the keyboard")
+                    .accessibilityHint(
+                        "Dismisses the keyboard, or closes the note when the keyboard is hidden"
+                    )
                 }
 
                 ToolbarItem(placement: .keyboard) {
